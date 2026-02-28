@@ -1,0 +1,400 @@
+.regex-sandbox {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+
+  &__content {
+    padding: 0;
+    overflow-y: auto;
+  }
+
+  &__three-column {
+    height: calc(100vh - 64px);
+    display: flex;
+  }
+
+  &__left-panel {
+    background: #fff;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.09);
+    z-index: 1;
+    overflow-y: auto;
+  }
+
+  &__middle-panel {
+    padding: 10px;
+    overflow-y: auto;
+    background: #f5f5f5;
+  }
+
+  &__right-panel {
+    background: #fff;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.09);
+    z-index: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+  }
+
+  &__tabs {
+    .ant-tabs-nav {
+      margin-bottom: 16px;
+    }
+
+    .ant-tabs-content {
+      overflow-y: auto;
+    }
+
+    .ant-tabs-tab {
+      padding: 8px 16px;
+      font-weight: 500;
+    }
+  }
+
+  &__editor-tab {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  &__editor-section {
+    flex: 0 0 400px;
+    min-width: 300px;
+  }
+
+  &__tester-section {
+    flex: 1;
+    min-width: 300px;
+  }
+
+  &__testcases-tab,
+  &__library-tab {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+.regex-editor {
+  .regex-pattern-section {
+    .regex-pattern-input {
+      margin-top: 8px;
+    }
+  }
+
+  .regex-flags-section {
+    .regex-flags-checkbox {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+    }
+  }
+
+  .regex-presets-section {
+    margin-top: 0px;
+  }
+}
+
+.regex-tester-input {
+  margin-top: 10px;
+  .regex-test-textarea {
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+    font-size: 14px;
+  }
+}
+
+.regex-tester-result {
+  margin-top: 10px;
+  .match-summary {
+    padding: 12px;
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+
+  .match-stats {
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+  }
+
+  .match-preview {
+    margin-bottom: 16px;
+    .match-preview-title {
+      padding: 10px 0;
+      display: block;
+    }
+
+    .match-preview-content {
+      padding: 16px;
+      background: #fafafa;
+      border-radius: 6px;
+      border: 1px solid #d9d9d9;
+      min-height: 100px;
+      font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+  }
+
+  .match-details {
+    .match-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .match-item {
+      padding: 12px;
+      background: #fafafa;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+
+      .match-item-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+
+      .match-explanation {
+        padding: 8px 12px;
+        background: #e6f7ff;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        border-left: 3px solid #1890ff;
+      }
+
+      .match-groups {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+    }
+  }
+}
+
+.highlighted-text {
+  .match-highlight {
+    background-color: #fffb8f;
+    padding: 2px 4px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
+
+  .text-normal {
+    color: inherit;
+  }
+}
+
+.regex-library {
+  .regex-library-search {
+    margin-bottom: 0px;
+  }
+
+  .regex-library-list {
+    height: calc(100vh - 300px);
+    overflow-y: auto;
+  }
+
+  .preset-pattern {
+    display: flex;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  .preset-item {
+    transition: all 0.1s ease;
+    cursor: pointer;
+
+    &--selected {
+      background-color: #e6f7ff;
+      border-left: 3px solid #1890ff;
+    }
+  }
+}
+
+.regex-visualizer {
+  .regex-preset-info {
+    padding: 12px;
+    background: #e6f7ff;
+    border-radius: 6px;
+    border: 1px solid #91d5ff;
+  }
+
+  .preset-pattern-display {
+    margin-top: 8px;
+    padding: 8px;
+    background: #fff;
+    border-radius: 4px;
+  }
+
+  .regex-structure {
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+  }
+
+  .regex-flags {
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+  }
+}
+
+.regex-cheat-sheet {
+  .syntax-item {
+    padding: 8px 0;
+  }
+
+  .syntax-example {
+    margin-top: 4px;
+    padding-left: 16px;
+  }
+
+  .regex-tips {
+    ul {
+      margin: 0;
+      padding-left: 20px;
+
+      li {
+        margin-bottom: 4px;
+      }
+    }
+  }
+}
+
+.regex-guide-examples {
+  .use-case-item {
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+  }
+
+  .use-case-header {
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e8e8e8;
+    margin-bottom: 12px;
+  }
+
+  .step-description {
+    .step-pattern {
+      margin-top: 8px;
+    }
+  }
+
+  .use-case-result {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e8e8e8;
+  }
+
+  .final-pattern {
+    .pattern-display {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #f0f0f0;
+      border-radius: 4px;
+    }
+  }
+
+  .example-demo {
+    margin-top: 12px;
+    padding: 8px;
+    background: #fff;
+    border-radius: 4px;
+  }
+
+  .example-input,
+  .example-output {
+    margin-top: 4px;
+  }
+
+  .guide-tips {
+    padding: 8px 12px;
+    background: #e6f7ff;
+    border-radius: 4px;
+    border-left: 3px solid #1890ff;
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .regex-sandbox {
+    &__three-column {
+      flex-direction: column;
+    }
+
+    &__left-panel,
+    &__right-panel {
+      width: 100% !important;
+      height: auto;
+      max-height: 400px;
+      box-shadow: none;
+      border-bottom: 1px solid #e8e8e8;
+    }
+
+    &__middle-panel {
+      min-height: 400px;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .regex-sandbox {
+    &__three-column {
+      height: auto;
+    }
+
+    &__left-panel,
+    &__right-panel {
+      max-height: none;
+      padding: 12px;
+    }
+
+    &__middle-panel {
+      padding: 16px;
+    }
+
+    &__preset-details {
+      h4 {
+        font-size: 14px;
+      }
+
+      .pattern-info,
+      .flags-info,
+      .category-info {
+        padding: 6px 8px;
+      }
+    }
+  }
+
+  .regex-editor {
+    .regex-flags-section {
+      .regex-flags-checkbox {
+        gap: 8px;
+      }
+    }
+  }
+
+  .regex-tester-result {
+    .match-stats {
+      .ant-col {
+        margin-bottom: 12px;
+      }
+    }
+
+    .match-item-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+}

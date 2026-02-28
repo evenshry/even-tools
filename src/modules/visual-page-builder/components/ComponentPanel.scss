@@ -1,0 +1,115 @@
+// 组件面板样式
+.component-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  
+  .search-section {
+    padding: 0;
+    margin-bottom: 0;
+    
+    .ant-input-affix-wrapper {
+      border-radius: 6px;
+    }
+  }
+  
+  .ant-tabs {
+    flex: 1;
+    
+    .ant-tabs-content-holder {
+      overflow: auto;
+      padding: 0 8px;
+    }
+    
+    .ant-tabs-tab {
+      padding: 8px 12px !important;
+      margin: 0 2px !important;
+      
+      .ant-tabs-tab-btn {
+        font-size: 12px;
+      }
+    }
+  }
+  
+  .panel-footer {
+    padding: 8px 0;
+    text-align: center;
+    border-top: 1px solid #f0f0f0;
+    margin-top: auto;
+  }
+}
+
+// 可拖拽组件
+.draggable-component {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: grab;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+
+  &:hover {
+    border-color: #1890ff;
+    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &.dragging {
+    opacity: 0.5;
+    border-color: #1890ff;
+    background: #f0f8ff;
+  }
+
+  .component-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+  }
+
+  .component-name {
+    font-size: 14px;
+    color: #262626;
+    flex: 1;
+  }
+}
+
+// 组件列表内容
+.component-list-content {
+  height: 100%;
+  
+  .ant-empty {
+    margin: 40px 0;
+    
+    .ant-empty-image {
+      height: 60px;
+      margin-bottom: 8px;
+    }
+    
+    .ant-empty-description {
+      font-size: 12px;
+      color: #8c8c8c;
+    }
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .component-panel {
+    .ant-tabs {
+      .ant-tabs-tab {
+        padding: 6px 8px !important;
+        
+        .ant-tabs-tab-btn {
+          font-size: 11px;
+        }
+      }
+    }
+  }
+}

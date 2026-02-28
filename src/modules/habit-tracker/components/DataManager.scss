@@ -1,0 +1,16 @@
+.data-manager {
+  &__header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  &__actions {
+    margin-bottom: 16px;
+  }
+
+  &__info {
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+}

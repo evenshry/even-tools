@@ -1,0 +1,157 @@
+.color-calculator {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+
+  &__content {
+    padding: 24px;
+    overflow-y: auto;
+  }
+}
+
+.color-selection-card {
+  .color-picker-item {
+    display: flex;
+    align-items: center;
+  }
+  .color-picker-box {
+    margin-left: 10px;
+  }
+  .color-picker-input {
+    flex: 1;
+    margin-left: 10px;
+  }
+}
+
+.color-info-card {
+  .color-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .color-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    border: 2px solid #d9d9d9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .color-value {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+.contrast-card {
+  .contrast-preview {
+    padding: 24px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 200px;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+
+  .contrast-ratio {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+  }
+
+  .wcag-standards {
+    .wcag-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+  }
+}
+
+.colorblind-card {
+  .colorblind-type-card {
+    .colorblind-preview {
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 8px;
+    }
+  }
+}
+
+.harmonies-card {
+  .harmony-card {
+    .color-palette {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .color-swatch {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      border: 2px solid #d9d9d9;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .color-calculator {
+    &__content {
+      padding: 16px;
+    }
+  }
+
+  .color-info-card {
+    .color-preview {
+      width: 48px;
+      height: 48px;
+    }
+  }
+
+  .contrast-card {
+    .contrast-preview {
+      padding: 16px;
+    }
+
+    .contrast-ratio {
+      flex-direction: column;
+      gap: 8px;
+    }
+  }
+}

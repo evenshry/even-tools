@@ -1,0 +1,163 @@
+// 预览渲染器样式
+.preview-node {
+  box-sizing: border-box;
+  
+  // 页面节点
+  &.page-node {
+    width: 100%;
+    min-height: 100vh;
+    background: #ffffff;
+    
+    .page-content {
+      width: 100%;
+      min-height: 100%;
+    }
+  }
+  
+  // 区块节点
+  &.section-node {
+    width: 100%;
+    min-height: 200px;
+    background: #f8f9fa;
+    margin-bottom: 20px;
+    padding: 20px;
+  }
+  
+  // 容器节点
+  &.container-node {
+    width: 100%;
+    min-height: 200px;
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  // 弹性布局节点
+  &.flex-node {
+    display: flex;
+    width: 100%;
+    min-height: 200px;
+    background: #f8f9fa;
+    padding: 16px;
+    gap: 10px;
+    margin-bottom: 16px;
+    
+    // 子节点样式
+    & > .preview-node {
+      flex: 1;
+      min-height: 100px;
+      background: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 8px;
+    }
+  }
+  
+  // 网格布局节点
+  &.grid-node {
+    display: grid;
+    width: 100%;
+    min-height: 200px;
+    background: #f8f9fa;
+    padding: 16px;
+    gap: 10px;
+    margin-bottom: 16px;
+    
+    // 子节点样式
+    & > .preview-node {
+      background: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 8px;
+    }
+  }
+  
+  // Div节点
+  &.div-node {
+    width: 100%;
+    min-height: 100px;
+    background: #e9ecef;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+  
+  // 文本节点
+  &.text-node {
+    font-size: 14px;
+    color: #333333;
+    line-height: 1.5;
+    margin: 4px 0;
+  }
+  
+  // 标题节点
+  &.heading-node {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333333;
+    margin: 0 0 16px 0;
+  }
+  
+  // 按钮节点
+  &.button-node {
+    padding: 8px 16px;
+    background: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    
+    &:hover {
+      background: #0056b3;
+    }
+  }
+  
+  // 图片节点
+  &.image-node {
+    .image-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 200px;
+      height: 150px;
+      background: #f8f9fa;
+      border: 2px dashed #dee2e6;
+      border-radius: 8px;
+      color: #6c757d;
+      font-size: 12px;
+      
+      span:first-child {
+        font-size: 24px;
+        margin-bottom: 4px;
+      }
+    }
+  }
+  
+  // 未知节点
+  &.unknown-node {
+    background: #ffc107;
+    color: #856404;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin: 4px 0;
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .preview-node {
+    &.flex-node {
+      flex-direction: column;
+    }
+    
+    &.grid-node {
+      grid-template-columns: 1fr;
+    }
+  }
+}

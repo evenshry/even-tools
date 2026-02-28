@@ -1,0 +1,372 @@
+// 画布区域样式
+.canvas-area {
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+}
+
+// 画布工具栏
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toolbar-btn {
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #f8f9fa;
+      border-color: #adb5bd;
+    }
+
+    &.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+  }
+
+  .zoom-info {
+    font-size: 14px;
+    color: #6c757d;
+    font-weight: 500;
+  }
+}
+
+// 画布容器
+.canvas-container {
+  flex: 1;
+  position: relative;
+  overflow-y: auto;
+  background: #fff;
+  transition: all 0.2s;
+  height: calc(100% - 58px); // 减去工具栏高度
+  padding: 16px;
+  z-index: 1; // 确保画布容器在正确层级
+  pointer-events: auto; // 确保可以接收鼠标事件
+
+  // 拖拽状态样式
+  &.drag-over-valid {
+    background: rgba(40, 167, 69, 0.05);
+    border: 2px dashed #28a745;
+  }
+
+  &.drag-over-invalid {
+    background: rgba(220, 53, 69, 0.05);
+    border: 2px dashed #dc3545;
+  }
+}
+
+// 网格背景
+.grid-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+  pointer-events: none;
+  z-index: 0; // 降低层级，确保不会阻挡鼠标事件
+}
+
+// 拖拽提示
+.drag-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  z-index: 100;
+  pointer-events: none;
+
+  &.valid {
+    background: #28a745;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  }
+
+  &.invalid {
+    background: #dc3545;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+}
+
+// 节点树
+.node-tree {
+  position: relative;
+  min-height: 100%;
+  z-index: 2;
+}
+
+// 画布节点
+.canvas-node {
+  border: 2px solid transparent;
+  transition: all 0.2s;
+
+  // 可拖动节点（绝对定位和固定定位）
+  &.draggable {
+    position: absolute;
+    cursor: move;
+
+    &:hover {
+      border-color: #007bff;
+    }
+
+    &.selected {
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    // 悬停状态（可以接受子节点）
+    &.hovered {
+      border-color: #28a745;
+      box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+      background-color: rgba(40, 167, 69, 0.05);
+    }
+  }
+
+  // 流布局节点（静态定位和相对定位）
+  &.flow-layout {
+    position: static;
+    cursor: default;
+    margin-bottom: 10px;
+
+    &:hover {
+      border-color: #6c757d;
+    }
+
+    &.selected {
+      border-color: #6c757d;
+      box-shadow: 0 0 0 2px rgba(108, 117, 125, 0.25);
+    }
+
+    // 悬停状态（可以接受子节点）
+    &.hovered {
+      border-color: #28a745;
+      box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+      background-color: rgba(40, 167, 69, 0.05);
+    }
+  }
+  
+  // 拖拽目标状态（可以接受当前拖拽的组件）
+&.drag-target {
+  border-color: #007bff !important;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5) !important;
+  background-color: rgba(0, 123, 255, 0.05) !important;
+  
+  // 添加放置提示文字
+  &::after {
+    content: '可以放置到这里';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #007bff;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0.9;
+    animation: fadeInOut 2s infinite;
+  }
+}
+
+// 拖拽目标但不可放置状态
+&.drag-target-invalid {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3) !important;
+  background-color: rgba(220, 53, 69, 0.05) !important;
+  
+  &::after {
+    content: '不能放置到这里';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #dc3545;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+}
+  
+  // 脉冲动画
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.7; }
+}
+
+// 淡入淡出动画
+@keyframes fadeInOut {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.7; }
+}
+
+  .node-content {
+    padding: 8px;
+    min-height: 40px;
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+  }
+
+  // 不同类型节点的样式
+  .image-placeholder,
+  .div-placeholder,
+  .page-placeholder,
+  .section-placeholder,
+  .container-placeholder,
+  .flex-placeholder,
+  .grid-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: #6c757d;
+    font-size: 12px;
+  }
+
+  // 选择框
+  .selection-box {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid #007bff;
+    pointer-events: none;
+
+    .resize-handle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #007bff;
+      border-radius: 50%;
+
+      &.top-left {
+        top: -4px;
+        left: -4px;
+      }
+
+      &.top-right {
+        top: -4px;
+        right: -4px;
+      }
+
+      &.bottom-left {
+        bottom: -4px;
+        left: -4px;
+      }
+
+      &.bottom-right {
+        bottom: -4px;
+        right: -4px;
+      }
+    }
+  // 子节点容器 - 子节点应该直接渲染在画布上，而不是在父节点内部
+  .node-children {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    
+    // 子节点本身需要能够接收鼠标事件
+    .canvas-node {
+      pointer-events: auto;
+    }
+  }
+  
+  // 流布局的子节点容器
+  .flow-children {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px;
+    background: rgba(0, 123, 255, 0.05);
+    border: 1px dashed #007bff;
+    border-radius: 4px;
+    margin-top: 8px;
+    
+    .canvas-node {
+      margin-bottom: 8px;
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  } 
+    .canvas-node {
+      pointer-events: auto;
+    }
+  }
+}
+
+// 空状态
+.empty-canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6c757d;
+
+  .empty-content {
+    text-align: center;
+    max-width: 300px;
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      color: #495057;
+    }
+
+    p {
+      margin: 0;
+      font-size: 14px;
+    }
+  }
+}

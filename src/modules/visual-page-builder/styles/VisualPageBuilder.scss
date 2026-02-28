@@ -1,0 +1,79 @@
+// 可视化页面构建器主样式
+.visual-page-builder {
+  height: 100vh;
+
+  // ModuleHeader组件样式适配
+  .module-header {
+    background: #fff;
+
+    .module-header__title {
+      color: #000;
+    }
+
+    .ant-btn {
+      &:hover {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-color: rgba(255, 255, 255, 0.5) !important;
+      }
+
+      &.ant-btn-primary {
+        background: #1890ff !important;
+        border-color: #1890ff !important;
+      }
+    }
+
+    .ant-typography {
+      color: #333;
+    }
+  }
+
+  .ant-layout-content {
+    padding: 16px;
+    background: #f0f2f5;
+    height: calc(100vh - 64px); // 减去头部高度
+  }
+
+  // 工作区布局
+  .workspace-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 16px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  // 组件面板容器
+  .component-panel-container {
+    .ant-card-body {
+      padding: 0;
+      height: calc(100% - 57px); // 减去标题栏高度
+      overflow: auto;
+    }
+  }
+
+  // 画布区域容器
+  .canvas-area-container {
+    .ant-card-body {
+      padding: 0;
+      height: calc(100% - 38px); // 减去标题栏高度
+      position: relative;
+      overflow: hidden;
+    }
+  }
+
+  // 属性面板容器
+  .property-panel-container {
+    .ant-card-body {
+      padding: 0;
+      height: calc(100% - 57px); // 减去标题栏高度
+      overflow: auto;
+    }
+  }
+
+  // 预览布局
+  .preview-layout {
+    height: 100%;
+    background: #f8f9fa;
+    overflow-y: auto;
+  }
+}

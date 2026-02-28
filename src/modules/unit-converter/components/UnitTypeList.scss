@@ -1,0 +1,41 @@
+.unit-type-list {
+  &__title {
+    margin-bottom: 24px !important;
+  }
+
+  &__card {
+    width: 100%;
+    height: auto;
+
+    &--selected {
+      border-color: #1890ff !important;
+      border-width: 2px !important;
+    }
+  }
+
+  &__card-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  &__card-body {
+    padding: 20px;
+  }
+
+  &__card-title {
+    flex: 1;
+    margin-bottom: 12px !important;
+  }
+
+  &__card-description {
+    flex: 1;
+    display: block;
+    margin-bottom: 16px;
+    text-align: right;
+  }
+
+  &__statistic-value {
+    font-size: 20px;
+  }
+}
