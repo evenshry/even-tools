@@ -40,6 +40,8 @@ jobs:
 
       - name: Build project # 4. 构建项目
         run: npm run build # 确保这个脚本存在且能生成构建文件夹
+        env:
+          BASE_URL: /${{ github.event.repository.name }}/
 
       - name: Deploy to GitHub Pages # 5. 部署
         uses: JamesIves/github-pages-deploy-action@v4
