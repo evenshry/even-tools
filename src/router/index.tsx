@@ -4,6 +4,7 @@ import HabitTracker from "@/modules/habit-tracker";
 import ColorCalculator from "@/modules/color-calculator";
 import RegexSandbox from "@/modules/regex-sandbox";
 import VisualPageBuilder from "@/modules/visual-page-builder";
+import FloorPlanGenerator from "@/modules/floor-plan-generator";
 import ToolNavigation from "@/components/ToolNavigation";
 import { tools } from "@/config/tools";
 
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
   {
     path: "/visual-page-builder", // 视觉页面构建器页面
     element: <VisualPageBuilder />,
+  },
+  {
+    path: "/floor-plan-generator", // 房屋平面设计图生成器页面
+    element: <FloorPlanGenerator />,
   },
 
 ]);

@@ -50,5 +50,13 @@ export const tools: Tool[] = [
     category: "设计工具",
     path: "/visual-page-builder",
   },
+  {
+    id: "floor-plan-generator",
+    name: "房屋平面设计图生成器",
+    description: "根据配置参数生成专业的房屋平面设计图，支持房间布局、门窗设置、家具摆放等功能",
+    icon: "🏠",
+    category: "设计工具",
+    path: "/floor-plan-generator",
+  },
 
 ];

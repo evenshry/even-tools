@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    optimizeDeps: {
+      // 依赖优化配置
+    },
     build: {
       rollupOptions: {
         output: {
