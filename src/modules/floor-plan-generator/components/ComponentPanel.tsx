@@ -37,6 +37,9 @@ const ComponentPanel: React.FC = () => {
     { id: 'room-kitchen', name: '厨房', type: 'room', icon: <CoffeeOutlined />, width: 300, height: 250, color: '#f6ffed', category: 'rooms' },
     { id: 'room-bathroom', name: '卫生间', type: 'room', icon: <SettingOutlined />, width: 200, height: 200, color: '#fff2e8', category: 'rooms' },
     { id: 'room-dining', name: '餐厅', type: 'room', icon: <TableOutlined />, width: 300, height: 250, color: '#f9f0ff', category: 'rooms' },
+    { id: 'room-study', name: '书房', type: 'room', icon: <CarOutlined />, width: 250, height: 250, color: '#e8f5ff', category: 'rooms' },
+    { id: 'room-balconey', name: '阳台', type: 'room', icon: <HomeOutlined />, width: 150, height: 300, color: '#fff7e6', category: 'rooms' },
+    { id: 'room-storage', name: '储藏室', type: 'room', icon: <SettingOutlined />, width: 150, height: 200, color: '#f0f0f0', category: 'rooms' },
   ];
 
   // 家具组件库
@@ -46,20 +49,40 @@ const ComponentPanel: React.FC = () => {
     { id: 'furniture-table', name: '餐桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 80, color: '#d9d9d9', category: 'dining' },
     { id: 'furniture-chair', name: '椅子', type: 'furniture', icon: <TableOutlined />, width: 40, height: 40, color: '#d9d9d9', category: 'dining' },
     { id: 'furniture-cabinet', name: '柜子', type: 'furniture', icon: <CarOutlined />, width: 60, height: 120, color: '#d9d9d9', category: 'storage' },
+    { id: 'furniture-desk', name: '书桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 60, color: '#d9d9d9', category: 'study' },
+    { id: 'furniture-wardrobe', name: '衣柜', type: 'furniture', icon: <CarOutlined />, width: 100, height: 200, color: '#d9d9d9', category: 'bedroom' },
+    { id: 'furniture-tv', name: '电视', type: 'furniture', icon: <HomeOutlined />, width: 100, height: 60, color: '#d9d9d9', category: 'living' },
+    { id: 'furniture-refrigerator', name: '冰箱', type: 'furniture', icon: <CoffeeOutlined />, width: 60, height: 180, color: '#d9d9d9', category: 'kitchen' },
+    { id: 'furniture-stove', name: '灶台', type: 'furniture', icon: <CoffeeOutlined />, width: 80, height: 60, color: '#d9d9d9', category: 'kitchen' },
   ];
 
   // 门窗组件库
   const doorWindowComponents: ComponentItem[] = [
     { id: 'door-single', name: '单开门', type: 'door', icon: <DragOutlined />, width: 80, height: 20, color: '#8c8c8c', category: 'doors' },
     { id: 'door-double', name: '双开门', type: 'door', icon: <DragOutlined />, width: 120, height: 20, color: '#8c8c8c', category: 'doors' },
+    { id: 'door-sliding', name: '推拉门', type: 'door', icon: <DragOutlined />, width: 100, height: 20, color: '#8c8c8c', category: 'doors' },
     { id: 'window-single', name: '单窗', type: 'window', icon: <DragOutlined />, width: 100, height: 15, color: '#91d5ff', category: 'windows' },
     { id: 'window-double', name: '双窗', type: 'window', icon: <DragOutlined />, width: 180, height: 15, color: '#91d5ff', category: 'windows' },
+    { id: 'window-bay', name: '飘窗', type: 'window', icon: <DragOutlined />, width: 150, height: 15, color: '#91d5ff', category: 'windows' },
   ];
 
   // 处理组件拖拽开始
   const handleDragStart = (e: React.DragEvent, component: ComponentItem) => {
+    console.log('Drag start for component:', component);
     setDraggingItem(component);
-    e.dataTransfer.setData('text/plain', JSON.stringify(component));
+    // 只序列化必要的属性，排除无法序列化的 React 组件
+    const serializableComponent = {
+      id: component.id,
+      name: component.name,
+      type: component.type,
+      width: component.width,
+      height: component.height,
+      color: component.color,
+      category: component.category
+    };
+    const componentData = JSON.stringify(serializableComponent);
+    console.log('Setting drag data:', componentData);
+    e.dataTransfer.setData('text/plain', componentData);
     e.dataTransfer.effectAllowed = 'copy';
     
     // 添加拖拽视觉反馈

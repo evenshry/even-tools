@@ -53,16 +53,17 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
 
   const getFurnitureColor = (type: string): string => {
     const colors: Record<string, string> = {
-      bed: '#d9d9d9',
-      sofa: '#d9d9d9',
-      table: '#d9d9d9',
-      chair: '#d9d9d9',
-      cabinet: '#d9d9d9',
-      desk: '#d9d9d9',
-      wardrobe: '#d9d9d9',
-      refrigerator: '#d9d9d9',
-      stove: '#d9d9d9',
-      sink: '#d9d9d9'
+      bed: '#e6f7ff',
+      sofa: '#f6ffed',
+      table: '#fff7e6',
+      chair: '#f9f0ff',
+      cabinet: '#f0f0f0',
+      desk: '#e8f5ff',
+      wardrobe: '#f0f0f0',
+      tv: '#d9d9d9',
+      refrigerator: '#e6f7ff',
+      stove: '#f6ffed',
+      sink: '#91d5ff'
     };
     return colors[type] || '#d9d9d9';
   };
@@ -77,11 +78,21 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
 
   const getSvgPoint = (evt: { clientX: number; clientY: number }) => {
     const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
+    if (!svg) {
+      console.log('SVG ref is null');
+      return { x: 0, y: 0 };
+    }
+    console.log('SVG element:', svg);
+    console.log('SVG bounds:', svg.getBoundingClientRect());
     const ctm = svg.getScreenCTM();
-    if (!ctm) return { x: 0, y: 0 };
+    if (!ctm) {
+      console.log('CTM is null');
+      return { x: 0, y: 0 };
+    }
     const pt = new DOMPoint(evt.clientX, evt.clientY);
     const p = pt.matrixTransform(ctm.inverse());
+    console.log('Screen point:', { x: evt.clientX, y: evt.clientY });
+    console.log('SVG point:', p);
     return { x: p.x, y: p.y };
   };
 
@@ -110,11 +121,19 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   };
 
   const findRoomAtPoint = (p: { x: number; y: number }) => {
+    console.log('Finding room at point:', p);
+    console.log('Rooms:', houseConfig.rooms);
     const rooms = [...houseConfig.rooms];
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i];
-      if (p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height) return r;
+      console.log(`Checking room ${r.id}: x=${r.x}, y=${r.y}, width=${r.width}, height=${r.height}`);
+      console.log(`Point in room: ${p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height}`);
+      if (p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height) {
+        console.log('Found room:', r);
+        return r;
+      }
     }
+    console.log('No room found at point');
     return null;
   };
 
@@ -420,18 +439,29 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   const zoomOut = () => setViewport((v) => ({ ...v, zoom: clamp(v.zoom / 1.2, 0.2, 4) }));
 
   const handleDrop = (evt: React.DragEvent) => {
+    console.log('Drop event triggered');
     evt.preventDefault();
-    if (previewMode) return;
+    if (previewMode) {
+      console.log('Preview mode, returning');
+      return;
+    }
     const raw = evt.dataTransfer.getData('text/plain');
-    if (!raw) return;
+    console.log('Drag data:', raw);
+    if (!raw) {
+      console.log('No drag data, returning');
+      return;
+    }
     let component: any;
     try {
       component = JSON.parse(raw);
-    } catch {
+      console.log('Parsed component:', component);
+    } catch (error) {
+      console.error('Failed to parse component:', error);
       return;
     }
 
     const p = getSvgPoint(evt);
+    console.log('SVG point:', p);
     const ts = Date.now();
 
     if (component.type === 'room') {
@@ -486,7 +516,17 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
                 ? 'cabinet'
                 : component.id?.includes('bed')
                   ? 'bed'
-                  : 'table',
+                  : component.id?.includes('desk')
+                    ? 'desk'
+                    : component.id?.includes('wardrobe')
+                      ? 'wardrobe'
+                      : component.id?.includes('tv')
+                        ? 'tv'
+                        : component.id?.includes('refrigerator')
+                          ? 'refrigerator'
+                          : component.id?.includes('stove')
+                            ? 'stove'
+                            : 'table',
         name: component.name || '家具',
         width: w,
         height: h,
@@ -534,7 +574,12 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   };
 
   const onDragOver = (evt: React.DragEvent) => {
-    if (previewMode) return;
+    console.log('Drag over event triggered');
+    if (previewMode) {
+      console.log('Preview mode, returning');
+      return;
+    }
+    console.log('Preventing default and setting drop effect to copy');
     evt.preventDefault();
     evt.dataTransfer.dropEffect = 'copy';
   };
@@ -612,7 +657,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     );
   };
 
-  const renderRoom = (room: FloorPlan.Room) => {
+  // 渲染优化：使用 useMemo 缓存渲染结果
+  const renderRoom = React.useMemo(() => (room: FloorPlan.Room) => {
     const isSelected = selected?.metadata?.originalType === 'room' && selected.metadata.roomId === room.id;
     const stroke = isSelected ? '#1890ff' : '#333';
     const strokeWidth = isSelected ? 3 : 2;
@@ -646,14 +692,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         {renderResizeHandlesForRoom(room)}
       </g>
     );
-  };
+  }, [selected, previewMode, houseConfig.showDimensions]);
 
-  const renderFurniture = (room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
+  const renderFurniture = React.useMemo(() => (room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
     if (!houseConfig.showFurniture) return null;
-    const isSelected =
-      selected?.metadata?.originalType === 'furniture' &&
-      selected.metadata.roomId === room.id &&
-      selected.metadata.furnitureId === furniture.id;
+    const isSelected = selected?.metadata?.originalType === 'furniture' && selected.metadata.roomId === room.id && selected.metadata.furnitureId === furniture.id;
     const stroke = isSelected ? '#52c41a' : '#A0522D';
 
     const x = room.x + furniture.x;
@@ -683,9 +726,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         {renderResizeHandlesForFurniture(room, furniture)}
       </g>
     );
-  };
+  }, [selected, previewMode, houseConfig.showFurniture, getFurnitureColor]);
 
-  const renderDoor = (room: FloorPlan.Room, door: FloorPlan.Door) => {
+  const renderDoor = React.useMemo(() => (room: FloorPlan.Room, door: FloorPlan.Door) => {
     const thickness = 20;
     const isVertical = door.position === 'left' || door.position === 'right';
     const w = isVertical ? thickness : door.width;
@@ -710,9 +753,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         />
       </g>
     );
-  };
+  }, [selected, previewMode]);
 
-  const renderWindow = (room: FloorPlan.Room, window: FloorPlan.Window) => {
+  const renderWindow = React.useMemo(() => (room: FloorPlan.Room, window: FloorPlan.Window) => {
     const thickness = 15;
     const isVertical = window.position === 'left' || window.position === 'right';
     const w = isVertical ? thickness : window.width;
@@ -720,8 +763,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     const x = room.x + (window.x ?? 0);
     const y = room.y + (window.y ?? 0);
 
-    const isSelected =
-      selected?.metadata?.originalType === 'window' && selected.metadata.roomId === room.id && selected.metadata.windowId === window.id;
+    const isSelected = selected?.metadata?.originalType === 'window' && selected.metadata.roomId === room.id && selected.metadata.windowId === window.id;
     const stroke = isSelected ? '#1890ff' : '#1890ff';
 
     return (
@@ -738,7 +780,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         />
       </g>
     );
-  };
+  }, [selected, previewMode]);
 
   return (
     <Card
@@ -784,8 +826,6 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         borderRadius: '4px',
         overflow: 'hidden'
       }}
-      onDrop={handleDrop}
-      onDragOver={onDragOver}
       >
         <svg
           ref={svgRef}
@@ -805,7 +845,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
             buildSelected(null);
             startPan(e);
           }}
-          style={{ background: '#f5f5f5', touchAction: 'none' }}
+          onDrop={handleDrop}
+          onDragOver={onDragOver}
+          style={{ background: '#f5f5f5', touchAction: 'none', pointerEvents: 'all' }}
         >
           <defs>
             {houseConfig.showGrid && (

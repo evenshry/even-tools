@@ -72,6 +72,30 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             rotation: furniture.rotation
           });
         }
+      } else if (metadata.originalType === 'door') {
+        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
+        const door = room?.doors.find(d => d.id === metadata.doorId);
+        if (door) {
+          form.setFieldsValue({
+            name: door.type === 'double' ? '双开门' : '单开门',
+            type: door.type,
+            width: door.width,
+            position: door.position,
+            offset: door.offset
+          });
+        }
+      } else if (metadata.originalType === 'window') {
+        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
+        const window = room?.windows.find(w => w.id === metadata.windowId);
+        if (window) {
+          form.setFieldsValue({
+            name: window.type === 'bay' ? '飘窗' : '普通窗',
+            type: window.type,
+            width: window.width,
+            position: window.position,
+            offset: window.offset
+          });
+        }
       }
     } else {
       setEditingRoom(null);
@@ -88,6 +112,10 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
         updateRoom(editingRoom.id, values);
       } else if (metadata.originalType === 'furniture') {
         updateFurniture(metadata.roomId, metadata.furnitureId, values);
+      } else if (metadata.originalType === 'door') {
+        updateDoor(metadata.roomId, metadata.doorId, values);
+      } else if (metadata.originalType === 'window') {
+        updateWindow(metadata.roomId, metadata.windowId, values);
       }
     }
   };
@@ -294,6 +322,97 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             
             <Form.Item label="旋转角度" name="rotation">
               <InputNumber min={0} max={360} style={{ width: '100%' }} />
+            </Form.Item>
+          </Form>
+        </Card>
+      </div>
+    );
+  }
+
+  if (metadata.originalType === 'door') {
+    return (
+      <div className="property-panel">
+        <Card title="门属性" size="small">
+          <Form
+            layout="vertical"
+            size="small"
+            form={form}
+            onFinish={handlePropertiesUpdate}
+          >
+            <Form.Item label="门名称" name="name">
+              <Input />
+            </Form.Item>
+            
+            <Form.Item label="门类型" name="type">
+              <Select>
+                <Option value="single">单开门</Option>
+                <Option value="double">双开门</Option>
+                <Option value="sliding">推拉门</Option>
+              </Select>
+            </Form.Item>
+            
+            <Divider style={{ margin: '12px 0' }} />
+            
+            <Form.Item label="宽度" name="width">
+              <InputNumber min={50} max={200} style={{ width: '100%' }} />
+            </Form.Item>
+            
+            <Form.Item label="位置" name="position">
+              <Select>
+                <Option value="top">顶部</Option>
+                <Option value="bottom">底部</Option>
+                <Option value="left">左侧</Option>
+                <Option value="right">右侧</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item label="偏移量" name="offset">
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Form>
+        </Card>
+      </div>
+    );
+  }
+
+  if (metadata.originalType === 'window') {
+    return (
+      <div className="property-panel">
+        <Card title="窗属性" size="small">
+          <Form
+            layout="vertical"
+            size="small"
+            form={form}
+            onFinish={handlePropertiesUpdate}
+          >
+            <Form.Item label="窗名称" name="name">
+              <Input />
+            </Form.Item>
+            
+            <Form.Item label="窗类型" name="type">
+              <Select>
+                <Option value="regular">普通窗</Option>
+                <Option value="bay">飘窗</Option>
+              </Select>
+            </Form.Item>
+            
+            <Divider style={{ margin: '12px 0' }} />
+            
+            <Form.Item label="宽度" name="width">
+              <InputNumber min={50} max={300} style={{ width: '100%' }} />
+            </Form.Item>
+            
+            <Form.Item label="位置" name="position">
+              <Select>
+                <Option value="top">顶部</Option>
+                <Option value="bottom">底部</Option>
+                <Option value="left">左侧</Option>
+                <Option value="right">右侧</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item label="偏移量" name="offset">
+              <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </Form>
         </Card>

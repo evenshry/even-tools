@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Layout, Button, Tooltip, Modal, message, Dropdown } from "antd";
-import { EyeOutlined, ExportOutlined, ReloadOutlined } from "@ant-design/icons";
+import { EyeOutlined, ExportOutlined, ImportOutlined, ReloadOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
 import ComponentPanel from "./components/ComponentPanel";
 import CanvasArea from "./components/CanvasArea";
@@ -16,7 +16,8 @@ const FloorPlanGenerator: React.FC = () => {
     previewMode, 
     togglePreview, 
     houseConfig, 
-    resetConfig
+    resetConfig,
+    setHouseConfig
   } = useFloorPlanStore();
   
   const [selectedElement, setSelectedElement] = useState<Record<string, any> | null>(null);
@@ -84,6 +85,32 @@ const FloorPlanGenerator: React.FC = () => {
     });
   };
 
+  // 处理导入配置
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const content = event.target?.result as string;
+            const config = JSON.parse(content) as FloorPlan.HouseConfig;
+            setHouseConfig(config);
+            message.success('配置导入成功');
+          } catch (error) {
+            message.error('导入失败：文件格式错误');
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
   // 头部额外内容
   const headerExtra = (
     <div className="header-actions">
@@ -95,6 +122,17 @@ const FloorPlanGenerator: React.FC = () => {
           size="small"
         >
           {previewMode ? "退出预览" : "预览"}
+        </Button>
+      </Tooltip>
+      
+      <Tooltip title="导入设计">
+        <Button 
+          icon={<ImportOutlined />}
+          onClick={handleImport}
+          size="small"
+          style={{ marginLeft: 8 }}
+        >
+          导入
         </Button>
       </Tooltip>
       
