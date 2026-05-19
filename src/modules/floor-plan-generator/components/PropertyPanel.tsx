@@ -10,7 +10,7 @@ interface PropertyPanelProps {
 }
 
 const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
-  const { houseConfig, updateHouseConfig, updateRoom, updateFurniture, deleteRoom } = useFloorPlanStore();
+  const { houseConfig, updateHouseConfig, updateRoom, updateFurniture, updateDoor, updateWindow, deleteRoom } = useFloorPlanStore();
   const [form] = Form.useForm();
   const [editingRoom, setEditingRoom] = useState<FloorPlan.Room | null>(null);
 

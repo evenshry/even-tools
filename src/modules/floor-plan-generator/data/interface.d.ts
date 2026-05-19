@@ -57,7 +57,7 @@ declare namespace FloorPlan {
   }
 
   // 家具类型
-  type FurnitureType = 'bed' | 'sofa' | 'table' | 'chair' | 'cabinet' | 'desk' | 'wardrobe' | 'refrigerator' | 'stove' | 'sink';
+  type FurnitureType = 'bed' | 'sofa' | 'table' | 'chair' | 'cabinet' | 'desk' | 'wardrobe' | 'tv' | 'refrigerator' | 'stove' | 'sink';
 
   // 房屋配置
   interface HouseConfig {
