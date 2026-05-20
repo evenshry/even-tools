@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createHashRouter } from "react-router-dom";
 import UnitConverter from "@/modules/unit-converter";
 import HabitTracker from "@/modules/habit-tracker";
 import ColorCalculator from "@/modules/color-calculator";
@@ -9,7 +9,7 @@ import ToolNavigation from "@/components/ToolNavigation";
 import { tools } from "@/config/tools";
 
 // 创建应用路由配置
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/", // 首页：工具导航页面
     element: <ToolNavigation tools={tools} />,
