@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode deploy",
     "build": "tsc -b && vite build",
     "deploy": "tsc -b && vite build --mode deploy",
     "lint": "eslint .",
