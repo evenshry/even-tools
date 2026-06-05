@@ -27,11 +27,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'yarn'
+          node-version: 22
 
-      - name: Install dependencies
-        run: yarn install
+      - name: 启用 Yarn 4 (通过 Corepack)
+        run: |
+          corepack enable
+          corepack prepare yarn@4.16.0 --activate # 如需锁定特定版本，使用此命令
+          yarn set version 4.16.0
+
+      - name: 还原依赖缓存
+        uses: actions/cache@v4
+        id: yarn-cache
+        with:
+          # 注意：这里缓存的是 .yarn/cache 目录，而不是 node_modules
+          path: .yarn/cache
+          # 使用 yarn.lock 文件生成唯一的缓存键
+          key: yarn-cache-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            yarn-cache-
+
+      - name: 安装依赖
+        # 如果命中缓存，会跳过安装；否则执行安装
+        if: steps.yarn-cache.outputs.cache-hit != 'true'
+        run: yarn install --immutable
 
       - name: Build
         run: yarn deploy
