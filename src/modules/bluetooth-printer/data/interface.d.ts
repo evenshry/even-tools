@@ -4,7 +4,7 @@
 export type AppMode = 'command' | 'designer';
 
 // ===== 指令模式 =====
-export type CommandSyntax = 'hex' | 'mnemonic' | 'plaintext';
+export type CommandSyntax = 'hex' | 'plaintext';
 
 export interface CommandInput {
   syntax: CommandSyntax;
@@ -104,6 +104,7 @@ export interface PrintJob {
   elements?: PrintElement[];
   commandInput?: CommandInput;
   compiledBytes?: Uint8Array;
+  compiledText?: string;  // 编译后的指令文本（用于历史显示）
   status: 'pending' | 'sending' | 'success' | 'failed' | 'canceled';
   progress: number;
   createdAt: number;

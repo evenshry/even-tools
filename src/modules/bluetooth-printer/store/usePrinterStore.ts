@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type {
   AppMode, CommandInput, CommandSnippet, ConnectionState,
   ConnectedDevice, PrintElement, PrintHistoryEntry, PrintJob,
-  PrinterProfile, PrinterStatus, Template,
+  PrinterProfile, PrinterStatus, SavedDevice, Template,
 } from '../data/interface';
 import { DEFAULT_PROFILE } from '../data/printerProfiles';
 import { BUILTIN_SNIPPETS } from '../data/snippets';
@@ -13,6 +13,8 @@ import { BUILTIN_TEMPLATES } from '../data/templates';
 const STORAGE_KEY_MODE = 'bluetooth-printer-mode';
 const STORAGE_KEY_COMMAND = 'bluetooth-printer-command';
 const STORAGE_KEY_PROFILE = 'bluetooth-printer-profile';
+const STORAGE_KEY_HISTORY = 'bluetooth-printer-history';
+const STORAGE_KEY_SAVED_DEVICES = 'bluetooth-printer-saved-devices';
 
 function loadMode(): AppMode {
   try {
@@ -26,11 +28,14 @@ function loadMode(): AppMode {
 function loadCommandInput(): CommandInput {
   try {
     const v = localStorage.getItem(STORAGE_KEY_COMMAND);
-    if (v) return JSON.parse(v);
+    if (v) {
+      const parsed = JSON.parse(v);
+      return { ...parsed, syntax: 'plaintext' };
+    }
   } catch { /* ignore */ }
   return {
-    syntax: 'mnemonic',
-    raw: '@init\n@align center\n@size 2x2\n@bold on\nHello World\n@bold off\n@size 1x1\n@align left\n@feed 3\n@cut',
+    syntax: 'plaintext',
+    raw: '',
     encoding: 'utf8',
     appendNewline: false,
     repeat: 1,
@@ -43,6 +48,22 @@ function loadProfile(): PrinterProfile {
     if (v) return JSON.parse(v);
   } catch { /* ignore */ }
   return DEFAULT_PROFILE;
+}
+
+function loadHistory(): PrintHistoryEntry[] {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_HISTORY);
+    if (v) return JSON.parse(v);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function loadSavedDevices(): SavedDevice[] {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_SAVED_DEVICES);
+    if (v) return JSON.parse(v);
+  } catch { /* ignore */ }
+  return [];
 }
 
 interface PrinterStore {
@@ -93,6 +114,11 @@ interface PrinterStore {
   saveAsTemplate: (name: string, elements: PrintElement[]) => void;
   loadTemplate: (id: string) => PrintElement[] | null;
   saveAsSnippet: (name: string, input: CommandInput) => void;
+
+  // 已保存设备
+  savedDevices: SavedDevice[];
+  saveDevice: (device: Omit<SavedDevice, 'lastConnectedAt'>) => void;
+  removeSavedDevice: (id: string) => void;
 }
 
 export const usePrinterStore = create<PrinterStore>((set, get) => ({
@@ -119,7 +145,7 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   // 指令模式
   commandInput: loadCommandInput(),
   setCommandInput: (patch) => {
-    const newInput = { ...get().commandInput, ...patch };
+    const newInput: CommandInput = { ...get().commandInput, ...patch, syntax: 'plaintext' as const };
     try { localStorage.setItem(STORAGE_KEY_COMMAND, JSON.stringify(newInput)); } catch { /* ignore */ }
     set({ commandInput: newInput });
   },
@@ -167,11 +193,18 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   })),
 
   // 历史
-  history: [],
-  addHistory: (entry) => set((s) => ({
-    history: [entry, ...s.history].slice(0, 100),
-  })),
-  clearHistory: () => set({ history: [] }),
+  history: loadHistory(),
+  addHistory: (entry) => set((s) => {
+    // 防止重复添加
+    if (s.history.some(h => h.id === entry.id)) return s;
+    const newHistory = [entry, ...s.history].slice(0, 100);
+    try { localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(newHistory)); } catch { /* ignore */ }
+    return { history: newHistory };
+  }),
+  clearHistory: () => {
+    try { localStorage.removeItem(STORAGE_KEY_HISTORY); } catch { /* ignore */ }
+    set({ history: [] });
+  },
 
   // 模板与片段
   templates: BUILTIN_TEMPLATES,
@@ -203,5 +236,22 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
       category: 'common',
     };
     return { snippets: [...s.snippets, snip] };
+  }),
+
+  // 已保存设备
+  savedDevices: loadSavedDevices(),
+  saveDevice: (device) => set((s) => {
+    const newDevices = s.savedDevices
+      .filter(d => d.id !== device.id)
+      .concat({ ...device, lastConnectedAt: Date.now() })
+      .sort((a, b) => b.lastConnectedAt - a.lastConnectedAt)
+      .slice(0, 10);
+    try { localStorage.setItem(STORAGE_KEY_SAVED_DEVICES, JSON.stringify(newDevices)); } catch { /* ignore */ }
+    return { savedDevices: newDevices };
+  }),
+  removeSavedDevice: (id) => set((s) => {
+    const newDevices = s.savedDevices.filter(d => d.id !== id);
+    try { localStorage.setItem(STORAGE_KEY_SAVED_DEVICES, JSON.stringify(newDevices)); } catch { /* ignore */ }
+    return { savedDevices: newDevices };
   }),
 }));

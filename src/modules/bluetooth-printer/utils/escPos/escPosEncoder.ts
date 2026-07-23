@@ -22,6 +22,7 @@ function encodeText(text: string, encoding: 'gbk' | 'utf8'): number[] {
 
 export class EscPosEncoder {
   private buffer: number[] = [];
+  private textBuffer: string[] = [];
   private encoding: 'gbk' | 'utf8' = 'gbk';
 
   setEncoding(enc: 'gbk' | 'utf8'): this {
@@ -30,30 +31,34 @@ export class EscPosEncoder {
   }
 
   // ===== 基础指令 =====
-  init(): this { this.buffer.push(...CMD_INIT); return this; }
+  init(): this { this.buffer.push(...CMD_INIT); this.textBuffer.push('ESC @'); return this; }
   align(value: Alignment): this {
     this.buffer.push(...cmdAlign(value === 'left' ? 0 : value === 'center' ? 1 : 2));
+    this.textBuffer.push(`ESC a ${value}`);
     return this;
   }
-  bold(on: boolean): this { this.buffer.push(...cmdBold(on ? 1 : 0)); return this; }
-  underline(n: 0 | 1 | 2): this { this.buffer.push(...cmdUnderline(n)); return this; }
-  fontSize(w: number, h: number): this { this.buffer.push(...cmdFontSize(w, h)); return this; }
-  lineSpacing(n: number): this { this.buffer.push(...cmdLineSpacing(n)); return this; }
+  bold(on: boolean): this { this.buffer.push(...cmdBold(on ? 1 : 0)); this.textBuffer.push(`ESC E ${on ? '1' : '0'}`); return this; }
+  underline(n: 0 | 1 | 2): this { this.buffer.push(...cmdUnderline(n)); this.textBuffer.push(`ESC - ${n}`); return this; }
+  fontSize(w: number, h: number): this { this.buffer.push(...cmdFontSize(w, h)); this.textBuffer.push(`GS ! ${w},${h}`); return this; }
+  lineSpacing(n: number): this { this.buffer.push(...cmdLineSpacing(n)); this.textBuffer.push(`ESC 3 ${n}`); return this; }
   text(s: string): this {
     this.buffer.push(...encodeText(s, this.encoding));
+    this.textBuffer.push(s);
     return this;
   }
-  textLine(s: string): this { this.text(s); this.buffer.push(LF); return this; }
-  feed(n: number): this { this.buffer.push(...cmdFeed(n)); return this; }
-  cut(full: boolean = true): this { this.buffer.push(...cmdCut(full)); return this; }
+  textLine(s: string): this { this.text(s); this.buffer.push(LF); this.textBuffer.push('\n'); return this; }
+  feed(n: number): this { this.buffer.push(...cmdFeed(n)); this.textBuffer.push(`ESC d ${n}`); return this; }
+  cut(full: boolean = true): this { this.buffer.push(...cmdCut(full)); this.textBuffer.push(`GS V ${full ? '1' : '0'}`); return this; }
   buzzer(times: number, duration: number): this {
-    this.buffer.push(...cmdBuzzer(times, duration)); return this;
+    this.buffer.push(...cmdBuzzer(times, duration)); this.textBuffer.push(`ESC ( B ${times},${duration}`); return this;
   }
 
   // ===== 分割线 =====
   divider(char: string = '-', width: number = 32): this {
-    this.buffer.push(...encodeText(char.repeat(width), this.encoding));
+    const line = char.repeat(width);
+    this.buffer.push(...encodeText(line, this.encoding));
     this.buffer.push(LF);
+    this.textBuffer.push(line + '\n');
     return this;
   }
 
@@ -68,6 +73,7 @@ export class EscPosEncoder {
     this.buffer.push(...cmdBarcodeText(opts?.showText ? 1 : 0));
     this.buffer.push(...cmdBarcode(m, data));
     this.buffer.push(LF);
+    this.textBuffer.push(`BARCODE ${type} "${content}"`);
     return this;
   }
 
@@ -79,18 +85,21 @@ export class EscPosEncoder {
     this.buffer.push(...cmdQrLevel(QR_LEVEL_MAP[level]));
     this.buffer.push(...cmdQrData(data));
     this.buffer.push(...CMD_QR_PRINT);
+    this.textBuffer.push(`QRCODE "${content}" size=${size} level=${level}`);
     return this;
   }
 
   // ===== 位图 =====
   image(width: number, height: number, data: number[]): this {
     this.buffer.push(...cmdImage(width, height, data));
+    this.textBuffer.push(`IMAGE ${width}x${height}`);
     return this;
   }
 
-  // ===== 直接写入原始字节 (助记符 @raw 使用) =====
+  // ===== 直接写入原始字节 =====
   raw(data: Uint8Array | number[]): this {
     this.buffer.push(...(data instanceof Uint8Array ? Array.from(data) : data));
+    this.textBuffer.push('[RAW BYTES]');
     return this;
   }
 
@@ -201,12 +210,22 @@ export class EscPosEncoder {
   flush(): Uint8Array {
     const result = new Uint8Array(this.buffer);
     this.buffer = [];
+    this.textBuffer = [];
     return result;
   }
 
   getBytes(): number[] {
     return [...this.buffer];
   }
+
+  getText(): string {
+    return this.textBuffer.join('');
+  }
+}
+
+export interface EscPosCompileResult {
+  bytes: Uint8Array;
+  text: string;
 }
 
 // 便捷函数：编码打印元素为字节流
@@ -214,11 +233,11 @@ export function encodePrintElements(
   elements: PrintElement[],
   paperWidth: number = 48,
   encoding: 'gbk' | 'utf8' = 'gbk',
-): Uint8Array {
+): EscPosCompileResult {
   const encoder = new EscPosEncoder().setEncoding(encoding);
   encoder.init();
   encoder.encodeElements(elements, paperWidth);
-  encoder.feed(3);
-  encoder.cut();
-  return encoder.flush();
+  const text = encoder.getText();
+  const bytes = encoder.flush();
+  return { bytes, text };
 }

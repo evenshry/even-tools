@@ -1,19 +1,22 @@
 // 打印队列 Hook - 异步消费队列，发送到打印机
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { message } from 'antd';
 import { usePrinterStore } from '../store/usePrinterStore';
 import { useBluetoothPrinter } from './useBluetoothPrinter';
-import { generateTestPageBytes } from '../utils/testPage';
+import { generateSelfTestBytes } from '../utils/testPage';
 import type { PrintJob, PrintHistoryEntry } from '../data/interface';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
-const DEBUG = true;
+const DEBUG = false;
 
 function log(...args: unknown[]) {
   if (DEBUG) console.log('[usePrintQueue]', ...args);
 }
+
+// 全局锁，防止多个组件实例同时处理同一个任务
+let globalProcessingJobId: string | null = null;
 
 export function usePrintQueue() {
   const {
@@ -21,7 +24,6 @@ export function usePrintQueue() {
     profile, connectedDevice,
   } = usePrinterStore();
   const { write, connectionState } = useBluetoothPrinter();
-  const runningRef = useRef(false);
 
   log('render hook, connectionState:', connectionState, 'queue.length:', queue.length, 'currentJob:', currentJob?.id);
 
@@ -89,22 +91,23 @@ export function usePrintQueue() {
   // 队列消费循环
   useEffect(() => {
     log('useEffect check:', {
-      running: runningRef.current,
+      globalProcessing: globalProcessingJobId,
       currentJob,
       queueLength: queue.length,
       connectionState,
     });
-    if (runningRef.current) return;
     if (currentJob) return;
     if (queue.length === 0) return;
     if (connectionState !== 'connected') return;
 
     const nextJob = queue[0];
+    if (globalProcessingJobId) return;
+
     log('start processing job:', nextJob.id);
-    runningRef.current = true;
+    globalProcessingJobId = nextJob.id;
     removeJob(nextJob.id);
     runJob(nextJob).finally(() => {
-      runningRef.current = false;
+      globalProcessingJobId = null;
     });
   }, [queue, currentJob, connectionState, runJob, removeJob]);
 
@@ -124,14 +127,14 @@ export function usePrintQueue() {
   }, [removeJob]);
 
   const printTestPage = useCallback(() => {
-    log('printTestPage called');
+    log('printTestPage (self-test) called');
     if (connectionState !== 'connected') {
       message.warning('请先连接打印机');
       return;
     }
-    const bytes = generateTestPageBytes(profile);
+    const bytes = generateSelfTestBytes(profile);
     const job: PrintJob = {
-      id: `job-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `job-selftest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       mode: 'command',
       compiledBytes: bytes,
       status: 'pending',
@@ -141,7 +144,7 @@ export function usePrintQueue() {
       deviceName: connectedDevice?.name,
     };
     enqueueJob(job);
-    message.info('测试页已加入打印队列');
+    message.info(profile.protocol === 'tspl' ? '已发送 SELFTEST 指令，打印机将打印自检页' : '自检样张已加入打印队列');
   }, [connectionState, profile, connectedDevice, enqueueJob]);
 
   return { queue, currentJob, enqueue, cancelJob, printTestPage };

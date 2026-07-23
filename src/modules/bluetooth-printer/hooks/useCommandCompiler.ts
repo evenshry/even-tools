@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import type { CommandInput } from '../data/interface';
 import { parseHex } from '../utils/command/hexParser';
-import { compileMnemonic, type PrinterProtocol } from '../utils/command/mnemonicCompiler';
 import { encodePlainText } from '../utils/command/plainTextEncoder';
 import { formatHexSimple } from '../utils/command/hexDump';
 
@@ -14,10 +13,7 @@ export interface CompileResult {
   byteCount: number;
 }
 
-export function useCommandCompiler(
-  input: CommandInput,
-  protocol: PrinterProtocol = 'escpos',
-): CompileResult {
+export function useCommandCompiler(input: CommandInput): CompileResult {
   return useMemo(() => {
     if (!input.raw.trim()) {
       return { bytes: null, hexPreview: '', error: null, byteCount: 0 };
@@ -31,19 +27,6 @@ export function useCommandCompiler(
           const result = parseHex(input.raw);
           if (result.error) {
             return { bytes: null, hexPreview: '', error: result.error, byteCount: 0 };
-          }
-          bytes = result.bytes;
-          break;
-        }
-        case 'mnemonic': {
-          const result = compileMnemonic(input.raw, input.encoding, protocol);
-          if (result.lineErrors.length > 0) {
-            return {
-              bytes: null,
-              hexPreview: '',
-              error: result.lineErrors.map(e => e.message).join('; '),
-              byteCount: 0,
-            };
           }
           bytes = result.bytes;
           break;
@@ -63,7 +46,6 @@ export function useCommandCompiler(
           return { bytes: null, hexPreview: '', error: '未知语法', byteCount: 0 };
       }
 
-      // 重复 N 次
       if (input.repeat > 1) {
         const repeated = new Uint8Array(bytes.length * input.repeat);
         for (let i = 0; i < input.repeat; i++) {
@@ -81,5 +63,5 @@ export function useCommandCompiler(
     } catch (e) {
       return { bytes: null, hexPreview: '', error: (e as Error).message, byteCount: 0 };
     }
-  }, [input.raw, input.syntax, input.encoding, input.appendNewline, input.repeat, protocol]);
+  }, [input.raw, input.syntax, input.encoding, input.appendNewline, input.repeat]);
 }

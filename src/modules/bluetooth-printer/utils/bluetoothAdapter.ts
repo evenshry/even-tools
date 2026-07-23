@@ -297,19 +297,21 @@ export class BluetoothAdapter {
     const CHUNK_DELAY = 20;
 
     for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
-      const chunk = data.slice(offset, offset + CHUNK_SIZE);
-      log(`writing chunk ${offset}-${offset + chunk.length}/${data.length}`);
+      const end = Math.min(offset + CHUNK_SIZE, data.length);
+      const chunk = new Uint8Array(end - offset);
+      chunk.set(data.slice(offset, end));
+      log(`writing chunk ${offset}-${end}/${data.length}`);
       try {
         if (mode === 'withResponse') {
-          await this.writeCharacteristic.writeValueWithResponse(chunk);
+          await this.writeCharacteristic.writeValueWithResponse(chunk.buffer);
         } else {
-          await this.writeCharacteristic.writeValueWithoutResponse(chunk);
+          await this.writeCharacteristic.writeValueWithoutResponse(chunk.buffer);
         }
       } catch (e) {
         logError('write chunk failed:', (e as Error).message);
         throw e;
       }
-      if (offset + CHUNK_SIZE < data.length) {
+      if (end < data.length) {
         await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY));
       }
     }

@@ -33,7 +33,7 @@ const PrintPreview: React.FC = () => {
   const { enqueue } = usePrintQueue();
 
   // 预编译字节数 (用于显示)
-  const compiledBytes = useMemo(() => {
+  const compileResult = useMemo(() => {
     if (elements.length === 0) return null;
     try {
       if (profile.protocol === 'tspl') {
@@ -49,15 +49,16 @@ const PrintPreview: React.FC = () => {
     }
   }, [elements, profile.paperWidth, profile.protocol, profile.dpi, commandInput.encoding]);
 
-  const canSend = connectionState === 'connected' && elements.length > 0;
+  const canSend = connectionState === 'connected' && elements.length > 0 && compileResult !== null;
 
   const handleSend = () => {
-    if (!compiledBytes || elements.length === 0) return;
+    if (!compileResult || elements.length === 0) return;
     const job: PrintJob = {
       id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       mode: 'designer',
       elements: JSON.parse(JSON.stringify(elements)),
-      compiledBytes,
+      compiledBytes: compileResult.bytes,
+      compiledText: compileResult.text,
       status: 'pending',
       progress: 0,
       createdAt: Date.now(),
@@ -149,10 +150,10 @@ const PrintPreview: React.FC = () => {
               </div>
             ))}
           </div>
-          {compiledBytes && (
+          {compileResult && (
             <div style={{ textAlign: 'center', marginTop: 12 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>
-                编译完成：{compiledBytes.length} 字节 / {elements.length} 元素 / {profile.paperWidth} 字符宽
+                编译完成：{compileResult.bytes.length} 字节 / {elements.length} 元素 / {profile.paperWidth} 字符宽
               </Text>
             </div>
           )}

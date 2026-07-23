@@ -1,7 +1,7 @@
 // 设备连接面板
 
 import React from 'react';
-import { Button, Card, Tag, Space, Typography, Alert } from 'antd';
+import { Button, Card, Tag, Space, Typography, Alert, List } from 'antd';
 import {
   ApiOutlined, LinkOutlined, DisconnectOutlined, ReloadOutlined,
   FileTextOutlined, InfoCircleOutlined,
@@ -25,7 +25,7 @@ const STATE_LABELS: Record<string, { text: string; color: string }> = {
 const DeviceConnectionPanel: React.FC = () => {
   const { connectionState, connectedDevice, isSupported, connect, disconnect, queryStatus } = useBluetoothPrinter();
   const { printTestPage } = usePrintQueue();
-  const printerStatus = usePrinterStore((s) => s.printerStatus);
+  const { printerStatus, savedDevices } = usePrinterStore();
 
   const stateInfo = STATE_LABELS[connectionState] || STATE_LABELS.idle;
   const isBusy = ['scanning', 'connecting', 'disconnecting'].includes(connectionState);
@@ -87,6 +87,28 @@ const DeviceConnectionPanel: React.FC = () => {
           </div>
         )}
 
+        {savedDevices.length > 0 && connectionState !== 'connected' && (
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>已配对设备</Text>
+            <List
+              size="small"
+              dataSource={savedDevices}
+              renderItem={(device) => (
+                <List.Item style={{ padding: '4px 0' }}>
+                  <Button
+                    block
+                    size="small"
+                    onClick={connect}
+                    disabled={isBusy || !isSupported}
+                  >
+                    {device.name}
+                  </Button>
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
+
         <Space wrap>
           {connectionState !== 'connected' ? (
             <Button
@@ -115,7 +137,7 @@ const DeviceConnectionPanel: React.FC = () => {
                 读取状态
               </Button>
               <Button icon={<FileTextOutlined />} onClick={printTestPage}>
-                打印测试页
+                打印自检页
               </Button>
             </>
           )}

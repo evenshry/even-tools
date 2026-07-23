@@ -10,13 +10,11 @@ const { Text } = Typography;
 
 const SYNTAX_COLORS: Record<CommandSyntax, string> = {
   hex: 'blue',
-  mnemonic: 'purple',
   plaintext: 'default',
 };
 
 const SYNTAX_LABELS: Record<CommandSyntax, string> = {
   hex: 'Hex',
-  mnemonic: '助记符',
   plaintext: '纯文本',
 };
 

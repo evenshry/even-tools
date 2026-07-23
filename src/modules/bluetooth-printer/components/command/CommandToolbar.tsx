@@ -14,10 +14,9 @@ const CommandToolbar: React.FC = () => {
   const setCommandInput = usePrinterStore(s => s.setCommandInput);
   const saveAsSnippet = usePrinterStore(s => s.saveAsSnippet);
   const connectedDevice = usePrinterStore(s => s.connectedDevice);
-  const profile = usePrinterStore(s => s.profile);
 
   const { connectionState } = useBluetoothPrinter();
-  const { bytes, error } = useCommandCompiler(commandInput, profile.protocol);
+  const { bytes, error } = useCommandCompiler(commandInput);
   const { enqueue } = usePrintQueue();
 
   const canSend = connectionState === 'connected' && !!bytes && !error;
@@ -29,6 +28,7 @@ const CommandToolbar: React.FC = () => {
       mode: 'command',
       commandInput: { ...commandInput },
       compiledBytes: bytes,
+      compiledText: commandInput.raw,
       status: 'pending',
       progress: 0,
       createdAt: Date.now(),

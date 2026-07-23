@@ -83,43 +83,26 @@ export const BUILTIN_SNIPPETS: CommandSnippet[] = [
     category: 'escpos',
   },
   {
-    id: 'snip-receipt-mnemonic',
-    name: '小票模板 (助记符)',
-    description: '完整小票示例：标题+商品+二维码+切纸',
-    syntax: 'mnemonic',
-    content: `@init
-@align center
-@size 2x2
-@bold on
-My Shop
-@bold off
-@size 1x1
----
-@align left
+    id: 'snip-receipt-plaintext',
+    name: '小票模板',
+    description: '完整小票示例：标题+商品+二维码',
+    syntax: 'plaintext',
+    content: `My Shop
+
 Item 1        $5.00
 Item 2        $3.50
----
-@align right
-@bold on
+
 Total: $8.50
-@bold off
-@align center
-@feed 1
-@qr https://example.com size=6 level=M
-@feed 3
-@cut`,
+
+https://example.com`,
     category: 'escpos',
   },
   {
     id: 'snip-qr-test',
-    name: '二维码测试 (助记符)',
+    name: '二维码测试',
     description: '打印一个二维码',
-    syntax: 'mnemonic',
-    content: `@init
-@align center
-@qr https://example.com size=8 level=M
-@feed 3
-@cut`,
+    syntax: 'plaintext',
+    content: `https://example.com`,
     category: 'escpos',
   },
   {
@@ -136,7 +119,7 @@ Total: $8.50
     name: 'TSPL 标签初始化',
     description: 'SIZE + GAP + DIRECTION + CLS + PRINT 标准初始化序列',
     syntax: 'plaintext',
-    content: 'SIZE 40 mm,30 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nPRINT 1,1\r\n',
+    content: 'SIZE 40 mm,30 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\nPRINT 1,1\r\n',
     category: 'tspl',
   },
   {
@@ -215,12 +198,22 @@ Total: $8.50
     id: 'snip-tspl-label-mnemonic',
     name: '标签模板 (助记符)',
     description: 'TSPL 完整标签示例：初始化+文本+二维码+条码+打印',
-    syntax: 'mnemonic',
-    content: `@init
-Product Name
-@qr https://example.com size=6 level=M
-@barcode CODE128 1234567890 height=60
-@print 1`,
+    syntax: 'plaintext',
+    content: `SIZE 80 mm,50 mm
+GAP 0 mm,0 mm
+CLS
+TEXT 50,20,"TSS24.BF2",0,1,1,"Product Name"
+QRCODE 50,80,L,4,A,0,"https://example.com"
+BARCODE 50,180,"128",60,1,0,2,2,"1234567890"
+PRINT 1`,
+    category: 'tspl',
+  },
+  {
+    id: 'snip-tspl-selftest',
+    name: 'TSPL 自检页',
+    description: '发送 SELFTEST，打印机自动打印固件/字库/DIP 等内置自检页',
+    syntax: 'plaintext',
+    content: 'SELFTEST\r\n',
     category: 'tspl',
   },
 ];

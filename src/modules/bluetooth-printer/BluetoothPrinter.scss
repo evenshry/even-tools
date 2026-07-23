@@ -109,6 +109,25 @@
   }
 }
 
+.bp-designer-grid .bp-preview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  grid-column: 3;
+  grid-row: 1;
+
+  > * {
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  > :first-child {
+    flex: 1;
+    min-height: 200px;
+  }
+}
+
 .bp-snippet-stack {
   grid-column: 1 / span 2;
   grid-row: 2;

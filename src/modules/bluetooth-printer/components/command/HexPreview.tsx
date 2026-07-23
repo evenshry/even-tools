@@ -11,8 +11,7 @@ const { Text } = Typography;
 
 const HexPreview: React.FC = () => {
   const commandInput = usePrinterStore(s => s.commandInput);
-  const profile = usePrinterStore(s => s.profile);
-  const { bytes, error, byteCount } = useCommandCompiler(commandInput, profile.protocol);
+  const { bytes, error, byteCount } = useCommandCompiler(commandInput);
 
   if (error) {
     return (

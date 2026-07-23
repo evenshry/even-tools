@@ -6,38 +6,32 @@ import { usePrinterStore } from '../store/usePrinterStore';
 import { getSharedBluetoothAdapter, isBluetoothSupported } from '../utils/bluetoothAdapter';
 import type { ConnectedDevice, PrinterProfile } from '../data/interface';
 
-const DEBUG = true;
+const DEBUG = false;
 
 function log(...args: unknown[]) {
   if (DEBUG) console.log('[useBluetoothPrinter]', ...args);
 }
 
-// 根据设备名称和服务 UUID 推断打印机协议和纸宽
 function inferProfile(deviceName: string, serviceUuids: string[]): Partial<PrinterProfile> {
   const name = deviceName.toLowerCase();
 
-  // TSC / 标签打印机
   if (name.includes('tsc') || name.includes('label') || name.includes('标签')) {
     return { protocol: 'tspl', paperWidth: 72, dpi: 203, writeMode: 'withoutResponse' };
   }
 
-  // 80mm 热敏打印机
   if (name.includes('80') || name.includes('p80') || name.includes('pos-80')) {
     return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
   }
 
-  // 58mm 热敏打印机 / 便携打印机
   if (name.includes('58') || name.includes('p58') || name.includes('mini') || name.includes('便携')) {
     return { protocol: 'escpos', paperWidth: 32, dpi: 203, writeMode: 'withResponse' };
   }
 
-  // 通过服务 UUID 推断
   const tsplServiceUuid = '000018f0-0000-1000-8000-00805f9b34fb';
   if (serviceUuids.includes(tsplServiceUuid)) {
     return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
   }
 
-  // 默认 fallback
   return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
 }
 
@@ -46,6 +40,7 @@ export function useBluetoothPrinter() {
   const {
     profile, connectionState, connectedDevice,
     setConnectionState, setConnectedDevice, setProfile, setPrinterStatus,
+    saveDevice,
   } = usePrinterStore();
 
   log('render hook, connectionState:', connectionState, 'connectedDevice:', connectedDevice?.name);
@@ -69,7 +64,6 @@ export function useBluetoothPrinter() {
       const discoveredServices = await adapter.connect(device, profile);
       log('adapter.connect done');
 
-      // 推断实际协议和纸宽
       const serviceUuids = discoveredServices.map(s => s.uuid);
       const inferred = inferProfile(device.name || '', serviceUuids);
       const actualProfile: PrinterProfile = {
@@ -79,7 +73,6 @@ export function useBluetoothPrinter() {
       log('inferred profile:', actualProfile);
       setProfile(actualProfile);
 
-      // 断线监听
       adapter.onDisconnected = () => {
         log('onDisconnected callback fired');
         setConnectionState('disconnected');
@@ -99,7 +92,12 @@ export function useBluetoothPrinter() {
       setConnectedDevice(connected);
       setConnectionState('connected');
 
-      // 连接成功后自动订阅状态推送（如果打印机支持）
+      saveDevice({
+        id: device.id,
+        name: device.name || '未知设备',
+        profileId: actualProfile.id,
+      });
+
       adapter.subscribeStatus((status) => {
         log('status update from subscription:', status);
         setPrinterStatus(status);
@@ -117,7 +115,7 @@ export function useBluetoothPrinter() {
         message.error(`连接失败: ${err.message}`);
       }
     }
-  }, [profile, setConnectionState, setConnectedDevice, setProfile]);
+  }, [profile, setConnectionState, setConnectedDevice, setProfile, saveDevice]);
 
   const disconnect = useCallback(async () => {
     log('disconnect callback start');

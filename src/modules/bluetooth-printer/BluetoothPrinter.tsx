@@ -57,7 +57,10 @@ const DesignerMode: React.FC = () => (
     <div className="bp-designer-grid">
       <PrintEditor />
       <PropertyPanel />
-      <PrintPreview />
+      <div className="bp-preview-stack">
+        <PrintPreview />
+        <PrintHistory />
+      </div>
     </div>
   </div>
 );

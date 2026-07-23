@@ -28,9 +28,9 @@ export interface TsplLabelConfig {
 export const DEFAULT_LABEL_CONFIG: TsplLabelConfig = {
   widthMm: 40,
   heightMm: 30,
-  gapMm: 2,
+  gapMm: 0,
   dpi: 203,
-  direction: 1,
+  direction: 0,
 };
 
 // 字号映射: PrintElement.fontSize -> TSPL 字体与放大倍数
@@ -272,12 +272,17 @@ export class TsplEncoder {
   }
 }
 
+export interface TsplCompileResult {
+  bytes: Uint8Array;
+  text: string;
+}
+
 // 便捷函数：编码打印元素为 TSPL 字节流
 export function encodePrintElementsTspl(
   elements: PrintElement[],
   labelConfig: TsplLabelConfig = DEFAULT_LABEL_CONFIG,
   encoding: 'gbk' | 'utf8' = 'utf8',
-): Uint8Array {
+): TsplCompileResult {
   const encoder = new TsplEncoder()
     .setEncoding(encoding)
     .setLabelConfig(labelConfig);
@@ -288,5 +293,7 @@ export function encodePrintElementsTspl(
   encoder.cls();
   encoder.encodeElements(elements);
   encoder.print(1, 1);
-  return encoder.flush();
+  const text = encoder.getText();
+  const bytes = encoder.flush();
+  return { bytes, text };
 }

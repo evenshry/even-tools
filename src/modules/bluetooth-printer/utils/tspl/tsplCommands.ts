@@ -52,7 +52,7 @@ export const CMD_CLS = `CLS${TSPL_NEWLINE}`;
 // 打印标签 PRINT m[,n]
 // m=打印张数, n=每张份数
 export function cmdPrint(copies: number = 1, quantity: number = 1): string {
-  return `PRINT ${copies},${quantity}${TSPL_NEWLINE}`;
+  return `PRINT ${copies},${quantity}${TSPL_NEWLINE}\r\n`;
 }
 
 // 蜂鸣 SOUND level,duration
@@ -195,6 +195,14 @@ export const CMD_QUERY_STATUS = `STATUS${TSPL_NEWLINE}`;
 
 // 查询打印机配置
 export const CMD_QUERY_CONFIG = `CONFIG${TSPL_NEWLINE}`;
+
+// 打印机自检页
+// 发送后打印机会自动打印包含固件版本、字库、DIP 开关等信息的自检页
+// 等同于按 FEED 键自检
+export const CMD_SELFTEST = `SELFTEST${TSPL_NEWLINE}`;
+
+// 自检 - 打印图案页（pattern page）
+export const CMD_SELFTEST_PAGE = `SELFTEST PAGE${TSPL_NEWLINE}`;
 
 // ===== 字符编码 =====
 
