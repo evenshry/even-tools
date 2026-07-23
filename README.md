@@ -10,6 +10,7 @@ A collection of useful web tools.
 - **Regex Sandbox** - Test and visualize regular expressions with presets
 - **Unit Converter** - Convert between various units with global search
 - **Visual Page Builder** - Build web pages visually with drag-and-drop components
+- **Bluetooth Printer** - Connect to ESC/POS thermal printers via Web Bluetooth, with command mode (Hex/mnemonic/plaintext) and designer mode (visual print layout editor)
 
 ## Tech Stack
 

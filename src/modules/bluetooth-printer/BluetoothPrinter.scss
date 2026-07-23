@@ -1,0 +1,180 @@
+// 蓝牙打印机工具主样式
+
+.bluetooth-printer {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  .module-header {
+    background: #fff;
+
+    .module-header__title {
+      color: #000;
+      margin: 0;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    padding: 12px;
+    background: #f0f2f5;
+    overflow: hidden;
+    height: calc(100vh - 64px);
+  }
+
+  &__layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+  }
+
+  // 左侧共享面板
+  &__sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+
+    > * {
+      flex-shrink: 0;
+    }
+
+    // 历史面板可拉伸
+    > :last-child {
+      flex: 1;
+      min-height: 200px;
+    }
+  }
+
+  // 右侧主面板
+  &__main {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+// ===== 模式面板基础 =====
+.bp-mode-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bp-toolbar-row {
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+// ===== 指令模式布局 =====
+.bp-command-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 220px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.bp-editor-card {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  .ant-card-body {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+}
+
+.bp-preview-stack {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  > * {
+    height: 100%;
+  }
+}
+
+.bp-snippet-stack {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  min-height: 0;
+  overflow: hidden;
+
+  > * {
+    height: 100%;
+  }
+}
+
+// ===== 编辑模式布局 =====
+.bp-designer-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+
+  > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+// ===== 响应式 =====
+@media (max-width: 1280px) {
+  .bluetooth-printer__layout {
+    grid-template-columns: 240px 1fr;
+  }
+
+  .bp-designer-grid {
+    grid-template-columns: 1fr 240px 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .bluetooth-printer__layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .bluetooth-printer__sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: 200px;
+
+    > * {
+      min-width: 240px;
+    }
+  }
+
+  .bp-command-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr 200px;
+  }
+
+  .bp-editor-card,
+  .bp-preview-stack,
+  .bp-snippet-stack {
+    grid-column: 1;
+  }
+
+  .bp-designer-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+  }
+}

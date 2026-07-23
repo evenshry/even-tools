@@ -5,6 +5,7 @@ import ColorCalculator from "@/modules/color-calculator";
 import RegexSandbox from "@/modules/regex-sandbox";
 import VisualPageBuilder from "@/modules/visual-page-builder";
 import FloorPlanGenerator from "@/modules/floor-plan-generator";
+import BluetoothPrinter from "@/modules/bluetooth-printer";
 import ToolNavigation from "@/components/ToolNavigation";
 import { tools } from "@/config/tools";
 
@@ -37,6 +38,10 @@ export const router = createHashRouter([
   {
     path: "/floor-plan-generator", // 房屋平面设计图生成器页面
     element: <FloorPlanGenerator />,
+  },
+  {
+    path: "/bluetooth-printer", // 蓝牙打印机工具页面
+    element: <BluetoothPrinter />,
   },
 
 ]);

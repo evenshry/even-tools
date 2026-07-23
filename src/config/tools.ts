@@ -58,5 +58,12 @@ export const tools: Tool[] = [
     category: "设计工具",
     path: "/floor-plan-generator",
   },
-
+  {
+    id: "bluetooth-printer",
+    name: "蓝牙打印机",
+    description: "通过 Web Bluetooth 连接 ESC/POS 热敏打印机，支持指令模式直接发送 Hex、助记符、纯文本，以及编辑模式可视化设计打印内容",
+    icon: "🖨️",
+    category: "开发工具",
+    path: "/bluetooth-printer",
+  },
 ];
