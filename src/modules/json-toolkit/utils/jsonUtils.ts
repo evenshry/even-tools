@@ -1,5 +1,6 @@
 import type { JsonToolkitTypes } from "../data/interface";
 import { isErrorValue } from "./jsonDiagnostics";
+import type { JsonDiagnosticError } from "./jsonDiagnostics";
 
 // 获取缩进字符串
 export const getIndentString = (style: JsonToolkitTypes.IndentStyle): string => {
@@ -220,13 +221,22 @@ const buildErrorNode = (key: string, path: string, value: { __jsonError: true; _
   errorSuggestion: value.__errorSuggestion,
 });
 
+// 致命错误类型集合（与 jsonDiagnostics.ts 中的定义保持一致）
+// 表明该字段的值从根本上无法正确解析，解析结果不可靠
+const CRITICAL_ERROR_TYPES = new Set([
+  "invalid_number",
+  "value_expected",
+  "property_name_unquoted",
+  "colon_expected",
+]);
+
 // 构建树形数据（用于 Antd Tree 组件）
 // errorNodes: 按父路径组织的错误节点信息
 // nodeOffsets: 所有字段在源文本中的偏移映射（path -> startOffset），用于混排解析节点和错误节点
 export const buildTree = (
   value: unknown,
   path = "$",
-  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]>,
+  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes?: string[]; hasCriticalError?: boolean; errors?: JsonDiagnosticError[] }[]>,
   nodeOffsets?: Record<string, number>
 ): JsonToolkitTypes.TreeNode => {
   if (isErrorValue(value)) {
@@ -247,13 +257,30 @@ export const buildTree = (
 
   if (type === "object") {
     const obj = value as Record<string, unknown>;
-    const entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
+    let entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
     const errorEntry = obj.__error;
+
+    // 检测哪些字段有致命错误类型，这些字段应作为错误节点展示，而非解析节点
+    const criticalKeys = new Set<string>();
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        if (err.hasCriticalError || (err.errorTypes && err.errorTypes.some((t) => CRITICAL_ERROR_TYPES.has(t)))) {
+          criticalKeys.add(err.keyName);
+        }
+      }
+    }
+    // 过滤掉有致命错误的字段（它们将以错误节点形式展示）
+    if (criticalKeys.size > 0) {
+      entries = entries.filter(([k]) => !criticalKeys.has(k));
+    }
+
     const count = entries.length;
     node.valueText = `{} (${count} 项)`;
     node.label = node.valueText;
     // 构建已解析的子节点集合（用于过滤重复的错误节点）
     const parsedOffsets = new Set<number>();
+    // 记录已解析的 keyName，用于过滤重复错误节点
+    const parsedKeyNames = new Set(entries.map(([k]) => k));
     const parsedChildren = entries.map(([k, v]) => {
       const childPath = `${path}.${k}`;
       const childNode = buildTreeChild(k, v, childPath, errorNodes, nodeOffsets);
@@ -263,13 +290,14 @@ export const buildTree = (
           childNode.errorStartOffset = nodeOffsets[childPath];
           parsedOffsets.add(nodeOffsets[childPath]);
         } else {
-          // 回退：查找以 childPath 为前缀的条目（处理 jsonc-parser 与 scanJsonFieldRegions 键名不一致的情况）
           for (const [p, off] of Object.entries(nodeOffsets)) {
-            if (p === childPath || p.startsWith(childPath)) {
-              if (childNode.errorStartOffset === undefined || off < childNode.errorStartOffset) {
-                childNode.errorStartOffset = off;
-              }
+            const isExact = p === childPath;
+            const isDirectChild = p.startsWith(childPath + ".") || p.startsWith(childPath + "[");
+            if (isExact || isDirectChild) {
               parsedOffsets.add(off);
+            }
+            if (isExact) {
+              childNode.errorStartOffset = off;
             }
           }
         }
@@ -280,8 +308,11 @@ export const buildTree = (
     const errorChildren: JsonToolkitTypes.TreeNode[] = [];
     if (errorNodes && errorNodes[path]) {
       for (const err of errorNodes[path]) {
-        // 跳过偏移已被解析节点占用的字段，它们会以内联错误形式显示在已解析节点上
-        if (parsedOffsets.has(err.startOffset)) continue;
+        // 若该 key 已被 jsonc-parser 成功解析，以内联错误显示，不再创建独立错误节点
+        // 但有致命错误的字段已被过滤掉（不在 parsedKeyNames 中），所以会正常展示为错误节点
+        if (parsedKeyNames.has(err.keyName) && !err.hasCriticalError) continue;
+        // 跳过偏移已被解析节点占用的字段
+        if (parsedOffsets.has(err.startOffset) && !err.hasCriticalError) continue;
         errorChildren.push({
           key: `${path}.${err.keyName}`,
           label: `❌ ${err.errorMessage}`,
@@ -296,6 +327,7 @@ export const buildTree = (
           errorSuggestion: err.errorSuggestion,
           errorOriginalValue: err.valueText,
           errorStartOffset: err.startOffset,
+          errors: err.errors,
         });
       }
     }
@@ -303,6 +335,13 @@ export const buildTree = (
     const markerChildren: JsonToolkitTypes.TreeNode[] = [];
     if (isErrorValue(errorEntry)) {
       markerChildren.push(buildErrorNode("__error__", `${path}.__error__`, errorEntry));
+    }
+    // 推断当前节点 offset：若自身无 offset，取子节点最小 offset（确保空对象/数组也能排对位置）
+    if (node.errorStartOffset === undefined && node.children) {
+      const childOffsets = node.children.map((c) => c.errorStartOffset).filter((o): o is number => o !== undefined);
+      if (childOffsets.length > 0) {
+        node.errorStartOffset = Math.min(...childOffsets);
+      }
     }
     // 按真实文本偏移混排（有 offset 的排在前面按偏移排序；没有的排在后面保持原始顺序）
     const allChildren = [...parsedChildren, ...errorChildren, ...markerChildren].map((n, idx) => ({ node: n, idx }));
@@ -339,7 +378,15 @@ export const buildTree = (
           errorSuggestion: err.errorSuggestion,
           errorOriginalValue: err.valueText,
           errorStartOffset: err.startOffset,
+          errors: err.errors,
         });
+      }
+    }
+    // 推断当前节点 offset：若自身无 offset，取子节点最小 offset
+    if (node.errorStartOffset === undefined && node.children) {
+      const childOffsets = node.children.map((c) => c.errorStartOffset).filter((o): o is number => o !== undefined);
+      if (childOffsets.length > 0) {
+        node.errorStartOffset = Math.min(...childOffsets);
       }
     }
   } else {
@@ -354,7 +401,7 @@ const buildTreeChild = (
   key: string,
   value: unknown,
   path: string,
-  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]>,
+  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes?: string[]; hasCriticalError?: boolean; errors?: JsonDiagnosticError[] }[]>,
   nodeOffsets?: Record<string, number>
 ): JsonToolkitTypes.TreeNode => {
   if (isErrorValue(value)) {
@@ -375,13 +422,29 @@ const buildTreeChild = (
 
   if (type === "object") {
     const obj = value as Record<string, unknown>;
-    const entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
+    let entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
     const errorEntry = obj.__error;
+
+    // 检测哪些字段有致命错误类型
+    const criticalKeys = new Set<string>();
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        if (err.hasCriticalError || (err.errorTypes && err.errorTypes.some((t) => CRITICAL_ERROR_TYPES.has(t)))) {
+          criticalKeys.add(err.keyName);
+        }
+      }
+    }
+    if (criticalKeys.size > 0) {
+      entries = entries.filter(([k]) => !criticalKeys.has(k));
+    }
+
     const count = entries.length;
     node.valueText = `{} (${count})`;
     node.label = `${key}: ${node.valueText}`;
     // 构建已解析的子节点集合（用于过滤重复的错误节点）
     const parsedOffsets = new Set<number>();
+    // 记录已解析的 keyName，用于过滤重复错误节点
+    const parsedKeyNames = new Set(entries.map(([k]) => k));
     const parsedChildren = entries.map(([k, v]) => {
       const childPath = `${path}.${k}`;
       const childNode = buildTreeChild(k, v, childPath, errorNodes, nodeOffsets);
@@ -391,11 +454,13 @@ const buildTreeChild = (
           parsedOffsets.add(nodeOffsets[childPath]);
         } else {
           for (const [p, off] of Object.entries(nodeOffsets)) {
-            if (p === childPath || p.startsWith(childPath)) {
-              if (childNode.errorStartOffset === undefined || off < childNode.errorStartOffset) {
-                childNode.errorStartOffset = off;
-              }
+            const isExact = p === childPath;
+            const isDirectChild = p.startsWith(childPath + ".") || p.startsWith(childPath + "[");
+            if (isExact || isDirectChild) {
               parsedOffsets.add(off);
+            }
+            if (isExact) {
+              childNode.errorStartOffset = off;
             }
           }
         }
@@ -410,8 +475,11 @@ const buildTreeChild = (
     // 追加未解析的错误节点（过滤掉已被 jsonc-parser 成功解析的字段，避免重复）
     if (errorNodes && errorNodes[path]) {
       for (const err of errorNodes[path]) {
-        // 跳过偏移已被解析节点占用的字段，它们会以内联错误形式显示在已解析节点上
-        if (parsedOffsets.has(err.startOffset)) continue;
+        // 若该 key 已被 jsonc-parser 成功解析，以内联错误显示，不再创建独立错误节点
+        // 但有致命错误的字段已被过滤掉（不在 parsedKeyNames 中），所以会正常展示为错误节点
+        if (parsedKeyNames.has(err.keyName) && !err.hasCriticalError) continue;
+        // 跳过偏移已被解析节点占用的字段
+        if (parsedOffsets.has(err.startOffset) && !err.hasCriticalError) continue;
         errorChildren.push({
           key: `${path}.${err.keyName}`,
           label: `❌ ${err.errorMessage}`,
@@ -426,7 +494,15 @@ const buildTreeChild = (
           errorSuggestion: err.errorSuggestion,
           errorOriginalValue: err.valueText,
           errorStartOffset: err.startOffset,
+          errors: err.errors,
         });
+      }
+    }
+    // 推断当前节点 offset：若自身无 offset，取子节点最小 offset（确保空对象/数组也能排对位置）
+    if (node.errorStartOffset === undefined && node.children) {
+      const childOffsets = node.children.map((c) => c.errorStartOffset).filter((o): o is number => o !== undefined);
+      if (childOffsets.length > 0) {
+        node.errorStartOffset = Math.min(...childOffsets);
       }
     }
     // 按 startOffset 排序（有 offset 的排在前面；没有的排在后面保持原始顺序）
@@ -465,7 +541,15 @@ const buildTreeChild = (
           errorSuggestion: err.errorSuggestion,
           errorOriginalValue: err.valueText,
           errorStartOffset: err.startOffset,
+          errors: err.errors,
         });
+      }
+    }
+    // 推断当前节点 offset：若自身无 offset，取子节点最小 offset
+    if (node.errorStartOffset === undefined && arrChildren.length > 0) {
+      const childOffsets = arrChildren.map((c) => c.errorStartOffset).filter((o): o is number => o !== undefined);
+      if (childOffsets.length > 0) {
+        node.errorStartOffset = Math.min(...childOffsets);
       }
     }
     node.children = arrChildren;

@@ -3,28 +3,6 @@ import type { JsonToolkitTypes } from "./interface";
 // 内置 JSON 示例数据
 export const samples: JsonToolkitTypes.Sample[] = [
   {
-    id: "comprehensive-errors",
-    name: "常见错误合集",
-    description: "覆盖未引号属性名、单引号、尾随逗号、非法转义、注释、NaN/Infinity、缺少逗号/括号等典型 JSON 错误",
-    content: `{
-  // 这是一行非法注释
-  unquoted_key: "属性名必须用双引号包裹",
-  'single_quotes': 'JSON 只接受双引号',
-  "trailing_comma": "注意末尾逗号",
-  "invalid_escape": "C:\\Users\\name",
-  "special_numbers": {
-    "not_a_number": NaN,
-    "positive_infinity": Infinity,
-    "negative_infinity": -Infinity
-  },
-  "missing_comma": "前面缺少逗号"
-  "missing_brace": "对象没有正确闭合",
-  "bad_number": 0123,
-  "empty_value": ,
-  "valid_field": "这行是正确的"
-}`,
-  },
-  {
     id: "user",
     name: "用户信息",
     description: "典型的用户对象，包含基本信息与爱好列表",
@@ -97,11 +75,11 @@ export const samples: JsonToolkitTypes.Sample[] = [
     "positive_infinity": Infinity,
     "negative_infinity": -Infinity
   },
-  "missing_comma": "前面缺少逗号"
   "missing_brace": "对象没有正确闭合",
+  "missing_comma": "后缺少逗号"
   "bad_number": 0123,
   "empty_value": ,
   "valid_field": "这行是正确的"
-}`,
+`,
   },
 ];

@@ -407,35 +407,6 @@
     border-color: #91d5ff;
   }
 
-  &__node--error {
-    background: #fff1f0;
-    border: 1px solid #ffccc7;
-    border-radius: 4px;
-    padding: 2px 8px;
-    margin: 2px 0;
-    display: inline-flex !important;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  &__error-box {
-    display: inline-flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  &__error-msg {
-    color: #cf1322;
-    font-weight: 500;
-    font-size: 13px;
-    font-family: "Monaco", "Menlo", "Consolas", monospace;
-  }
-
-  &__error-suggest {
-    color: #595959;
-    font-size: 12px;
-    font-family: "Monaco", "Menlo", "Consolas", monospace;
-  }
 }
 
 .json-stats {

@@ -7,6 +7,7 @@ import {
   getLocation,
   createScanner,
   visit,
+  parseTree,
 } from "jsonc-parser";
 
 // 本地常量替代 jsonc-parser 的 const enum（兼容 verbatimModuleSyntax / erasableSyntaxOnly）
@@ -630,8 +631,12 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
     if (stack.length > 0) {
       const top = stack[stack.length - 1];
       if (top.kind === "object" && top.currentKey !== null && top.valueStart !== -1) {
-        // 下一个字符看起来像是新 key 的开始：引号开头 或 无引号标识符开头
-        const looksLikeNewKey = ch === '"' || ch === "'" || /[a-zA-Z_$]/.test(ch);
+        // 只有当已经解析了值内容后，才判断是否为新 key
+        // 避免 NaN/Infinity/true/false/null 等值开头字母被误判为新 key
+        const valueContent = str.slice(top.valueStart, i).trim();
+        const hasValue = valueContent.length > 0;
+        // 只有引号开头的才可能是新 key（无引号标识符在值位置可能是 NaN/Infinity 等）
+        const looksLikeNewKey = hasValue && (ch === '"' || ch === "'");
         if (looksLikeNewKey) {
           const valStart = top.valueStart;
           const valText = str.slice(valStart, i).trim();
@@ -735,7 +740,8 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
           }
           if (ks >= 0 && ks < i) {
             let raw = str.slice(ks, i).trim();
-            if (raw.startsWith('"') && raw.endsWith('"')) raw = raw.slice(1, -1);
+            if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) raw = raw.slice(1, -1);
+            else if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) raw = raw.slice(1, -1);
             top.currentKey = raw;
             if (top.keyEnd === -1) top.keyEnd = i;
           }
@@ -789,20 +795,40 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
 };
 
 /**
- * 从字段区域提取所有节点的路径->偏移映射
- * 用于 buildTree 混排解析节点和错误节点
+ * 从 jsonc-parser 的 AST 提取所有解析节点的路径->偏移映射
+ * 比 scanJsonFieldRegions 更可靠，key 名与 jsonc-parser 解析结果完全一致
  */
 export const getFieldNodeOffsets = (text: string): Record<string, number> => {
-  const regions = scanJsonFieldRegions(text);
+  const str = typeof text === "string" ? text : String(text ?? "");
+  if (!str) return {};
+
+  const tree = parseTree(str);
   const offsets: Record<string, number> = {};
-  for (const r of regions) {
-    if (!r.keyName) continue;
-    const fullPath = r.path === "$" ? `$.${r.keyName}` : `${r.path}.${r.keyName}`;
-    // 保留最小偏移（如果同一个路径出现多次，取第一次）
-    if (!(fullPath in offsets) || r.startOffset < offsets[fullPath]) {
-      offsets[fullPath] = r.startOffset;
+
+  const walk = (node: any, path: string) => {
+    if (!node) return;
+    if (node.type === "object") {
+      for (const child of node.children || []) {
+        if (child.type === "property" && child.children && child.children.length >= 2) {
+          const keyNode = child.children[0];
+          const valueNode = child.children[1];
+          const key = keyNode.value !== undefined ? String(keyNode.value) : "";
+          const childPath = path === "$" ? `$.${key}` : `${path}.${key}`;
+          // 使用 key 节点的 offset（更精确）
+          if (!(childPath in offsets) || keyNode.offset < offsets[childPath]) {
+            offsets[childPath] = keyNode.offset;
+          }
+          walk(valueNode, childPath);
+        }
+      }
+    } else if (node.type === "array") {
+      for (let i = 0; i < (node.children || []).length; i++) {
+        walk(node.children[i], `${path}[${i}]`);
+      }
     }
-  }
+  };
+
+  if (tree) walk(tree, "$");
   return offsets;
 };
 
@@ -810,10 +836,19 @@ export const getFieldNodeOffsets = (text: string): Record<string, number> => {
  * 从诊断错误构建占位节点（用于在可视化树中展示无法解析的字段）
  * 将错误按"key:value区域"归组（以 , 或 { 分隔符识别字段边界）
  */
+// 致命错误类型：表明该字段的值从根本上无法正确解析
+// 解析结果不可靠，应展示为错误节点而非解析节点
+const CRITICAL_ERROR_TYPES = new Set([
+  "invalid_number",
+  "value_expected",
+  "property_name_unquoted",
+  "colon_expected",
+]);
+
 export const buildErrorNodesFromDiagnostics = (
   text: string,
   diagnostics: JsonDiagnosticError[]
-): Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]> => {
+): Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes: string[]; hasCriticalError: boolean; errors: JsonDiagnosticError[] }[]> => {
   const str = typeof text === "string" ? text : String(text ?? "");
   if (!str || !diagnostics.length) return {};
 
@@ -832,6 +867,7 @@ export const buildErrorNodesFromDiagnostics = (
     endOffset: number;
     valueText: string;
     errors: JsonDiagnosticError[];
+    errorTypes: string[];
   };
   const groupsMap = new Map<string, Group>(); // key: `${parentPath}|${keyName}|${start}`
 
@@ -912,13 +948,14 @@ export const buildErrorNodesFromDiagnostics = (
       keyName = `<错误@${diag.line}:${diag.column}>`;
     }
 
-    // 归并到组
-    const mapKey = `${parentPath}||${keyName}||${regionStart}`;
+    // 归并到组（同一 parentPath + keyName 合并，避免同一字段产生多个重复节点）
+    const mapKey = `${parentPath}||${keyName}`;
     if (groupsMap.has(mapKey)) {
       const g = groupsMap.get(mapKey)!;
-      g.startOffset = Math.min(g.startOffset, diag.position);
-      g.endOffset = Math.max(g.endOffset, diag.position + diag.length);
+      g.startOffset = Math.min(g.startOffset, regionStart);
+      g.endOffset = Math.max(g.endOffset, regionEnd);
       g.errors.push(diag);
+      if (!g.errorTypes.includes(diag.type)) g.errorTypes.push(diag.type);
     } else {
       groupsMap.set(mapKey, {
         path: `${parentPath}.${keyName}`,
@@ -928,12 +965,13 @@ export const buildErrorNodesFromDiagnostics = (
         endOffset: regionEnd,
         valueText: regionValueText,
         errors: [diag],
+        errorTypes: [diag.type],
       });
     }
   }
 
   // ==== 生成结果（合并每个组中的错误/修复提示）====
-  const result: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]> = {};
+  const result: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes: string[]; hasCriticalError: boolean; errors: JsonDiagnosticError[] }[]> = {};
   for (const g of groupsMap.values()) {
     if (!result[g.parentPath]) result[g.parentPath] = [];
 
@@ -949,12 +987,17 @@ export const buildErrorNodesFromDiagnostics = (
       ? messages.join("；")
       : `${messages[0]} 等 ${messages.length} 处问题`;
 
+    const hasCriticalError = g.errorTypes.some((t) => CRITICAL_ERROR_TYPES.has(t));
+
     result[g.parentPath].push({
       keyName: g.keyName,
       errorMessage: summary,
       errorSuggestion: suggestions.join("；"),
       valueText: g.valueText,
       startOffset: g.startOffset,
+      errorTypes: g.errorTypes,
+      hasCriticalError,
+      errors: g.errors,
     });
   }
 

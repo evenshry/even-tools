@@ -20,7 +20,7 @@ interface JsonTreeViewerProps {
   data: unknown;
   onPathClick?: (path: string, value: unknown) => void;
   pathErrors?: Record<string, JsonToolkitTypes.JsonDiagnosticError[]>;
-  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]>;
+  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes?: string[]; hasCriticalError?: boolean; errors?: JsonToolkitTypes.JsonDiagnosticError[] }[]>;
   nodeOffsets?: Record<string, number>;
 }
 
@@ -135,6 +135,75 @@ const convertNode = (
 
   // 错误节点单独渲染
   if (node.isError) {
+    const individualErrors = node.errors || [];
+    const hasMultiple = individualErrors.length > 1;
+    const count = individualErrors.length;
+
+    // 构建 hover 详情（每个错误单独列出）
+    const detailContent = (
+      <div style={{ maxWidth: 360 }}>
+        {hasMultiple && (
+          <div style={{ color: '#ff4d4f', fontWeight: 500, marginBottom: 6 }}>
+            <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
+            共 {count} 处问题
+          </div>
+        )}
+        {individualErrors.length > 0 ? individualErrors.map((e, i) => (
+          <div
+            key={i}
+            style={{
+              padding: '4px 0',
+              borderBottom: i < individualErrors.length - 1 ? '1px solid #303030' : 'none',
+            }}
+          >
+            <div style={{ color: '#ff7875', fontSize: 12, fontWeight: 500 }}>
+              <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
+              {e.message}
+            </div>
+            <div style={{ color: '#faad14', fontSize: 12, marginTop: 2 }}>
+              <BulbOutlined style={{ marginInlineEnd: 4 }} />
+              {e.suggestion}
+            </div>
+            <div style={{ color: '#8c8c8c', fontSize: 11, marginTop: 2 }}>
+              第 {e.line} 行，第 {e.column} 列
+            </div>
+          </div>
+        )) : (
+          <>
+            <div style={{ color: '#ff7875', fontSize: 12, fontWeight: 500 }}>
+              <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
+              {node.errorMessage}
+            </div>
+            {node.errorSuggestion && (
+              <div style={{ color: '#faad14', fontSize: 12, marginTop: 2 }}>
+                <BulbOutlined style={{ marginInlineEnd: 4 }} />
+                {node.errorSuggestion}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+
+    // 补全建议的 hover 内容
+    const allSuggestions = individualErrors.length > 0
+      ? individualErrors.map(e => e.suggestion).filter(Boolean)
+      : (node.errorSuggestion ? [node.errorSuggestion] : []);
+
+    const suggestionContent = allSuggestions.length > 0 ? (
+      <div style={{ maxWidth: 320 }}>
+        <div style={{ color: '#faad14', fontWeight: 500, marginBottom: 4 }}>
+          <BulbOutlined style={{ marginInlineEnd: 4 }} />
+          修复建议
+        </div>
+        {allSuggestions.map((s, i) => (
+          <div key={i} style={{ color: '#fff', fontSize: 12, marginTop: 2 }}>
+            {i + 1}. {s}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
     return {
       key: node.path,
       title: (
@@ -152,23 +221,8 @@ const convertNode = (
                 {node.errorOriginalValue}
               </span>
             )}
-            {/* 错误消息 */}
-            <Tooltip
-              title={
-                <div style={{ maxWidth: 320 }}>
-                  <div style={{ color: '#ff7875', fontWeight: 500, marginBottom: 4 }}>
-                    <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
-                    {node.errorMessage}
-                  </div>
-                  {node.errorSuggestion && (
-                    <div style={{ color: '#faad14', fontSize: 12, marginTop: 4 }}>
-                      <BulbOutlined style={{ marginInlineEnd: 4 }} />
-                      {node.errorSuggestion}
-                    </div>
-                  )}
-                </div>
-              }
-            >
+            {/* 错误消息（hover 展示详情） */}
+            <Tooltip title={detailContent}>
               <span className="json-tree-viewer__error-box">
                 <span className="json-tree-viewer__error-msg">
                   <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
@@ -176,21 +230,9 @@ const convertNode = (
                 </span>
               </span>
             </Tooltip>
-            {/* 修复建议（折叠为单个标签，hover 查看详情） */}
-            {node.errorSuggestion && (
-              <Tooltip
-                title={
-                  <div style={{ maxWidth: 320 }}>
-                    <div style={{ color: '#faad14', fontWeight: 500 }}>
-                      <BulbOutlined style={{ marginInlineEnd: 4 }} />
-                      修复建议
-                    </div>
-                    <div style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>
-                      {node.errorSuggestion}
-                    </div>
-                  </div>
-                }
-              >
+            {/* 修复建议（hover 查看所有补全建议） */}
+            {suggestionContent && (
+              <Tooltip title={suggestionContent}>
                 <span className="json-tree-viewer__error-suggest-tag">
                   <BulbOutlined style={{ marginInlineEnd: 4 }} />
                   补全
@@ -360,7 +402,15 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
     onPathClick?.(path, undefined);
   };
 
-  const root = useMemo(() => (data === undefined ? null : buildTree(data, "$", errorNodes, nodeOffsets)), [data, errorNodes, nodeOffsets]);
+  const root = useMemo(() => {
+    const tree = data === undefined ? null : buildTree(data, "$", errorNodes, nodeOffsets);
+    // eslint-disable-next-line no-console
+    console.log("[JsonTreeViewer] root tree:", JSON.stringify(tree, (key, value) => {
+      if (key === "value" && typeof value === "object" && value !== null) return "[object]";
+      return value;
+    }, 2));
+    return tree;
+  }, [data, errorNodes, nodeOffsets]);
 
   // 计算匹配列表
   const matchKeys = useMemo(() => {

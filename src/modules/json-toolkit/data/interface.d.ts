@@ -70,6 +70,7 @@ export namespace JsonToolkitTypes {
     errorSuggestion?: string; // 修复建议
     errorOriginalValue?: string; // 错误节点的原始值（从源文本提取）
     errorStartOffset?: number; // 错误字段在源文本中的起始位置（用于排序）
+    errors?: JsonDiagnosticError[]; // 该字段的所有错误详情（用于 hover 展示）
   }
 
   // 示例数据
