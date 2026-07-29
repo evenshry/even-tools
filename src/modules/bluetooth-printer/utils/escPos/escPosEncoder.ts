@@ -4,8 +4,9 @@
 import type {
   Alignment, PrintElement, QrErrorLevel, BarcodeType,
   TextElement, BarcodeElement, QrCodeElement, DividerElement,
-  TableElement,
+  TableElement, ImageElement,
 } from '../../data/interface';
+import { processImage } from '../imageProcessor';
 import {
   CMD_INIT, cmdAlign, cmdBold, cmdUnderline, cmdFontSize,
   cmdLineSpacing, cmdFeed, cmdCut, cmdBuzzer,
@@ -24,9 +25,15 @@ export class EscPosEncoder {
   private buffer: number[] = [];
   private textBuffer: string[] = [];
   private encoding: 'gbk' | 'utf8' = 'gbk';
+  private imagePaperWidth: number = 48;
 
   setEncoding(enc: 'gbk' | 'utf8'): this {
     this.encoding = enc;
+    return this;
+  }
+
+  setImagePaperWidth(width: number): this {
+    this.imagePaperWidth = width;
     return this;
   }
 
@@ -103,10 +110,23 @@ export class EscPosEncoder {
     return this;
   }
 
-  // ===== 编码打印元素数组 (编辑模式使用) =====
+  // ===== 编码打印元素数组 (编辑模式使用) - 同步版本（跳过图片）=====
   encodeElements(elements: PrintElement[], paperWidth: number = 48): this {
     for (const el of elements) {
       this.encodeElement(el, paperWidth);
+    }
+    return this;
+  }
+
+  // ===== 编码打印元素数组 - 异步版本（支持图片）=====
+  async encodeElementsAsync(elements: PrintElement[], paperWidth: number = 48): Promise<this> {
+    this.imagePaperWidth = paperWidth;
+    for (const el of elements) {
+      if (el.type === 'image') {
+        await this.encodeImageElement(el);
+      } else {
+        this.encodeElement(el, paperWidth);
+      }
     }
     return this;
   }
@@ -118,8 +138,28 @@ export class EscPosEncoder {
       case 'qrcode': this.encodeQrElement(el); break;
       case 'divider': this.encodeDividerElement(el, paperWidth); break;
       case 'table': this.encodeTableElement(el, paperWidth); break;
-      case 'image': break; // Phase 2: 需要 imageProcessor.ts 将 dataURL 转为单色位图
+      case 'image': break;
     }
+  }
+
+  private async encodeImageElement(el: ImageElement): Promise<void> {
+    if (!el.src) return;
+    // ESC/POS: 每字符 8 点宽，图片宽度 = 纸张宽度 × 8
+    const targetWidthPx = this.imagePaperWidth * 8;
+    const bitmap = await processImage(el.src, targetWidthPx, el.dither);
+    const bytesPerLine = Math.ceil(bitmap.width / 8);
+    console.log('[EscPosEncoder] image bitmap:', {
+      width: bitmap.width,
+      height: bitmap.height,
+      dataLength: bitmap.data.length,
+      bytesPerLine,
+      expectedLength: bytesPerLine * bitmap.height,
+      paperWidth: this.imagePaperWidth,
+    });
+    this.buffer.push(...cmdAlign(el.alignment === 'left' ? 0 : el.alignment === 'center' ? 1 : 2));
+    this.buffer.push(...cmdImage(bitmap.width, bitmap.height, Array.from(bitmap.data)));
+    this.buffer.push(LF);
+    this.textBuffer.push(`IMAGE ${bitmap.width}x${bitmap.height}`);
   }
 
   private encodeTextElement(el: TextElement, paperWidth: number): void {
@@ -237,6 +277,20 @@ export function encodePrintElements(
   const encoder = new EscPosEncoder().setEncoding(encoding);
   encoder.init();
   encoder.encodeElements(elements, paperWidth);
+  const text = encoder.getText();
+  const bytes = encoder.flush();
+  return { bytes, text };
+}
+
+// 便捷函数：编码打印元素为字节流（异步，支持图片）
+export async function encodePrintElementsAsync(
+  elements: PrintElement[],
+  paperWidth: number = 48,
+  encoding: 'gbk' | 'utf8' = 'gbk',
+): Promise<EscPosCompileResult> {
+  const encoder = new EscPosEncoder().setEncoding(encoding);
+  encoder.init();
+  await encoder.encodeElementsAsync(elements, paperWidth);
   const text = encoder.getText();
   const bytes = encoder.flush();
   return { bytes, text };

@@ -6,7 +6,7 @@ import type {
   ConnectedDevice, PrintElement, PrintHistoryEntry, PrintJob,
   PrinterProfile, PrinterStatus, SavedDevice, Template,
 } from '../data/interface';
-import { DEFAULT_PROFILE } from '../data/printerProfiles';
+import { DEFAULT_PROFILE, PRINTER_PROFILES } from '../data/printerProfiles';
 import { BUILTIN_SNIPPETS } from '../data/snippets';
 import { BUILTIN_TEMPLATES } from '../data/templates';
 
@@ -45,7 +45,12 @@ function loadCommandInput(): CommandInput {
 function loadProfile(): PrinterProfile {
   try {
     const v = localStorage.getItem(STORAGE_KEY_PROFILE);
-    if (v) return JSON.parse(v);
+    if (v) {
+      const saved = JSON.parse(v);
+      // 从 PRINTER_PROFILES 中查找匹配的完整配置，确保新字段不会缺失
+      const matched = PRINTER_PROFILES.find(p => p.id === saved.id);
+      return matched ?? { ...DEFAULT_PROFILE, ...saved };
+    }
   } catch { /* ignore */ }
   return DEFAULT_PROFILE;
 }

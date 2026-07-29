@@ -6,6 +6,8 @@ import RegexSandbox from "@/modules/regex-sandbox";
 import VisualPageBuilder from "@/modules/visual-page-builder";
 import FloorPlanGenerator from "@/modules/floor-plan-generator";
 import BluetoothPrinter from "@/modules/bluetooth-printer";
+import BarcodeGenerator from "@/modules/barcode-generator";
+import JsonToolkit from "@/modules/json-toolkit";
 import ToolNavigation from "@/components/ToolNavigation";
 import { tools } from "@/config/tools";
 
@@ -42,6 +44,14 @@ export const router = createHashRouter([
   {
     path: "/bluetooth-printer", // 蓝牙打印机工具页面
     element: <BluetoothPrinter />,
+  },
+  {
+    path: "/barcode-generator", // 条形码/二维码生成器页面
+    element: <BarcodeGenerator />,
+  },
+  {
+    path: "/json-toolkit", // JSON 工具箱页面
+    element: <JsonToolkit />,
   },
 
 ]);

@@ -185,6 +185,22 @@ export function cmdBox(
   return `BOX ${xStart},${yStart},${xEnd},${yEnd},${thickness}${TSPL_NEWLINE}`;
 }
 
+// 位图 BITMAP x,y,width_bytes,height,mode,data
+// x,y: 左上角坐标（点）
+// width_bytes: 每行字节数（width / 8）
+// height: 高度（点）
+// mode: 0=AND, 1=OR, 2=XOR, 3=NOT, 4=COPY(默认)
+// data: 位图数据（十六进制字符串）
+export function cmdBitmap(
+  x: number, y: number,
+  widthBytes: number, height: number,
+  data: Uint8Array,
+  mode: 0 | 1 | 2 | 3 | 4 = 4,
+): string {
+  const hexData = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `BITMAP ${x},${y},${widthBytes},${height},${mode},"${hexData}"${TSPL_NEWLINE}`;
+}
+
 // 画斜线 DMATRIX ...
 // 圆/椭圆 CIRCLE ...
 

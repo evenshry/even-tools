@@ -1,7 +1,7 @@
 // 打印预览 - 模拟热敏纸张渲染所有元素
 // 顶部工具栏：发送打印 / 保存为模板 / 编码选择
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, Space, Button, Select, Empty, Typography, Tag } from 'antd';
 import {
   EyeOutlined, PrinterOutlined, SaveOutlined,
@@ -9,16 +9,23 @@ import {
 import { usePrinterStore } from '../../store/usePrinterStore';
 import { useBluetoothPrinter } from '../../hooks/useBluetoothPrinter';
 import { usePrintQueue } from '../../hooks/usePrintQueue';
-import { encodePrintElements } from '../../utils/escPos/escPosEncoder';
-import { encodePrintElementsTspl, DEFAULT_LABEL_CONFIG, type TsplLabelConfig } from '../../utils/tspl/tsplEncoder';
+import { encodePrintElements, encodePrintElementsAsync } from '../../utils/escPos/escPosEncoder';
+import { encodePrintElementsTspl, encodePrintElementsTsplAsync, DEFAULT_LABEL_CONFIG, type TsplLabelConfig } from '../../utils/tspl/tsplEncoder';
 import PrintElementRenderer from './PrintElementRenderer';
 import type { PrintJob } from '../../data/interface';
+import type { EscPosCompileResult } from '../../utils/escPos/escPosEncoder';
+import type { TsplCompileResult } from '../../utils/tspl/tsplEncoder';
 
 const { Text } = Typography;
 
-// 纸张宽度 (字符 -> 像素，按 8px/字符 估算)
+type CompileResult = EscPosCompileResult | TsplCompileResult | null;
+
 function paperWidthPx(chars: number): number {
   return chars * 8;
+}
+
+function labelHeightPx(heightMm: number, dpi: number): number {
+  return Math.floor(heightMm * dpi / 25.4);
 }
 
 const PrintPreview: React.FC = () => {
@@ -32,13 +39,18 @@ const PrintPreview: React.FC = () => {
   const { connectionState } = useBluetoothPrinter();
   const { enqueue } = usePrintQueue();
 
-  // 预编译字节数 (用于显示)
-  const compileResult = useMemo(() => {
+  const [asyncCompileResult, setAsyncCompileResult] = useState<CompileResult>(null);
+  const [isCompiling, setIsCompiling] = useState(false);
+
+  const hasImageElement = elements.some(el => el.type === 'image' && el.src);
+
+  const syncCompileResult = useMemo(() => {
     if (elements.length === 0) return null;
     try {
       if (profile.protocol === 'tspl') {
         const labelConfig: TsplLabelConfig = {
           ...DEFAULT_LABEL_CONFIG,
+          widthMm: profile.widthMm,
           dpi: profile.dpi,
         };
         return encodePrintElementsTspl(elements, labelConfig, commandInput.encoding);
@@ -49,16 +61,86 @@ const PrintPreview: React.FC = () => {
     }
   }, [elements, profile.paperWidth, profile.protocol, profile.dpi, commandInput.encoding]);
 
+  useEffect(() => {
+    if (!hasImageElement || elements.length === 0) {
+      setAsyncCompileResult(syncCompileResult);
+      return;
+    }
+    setIsCompiling(true);
+    let mounted = true;
+    const doCompile = async () => {
+      try {
+        let result: CompileResult;
+        if (profile.protocol === 'tspl') {
+          const labelConfig: TsplLabelConfig = {
+            ...DEFAULT_LABEL_CONFIG,
+            widthMm: profile.widthMm,
+            dpi: profile.dpi,
+          };
+          result = await encodePrintElementsTsplAsync(elements, labelConfig, commandInput.encoding);
+        } else {
+          result = await encodePrintElementsAsync(elements, profile.paperWidth, commandInput.encoding);
+        }
+        if (mounted) {
+          setAsyncCompileResult(result);
+        }
+      } catch {
+        if (mounted) {
+          setAsyncCompileResult(syncCompileResult);
+        }
+      } finally {
+        if (mounted) {
+          setIsCompiling(false);
+        }
+      }
+    };
+    doCompile();
+    return () => { mounted = false; };
+  }, [hasImageElement, elements, profile.paperWidth, profile.protocol, profile.dpi, commandInput.encoding, syncCompileResult]);
+
+  const compileResult = hasImageElement ? asyncCompileResult : syncCompileResult;
   const canSend = connectionState === 'connected' && elements.length > 0 && compileResult !== null;
 
-  const handleSend = () => {
-    if (!compileResult || elements.length === 0) return;
+  const handleSend = async () => {
+    if (elements.length === 0) return;
+    let bytes: Uint8Array;
+    let text: string;
+    if (hasImageElement) {
+      if (isCompiling || !asyncCompileResult) {
+        try {
+          if (profile.protocol === 'tspl') {
+            const labelConfig: TsplLabelConfig = {
+              ...DEFAULT_LABEL_CONFIG,
+              widthMm: profile.widthMm,
+              dpi: profile.dpi,
+            };
+            const result = await encodePrintElementsTsplAsync(elements, labelConfig, commandInput.encoding);
+            bytes = result.bytes;
+            text = result.text;
+          } else {
+            const result = await encodePrintElementsAsync(elements, profile.paperWidth, commandInput.encoding);
+            bytes = result.bytes;
+            text = result.text;
+          }
+        } catch (e) {
+          console.error('Failed to compile with images:', e);
+          return;
+        }
+      } else {
+        bytes = asyncCompileResult.bytes;
+        text = asyncCompileResult.text;
+      }
+    } else {
+      if (!syncCompileResult) return;
+      bytes = syncCompileResult.bytes;
+      text = syncCompileResult.text;
+    }
     const job: PrintJob = {
       id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       mode: 'designer',
       elements: JSON.parse(JSON.stringify(elements)),
-      compiledBytes: compileResult.bytes,
-      compiledText: compileResult.text,
+      compiledBytes: bytes,
+      compiledText: text,
       status: 'pending',
       progress: 0,
       createdAt: Date.now(),
@@ -81,9 +163,15 @@ const PrintPreview: React.FC = () => {
         <Space>
           <EyeOutlined />
           打印预览
-          <Tag color="default" style={{ fontSize: 11 }}>
-            {profile.paperWidth}字符 / {profile.dpi}dpi
-          </Tag>
+          {profile.protocol === 'tspl' && compileResult && 'labelConfig' in compileResult ? (
+            <Tag color="default" style={{ fontSize: 11 }}>
+              {compileResult.labelConfig.widthMm}mm x {compileResult.labelConfig.heightMm}mm / {profile.dpi}dpi
+            </Tag>
+          ) : (
+            <Tag color="default" style={{ fontSize: 11 }}>
+              {profile.paperWidth}字符 / {profile.dpi}dpi
+            </Tag>
+          )}
         </Space>
       }
       size="small"
@@ -135,6 +223,9 @@ const PrintPreview: React.FC = () => {
               boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               fontFamily: 'monospace',
               color: '#000',
+              ...(profile.protocol === 'tspl' && compileResult && 'labelConfig' in compileResult
+                ? { height: labelHeightPx(compileResult.labelConfig.heightMm, compileResult.labelConfig.dpi), overflow: 'hidden' }
+                : {}),
             }}
           >
             {elements.map((el, i) => (

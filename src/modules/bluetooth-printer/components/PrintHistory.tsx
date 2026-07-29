@@ -98,7 +98,6 @@ const PrintHistory: React.FC = () => {
               const job = entry.job;
               const status = STATUS_TAGS[job.status] || STATUS_TAGS.pending;
               const content = getDisplayContent(entry);
-              const displayContent = content.length > 150 ? content.substring(0, 150) + "..." : content;
 
               return (
                 <List.Item>
@@ -110,7 +109,7 @@ const PrintHistory: React.FC = () => {
                       <Text type="secondary">{job.bytesSent || 0} 字节</Text>
                       {job.deviceName && <Text type="secondary">{job.deviceName}</Text>}
                     </Space>
-                    {displayContent && (
+                    {content && (
                       <pre
                         style={{
                           fontSize: 12,
@@ -120,13 +119,13 @@ const PrintHistory: React.FC = () => {
                           borderRadius: 4,
                           margin: 0,
                           overflowX: "auto",
-                          maxHeight: 80,
+                          maxHeight: 120,
                           overflowY: "auto",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-all",
                         }}
                       >
-                        {displayContent}
+                        {content}
                       </pre>
                     )}
                     {job.error && (

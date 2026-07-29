@@ -66,4 +66,20 @@ export const tools: Tool[] = [
     category: "开发工具",
     path: "/bluetooth-printer",
   },
+  {
+    id: "barcode-generator",
+    name: "条形码/二维码生成器",
+    description: "支持多种条形码类型（CODE 128、EAN-13、UPC、CODE 39等）和二维码生成，支持自定义颜色、尺寸、容错级别，支持批量生成和多格式图片下载",
+    icon: "🏷️",
+    category: "开发工具",
+    path: "/barcode-generator",
+  },
+  {
+    id: "json-toolkit",
+    name: "JSON 工具箱",
+    description: "JSON 格式化、压缩、校验、可视化树、统计分析、JSONPath 路径查询，以及与 YAML、CSV、TSV、XML、Properties 之间的相互转换，支持字符串转义/反转义",
+    icon: "🧬",
+    category: "开发工具",
+    path: "/json-toolkit",
+  },
 ];

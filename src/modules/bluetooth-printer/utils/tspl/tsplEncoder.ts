@@ -8,11 +8,12 @@
 import { encodeText as gbkEncodeText } from '../gbkEncoder';
 import type {
   PrintElement, QrErrorLevel, BarcodeType,
-  TextElement, BarcodeElement, QrCodeElement, DividerElement, TableElement,
+  TextElement, BarcodeElement, QrCodeElement, DividerElement, TableElement, ImageElement,
 } from '../../data/interface';
+import { processImage } from '../imageProcessor';
 import {
   TSPL_NEWLINE, CMD_CLS, cmdSize, cmdGap, cmdDirection, cmdCodepage,
-  cmdText, cmdBarcode, cmdQrcode, cmdBar, cmdBox, cmdPrint, cmdSound, cmdCut,
+  cmdText, cmdBarcode, cmdQrcode, cmdBar, cmdBox, cmdPrint, cmdSound, cmdCut, cmdBitmap,
   byteLength,
 } from './tsplCommands';
 
@@ -234,7 +235,7 @@ export class TsplEncoder {
     void el;
   }
 
-  // ===== 编码打印元素数组 =====
+  // ===== 编码打印元素数组 - 同步版本（跳过图片）=====
   encodeElements(elements: PrintElement[]): this {
     for (const el of elements) {
       switch (el.type) {
@@ -243,10 +244,41 @@ export class TsplEncoder {
         case 'qrcode': this.addQrElement(el); break;
         case 'divider': this.addDividerElement(el); break;
         case 'table': this.addTableElement(el); break;
-        case 'image': break; // Phase 2
+        case 'image': break;
       }
     }
     return this;
+  }
+
+  // ===== 编码打印元素数组 - 异步版本（支持图片）=====
+  async encodeElementsAsync(elements: PrintElement[]): Promise<this> {
+    for (const el of elements) {
+      switch (el.type) {
+        case 'text': this.addTextElement(el); break;
+        case 'barcode': this.addBarcodeElement(el); break;
+        case 'qrcode': this.addQrElement(el); break;
+        case 'divider': this.addDividerElement(el); break;
+        case 'table': this.addTableElement(el); break;
+        case 'image': await this.addImageElement(el); break;
+      }
+    }
+    return this;
+  }
+
+  private async addImageElement(el: ImageElement): Promise<void> {
+    if (!el.src) return;
+    // TSPL: 图片宽度 = 标签宽度（点）
+    const targetWidthPx = this.labelWidthDots;
+    const bitmap = await processImage(el.src, targetWidthPx, el.dither);
+    const widthBytes = Math.ceil(bitmap.width / 8);
+    let x = 0;
+    if (el.alignment === 'center') {
+      x = Math.max(0, Math.floor((this.labelWidthDots - bitmap.width) / 2));
+    } else if (el.alignment === 'right') {
+      x = Math.max(0, this.labelWidthDots - bitmap.width);
+    }
+    this.buffer.push(cmdBitmap(x, this.cursorY, widthBytes, bitmap.height, bitmap.data));
+    this.cursorY += bitmap.height + 4;
   }
 
   // ===== 输出 =====
@@ -275,6 +307,14 @@ export class TsplEncoder {
 export interface TsplCompileResult {
   bytes: Uint8Array;
   text: string;
+  labelConfig: TsplLabelConfig;
+}
+
+// 根据内容高度计算标签高度（毫米）
+function calcDynamicHeightMm(contentHeightDots: number, dpi: number): number {
+  const paddingMm = 4; // 上下边距各约 2mm
+  const contentHeightMm = Math.ceil(contentHeightDots * 25.4 / dpi);
+  return Math.max(10, contentHeightMm + paddingMm); // 最小 10mm
 }
 
 // 便捷函数：编码打印元素为 TSPL 字节流
@@ -283,17 +323,62 @@ export function encodePrintElementsTspl(
   labelConfig: TsplLabelConfig = DEFAULT_LABEL_CONFIG,
   encoding: 'gbk' | 'utf8' = 'utf8',
 ): TsplCompileResult {
-  const encoder = new TsplEncoder()
+  // 1. 预排版测量内容高度
+  const measureEncoder = new TsplEncoder()
     .setEncoding(encoding)
     .setLabelConfig(labelConfig);
-  encoder.size(labelConfig.widthMm, labelConfig.heightMm);
-  encoder.gap(labelConfig.gapMm);
-  encoder.direction(labelConfig.direction);
+  measureEncoder.encodeElements(elements);
+  const contentHeightDots = measureEncoder.getCursorY();
+
+  // 2. 动态计算标签高度
+  const dynamicHeightMm = calcDynamicHeightMm(contentHeightDots, labelConfig.dpi);
+  const finalConfig: TsplLabelConfig = { ...labelConfig, heightMm: dynamicHeightMm };
+
+  // 3. 正式编码
+  const encoder = new TsplEncoder()
+    .setEncoding(encoding)
+    .setLabelConfig(finalConfig);
+  encoder.size(finalConfig.widthMm, finalConfig.heightMm);
+  encoder.gap(finalConfig.gapMm);
+  encoder.direction(finalConfig.direction);
   encoder.codepage(encoding === 'utf8' ? 'UTF-8' : 'GB18030');
   encoder.cls();
   encoder.encodeElements(elements);
   encoder.print(1, 1);
   const text = encoder.getText();
   const bytes = encoder.flush();
-  return { bytes, text };
+  return { bytes, text, labelConfig: finalConfig };
+}
+
+// 便捷函数：编码打印元素为 TSPL 字节流（异步，支持图片）
+export async function encodePrintElementsTsplAsync(
+  elements: PrintElement[],
+  labelConfig: TsplLabelConfig = DEFAULT_LABEL_CONFIG,
+  encoding: 'gbk' | 'utf8' = 'utf8',
+): Promise<TsplCompileResult> {
+  // 1. 预排版测量内容高度
+  const measureEncoder = new TsplEncoder()
+    .setEncoding(encoding)
+    .setLabelConfig(labelConfig);
+  await measureEncoder.encodeElementsAsync(elements);
+  const contentHeightDots = measureEncoder.getCursorY();
+
+  // 2. 动态计算标签高度
+  const dynamicHeightMm = calcDynamicHeightMm(contentHeightDots, labelConfig.dpi);
+  const finalConfig: TsplLabelConfig = { ...labelConfig, heightMm: dynamicHeightMm };
+
+  // 3. 正式编码
+  const encoder = new TsplEncoder()
+    .setEncoding(encoding)
+    .setLabelConfig(finalConfig);
+  encoder.size(finalConfig.widthMm, finalConfig.heightMm);
+  encoder.gap(finalConfig.gapMm);
+  encoder.direction(finalConfig.direction);
+  encoder.codepage(encoding === 'utf8' ? 'UTF-8' : 'GB18030');
+  encoder.cls();
+  await encoder.encodeElementsAsync(elements);
+  encoder.print(1, 1);
+  const text = encoder.getText();
+  const bytes = encoder.flush();
+  return { bytes, text, labelConfig: finalConfig };
 }

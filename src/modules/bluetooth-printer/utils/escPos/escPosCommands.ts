@@ -83,11 +83,22 @@ export const cmdQrData = (data: number[]): number[] => {
 // 打印存储的 QR
 export const CMD_QR_PRINT = [GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30];
 
-// 位图 1D v 1 m xL xH yL yH d1...dk
+// 位图 GS v 0 m xL xH yL yH d1...dk
+// xL/xH = 每行字节数 (bytes per line = ceil(width/8))
+// yL/yH = 位图高度（点）
+// m=0 正常模式, m=1 倍宽, m=2 倍高, m=3 倍宽倍高
 export const cmdImage = (width: number, height: number, data: number[]): number[] => {
-  const xL = width & 0xff;
-  const xH = (width >> 8) & 0xff;
+  const bytesPerLine = Math.ceil(width / 8);
+  const expectedLength = bytesPerLine * height;
+  if (data.length !== expectedLength) {
+    console.warn(
+      `[cmdImage] data length mismatch: expected ${expectedLength}, got ${data.length} ` +
+      `(width=${width}, height=${height}, bytesPerLine=${bytesPerLine})`
+    );
+  }
+  const xL = bytesPerLine & 0xff;
+  const xH = (bytesPerLine >> 8) & 0xff;
   const yL = height & 0xff;
   const yH = (height >> 8) & 0xff;
-  return [GS, 0x76, 0x31, 0x00, xL, xH, yL, yH, ...data];
+  return [GS, 0x76, 0x30, 0x00, xL, xH, yL, yH, ...data];
 };

@@ -72,7 +72,6 @@ export interface QrCodeElement extends BaseElement {
 export interface ImageElement extends BaseElement {
   type: 'image';
   src: string;
-  width: number;
   alignment: Alignment;
   dither: 'threshold' | 'floydSteinberg' | 'ordered';
 }
@@ -152,7 +151,8 @@ export interface PrinterProfile {
   writeCharacteristicUuid: string;
   notifyCharacteristicUuid?: string;
   protocol: 'escpos' | 'tspl';
-  paperWidth: 32 | 48 | 72;
+  paperWidth: number;
+  widthMm: number;
   dpi: 203 | 300;
   writeMode: 'withResponse' | 'withoutResponse';
 }

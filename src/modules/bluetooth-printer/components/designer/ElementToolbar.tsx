@@ -57,7 +57,7 @@ function createElement(type: ElementType): PrintElement {
     case 'image':
       return {
         id, type: 'image',
-        src: '', width: 200, alignment: 'center', dither: 'threshold',
+        src: '', alignment: 'center', dither: 'threshold',
       };
     default:
       throw new Error(`Unknown element type: ${type}`);

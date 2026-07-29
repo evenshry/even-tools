@@ -1,7 +1,7 @@
 // 设备连接面板
 
 import React from 'react';
-import { Button, Card, Tag, Space, Typography, Alert, List } from 'antd';
+import { Button, Card, Tag, Space, Typography, Alert } from 'antd';
 import {
   ApiOutlined, LinkOutlined, DisconnectOutlined, ReloadOutlined,
   FileTextOutlined, InfoCircleOutlined,
@@ -25,7 +25,7 @@ const STATE_LABELS: Record<string, { text: string; color: string }> = {
 const DeviceConnectionPanel: React.FC = () => {
   const { connectionState, connectedDevice, isSupported, connect, disconnect, queryStatus } = useBluetoothPrinter();
   const { printTestPage } = usePrintQueue();
-  const { printerStatus, savedDevices } = usePrinterStore();
+  const { printerStatus } = usePrinterStore();
 
   const stateInfo = STATE_LABELS[connectionState] || STATE_LABELS.idle;
   const isBusy = ['scanning', 'connecting', 'disconnecting'].includes(connectionState);
@@ -84,28 +84,6 @@ const DeviceConnectionPanel: React.FC = () => {
               {printerStatus.coverOpen && <Tag color="warning">开盖</Tag>}
               {printerStatus.overheated && <Tag color="error">过热</Tag>}
             </Space>
-          </div>
-        )}
-
-        {savedDevices.length > 0 && connectionState !== 'connected' && (
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>已配对设备</Text>
-            <List
-              size="small"
-              dataSource={savedDevices}
-              renderItem={(device) => (
-                <List.Item style={{ padding: '4px 0' }}>
-                  <Button
-                    block
-                    size="small"
-                    onClick={connect}
-                    disabled={isBusy || !isSupported}
-                  >
-                    {device.name}
-                  </Button>
-                </List.Item>
-              )}
-            />
           </div>
         )}
 
