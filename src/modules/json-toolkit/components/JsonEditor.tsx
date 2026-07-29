@@ -1,16 +1,14 @@
-import { Card, Space, Typography, Alert, Input, Button, Segmented } from "antd";
+import { Card, Space, Typography, Input, Button, Segmented } from "antd";
 import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
 import { message } from "antd";
 import type { JsonToolkitTypes } from "../data/interface";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 
 interface JsonEditorProps {
   value: string;
   onChange: (value: string) => void;
-  error?: string;
-  errorLine?: number;
   indent: JsonToolkitTypes.IndentStyle;
   onIndentChange: (v: JsonToolkitTypes.IndentStyle) => void;
   onFormat: () => void;
@@ -18,13 +16,17 @@ interface JsonEditorProps {
   onClear: () => void;
   onPaste: () => void;
   rowHint?: string;
+  // 状态栏数据
+  dataValid: boolean;
+  sizeBytes?: number;
+  totalNodes?: number;
+  depth?: number;
+  keys?: number;
 }
 
 const JsonEditor = ({
   value,
   onChange,
-  error,
-  errorLine,
   indent,
   onIndentChange,
   onFormat,
@@ -32,6 +34,11 @@ const JsonEditor = ({
   onClear,
   onPaste,
   rowHint,
+  dataValid,
+  sizeBytes,
+  totalNodes,
+  depth,
+  keys,
 }: JsonEditorProps) => {
   const handleCopy = () => {
     if (!value) {
@@ -41,6 +48,9 @@ const JsonEditor = ({
     navigator.clipboard?.writeText(value);
     message.success("已复制");
   };
+
+  const indentLabel =
+    indent === "tab" ? "Tab" : indent === 0 ? "压缩" : `${indent} 空格`;
 
   return (
     <Card
@@ -73,20 +83,6 @@ const JsonEditor = ({
       className="json-editor"
       styles={{ body: { padding: 12 } }}
     >
-      {error && (
-        <Alert
-          type="error"
-          showIcon
-          message="JSON 解析失败"
-          description={
-            <Paragraph style={{ marginBottom: 0 }}>
-              <Text>{error}</Text>
-              {errorLine && <Text type="secondary"> （第 {errorLine} 行附近）</Text>}
-            </Paragraph>
-          }
-          style={{ marginBottom: 12 }}
-        />
-      )}
       <TextArea
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -99,6 +95,38 @@ const JsonEditor = ({
           fontSize: 13,
         }}
       />
+
+      {/* 状态栏：放在文本框下方，卡片内部 */}
+      <div className="json-editor__status-bar">
+        <Space size="large" wrap>
+          <Text type={dataValid ? "success" : "danger"} style={{ fontSize: 12 }}>
+            {dataValid ? "● JSON 有效" : "● JSON 无效"}
+          </Text>
+          {sizeBytes !== undefined && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              大小：{sizeBytes} B
+            </Text>
+          )}
+          {totalNodes !== undefined && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              节点：{totalNodes}
+            </Text>
+          )}
+          {depth !== undefined && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              深度：{depth}
+            </Text>
+          )}
+          {keys !== undefined && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              键数：{keys}
+            </Text>
+          )}
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            当前缩进：{indentLabel}
+          </Text>
+        </Space>
+      </div>
     </Card>
   );
 };

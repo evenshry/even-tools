@@ -1,4 +1,5 @@
 import type { JsonToolkitTypes } from "../data/interface";
+import { isErrorValue } from "./jsonDiagnostics";
 
 // 获取缩进字符串
 export const getIndentString = (style: JsonToolkitTypes.IndentStyle): string => {
@@ -204,15 +205,40 @@ export const formatBytes = (bytes: number): string => {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 };
 
+// 构建错误节点
+const buildErrorNode = (key: string, path: string, value: { __jsonError: true; __errorMessage: string; __errorSuggestion: string }): JsonToolkitTypes.TreeNode => ({
+  key: path,
+  label: `❌ ${value.__errorMessage}`,
+  keyName: key,
+  valueText: value.__errorMessage,
+  value,
+  type: "undefined",
+  path,
+  expandable: false,
+  isError: true,
+  errorMessage: value.__errorMessage,
+  errorSuggestion: value.__errorSuggestion,
+});
+
 // 构建树形数据（用于 Antd Tree 组件）
+// errorNodes: 按父路径组织的错误节点信息
+// nodeOffsets: 所有字段在源文本中的偏移映射（path -> startOffset），用于混排解析节点和错误节点
 export const buildTree = (
   value: unknown,
-  path = "$"
+  path = "$",
+  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]>,
+  nodeOffsets?: Record<string, number>
 ): JsonToolkitTypes.TreeNode => {
+  if (isErrorValue(value)) {
+    return buildErrorNode("$", path, value);
+  }
+
   const type = detectType(value);
   const node: JsonToolkitTypes.TreeNode = {
     key: path,
     label: "",
+    keyName: "$",
+    valueText: "",
     value,
     type,
     path,
@@ -221,20 +247,104 @@ export const buildTree = (
 
   if (type === "object") {
     const obj = value as Record<string, unknown>;
-    node.label = `{} ${Object.keys(obj).length} 项`;
-    node.children = Object.entries(obj).map(([k, v]) => {
+    const entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
+    const errorEntry = obj.__error;
+    const count = entries.length;
+    node.valueText = `{} (${count} 项)`;
+    node.label = node.valueText;
+    // 构建已解析的子节点集合（用于过滤重复的错误节点）
+    const parsedOffsets = new Set<number>();
+    const parsedChildren = entries.map(([k, v]) => {
       const childPath = `${path}.${k}`;
-      return buildTreeChild(k, v, childPath);
+      const childNode = buildTreeChild(k, v, childPath, errorNodes, nodeOffsets);
+      // 从 nodeOffsets 中获取该字段的真实偏移
+      if (nodeOffsets) {
+        if (childPath in nodeOffsets) {
+          childNode.errorStartOffset = nodeOffsets[childPath];
+          parsedOffsets.add(nodeOffsets[childPath]);
+        } else {
+          // 回退：查找以 childPath 为前缀的条目（处理 jsonc-parser 与 scanJsonFieldRegions 键名不一致的情况）
+          for (const [p, off] of Object.entries(nodeOffsets)) {
+            if (p === childPath || p.startsWith(childPath)) {
+              if (childNode.errorStartOffset === undefined || off < childNode.errorStartOffset) {
+                childNode.errorStartOffset = off;
+              }
+              parsedOffsets.add(off);
+            }
+          }
+        }
+      }
+      return childNode;
     });
+    // 追加未解析的错误节点（过滤掉已被 jsonc-parser 成功解析的字段，避免重复）
+    const errorChildren: JsonToolkitTypes.TreeNode[] = [];
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        // 跳过偏移已被解析节点占用的字段，它们会以内联错误形式显示在已解析节点上
+        if (parsedOffsets.has(err.startOffset)) continue;
+        errorChildren.push({
+          key: `${path}.${err.keyName}`,
+          label: `❌ ${err.errorMessage}`,
+          keyName: err.keyName,
+          valueText: err.valueText || err.errorMessage,
+          value: undefined,
+          type: "undefined",
+          path: `${path}.${err.keyName}`,
+          expandable: false,
+          isError: true,
+          errorMessage: err.errorMessage,
+          errorSuggestion: err.errorSuggestion,
+          errorOriginalValue: err.valueText,
+          errorStartOffset: err.startOffset,
+        });
+      }
+    }
+    // 解析错误标记的子节点
+    const markerChildren: JsonToolkitTypes.TreeNode[] = [];
+    if (isErrorValue(errorEntry)) {
+      markerChildren.push(buildErrorNode("__error__", `${path}.__error__`, errorEntry));
+    }
+    // 按真实文本偏移混排（有 offset 的排在前面按偏移排序；没有的排在后面保持原始顺序）
+    const allChildren = [...parsedChildren, ...errorChildren, ...markerChildren].map((n, idx) => ({ node: n, idx }));
+    allChildren.sort((a, b) => {
+      const ao = a.node.errorStartOffset;
+      const bo = b.node.errorStartOffset;
+      if (ao !== undefined && bo !== undefined) return ao - bo;
+      if (ao !== undefined && bo === undefined) return -1;
+      if (ao === undefined && bo !== undefined) return 1;
+      return a.idx - b.idx;
+    });
+    node.children = allChildren.map((item) => item.node);
   } else if (type === "array") {
     const arr = value as unknown[];
-    node.label = `[] ${arr.length} 项`;
+    node.valueText = `[] (${arr.length} 项)`;
+    node.label = node.valueText;
     node.children = arr.map((v, i) => {
       const childPath = `${path}[${i}]`;
-      return buildTreeChild(String(i), v, childPath);
+      return buildTreeChild(String(i), v, childPath, errorNodes, nodeOffsets);
     });
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        node.children.push({
+          key: `${path}.${err.keyName}`,
+          label: `❌ ${err.errorMessage}`,
+          keyName: err.keyName,
+          valueText: err.valueText || err.errorMessage,
+          value: undefined,
+          type: "undefined",
+          path: `${path}.${err.keyName}`,
+          expandable: false,
+          isError: true,
+          errorMessage: err.errorMessage,
+          errorSuggestion: err.errorSuggestion,
+          errorOriginalValue: err.valueText,
+          errorStartOffset: err.startOffset,
+        });
+      }
+    }
   } else {
-    node.label = formatPrimitive(value, type);
+    node.valueText = formatPrimitive(value, type);
+    node.label = node.valueText;
   }
 
   return node;
@@ -243,12 +353,20 @@ export const buildTree = (
 const buildTreeChild = (
   key: string,
   value: unknown,
-  path: string
+  path: string,
+  errorNodes?: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number }[]>,
+  nodeOffsets?: Record<string, number>
 ): JsonToolkitTypes.TreeNode => {
+  if (isErrorValue(value)) {
+    return buildErrorNode(key, path, value);
+  }
+
   const type = detectType(value);
   const node: JsonToolkitTypes.TreeNode = {
     key: path,
     label: "",
+    keyName: key,
+    valueText: "",
     value,
     type,
     path,
@@ -257,20 +375,103 @@ const buildTreeChild = (
 
   if (type === "object") {
     const obj = value as Record<string, unknown>;
-    node.label = `${key}: {} (${Object.keys(obj).length})`;
-    node.children = Object.entries(obj).map(([k, v]) => {
+    const entries = Object.entries(obj).filter(([k]) => k !== "__error" && k !== "__error_key__");
+    const errorEntry = obj.__error;
+    const count = entries.length;
+    node.valueText = `{} (${count})`;
+    node.label = `${key}: ${node.valueText}`;
+    // 构建已解析的子节点集合（用于过滤重复的错误节点）
+    const parsedOffsets = new Set<number>();
+    const parsedChildren = entries.map(([k, v]) => {
       const childPath = `${path}.${k}`;
-      return buildTreeChild(k, v, childPath);
+      const childNode = buildTreeChild(k, v, childPath, errorNodes, nodeOffsets);
+      if (nodeOffsets) {
+        if (childPath in nodeOffsets) {
+          childNode.errorStartOffset = nodeOffsets[childPath];
+          parsedOffsets.add(nodeOffsets[childPath]);
+        } else {
+          for (const [p, off] of Object.entries(nodeOffsets)) {
+            if (p === childPath || p.startsWith(childPath)) {
+              if (childNode.errorStartOffset === undefined || off < childNode.errorStartOffset) {
+                childNode.errorStartOffset = off;
+              }
+              parsedOffsets.add(off);
+            }
+          }
+        }
+      }
+      return childNode;
     });
+    const markerChildren: JsonToolkitTypes.TreeNode[] = [];
+    if (isErrorValue(errorEntry)) {
+      markerChildren.push(buildErrorNode("__error__", `${path}.__error__`, errorEntry));
+    }
+    const errorChildren: JsonToolkitTypes.TreeNode[] = [];
+    // 追加未解析的错误节点（过滤掉已被 jsonc-parser 成功解析的字段，避免重复）
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        // 跳过偏移已被解析节点占用的字段，它们会以内联错误形式显示在已解析节点上
+        if (parsedOffsets.has(err.startOffset)) continue;
+        errorChildren.push({
+          key: `${path}.${err.keyName}`,
+          label: `❌ ${err.errorMessage}`,
+          keyName: err.keyName,
+          valueText: err.valueText || err.errorMessage,
+          value: undefined,
+          type: "undefined",
+          path: `${path}.${err.keyName}`,
+          expandable: false,
+          isError: true,
+          errorMessage: err.errorMessage,
+          errorSuggestion: err.errorSuggestion,
+          errorOriginalValue: err.valueText,
+          errorStartOffset: err.startOffset,
+        });
+      }
+    }
+    // 按 startOffset 排序（有 offset 的排在前面；没有的排在后面保持原始顺序）
+    const allChildren = [...parsedChildren, ...errorChildren, ...markerChildren].map((n, idx) => ({ node: n, idx }));
+    allChildren.sort((a, b) => {
+      const ao = a.node.errorStartOffset;
+      const bo = b.node.errorStartOffset;
+      if (ao !== undefined && bo !== undefined) return ao - bo;
+      if (ao !== undefined && bo === undefined) return -1;
+      if (ao === undefined && bo !== undefined) return 1;
+      return a.idx - b.idx;
+    });
+    node.children = allChildren.map((item) => item.node);
   } else if (type === "array") {
     const arr = value as unknown[];
-    node.label = `${key}: [] (${arr.length})`;
-    node.children = arr.map((v, i) => {
+    node.valueText = `[] (${arr.length})`;
+    node.label = `${key}: ${node.valueText}`;
+    const arrChildren = arr.map((v, i) => {
       const childPath = `${path}[${i}]`;
-      return buildTreeChild(String(i), v, childPath);
+      return buildTreeChild(String(i), v, childPath, errorNodes, nodeOffsets);
     });
+    // 追加未解析的错误节点（数组路径）
+    if (errorNodes && errorNodes[path]) {
+      for (const err of errorNodes[path]) {
+        arrChildren.push({
+          key: `${path}.${err.keyName}`,
+          label: `❌ ${err.errorMessage}`,
+          keyName: err.keyName,
+          valueText: err.valueText || err.errorMessage,
+          value: undefined,
+          type: "undefined",
+          path: `${path}.${err.keyName}`,
+          expandable: false,
+          isError: true,
+          errorMessage: err.errorMessage,
+          errorSuggestion: err.errorSuggestion,
+          errorOriginalValue: err.valueText,
+          errorStartOffset: err.startOffset,
+        });
+      }
+    }
+    node.children = arrChildren;
   } else {
-    node.label = `${key}: ${formatPrimitive(value, type)}`;
+    node.valueText = formatPrimitive(value, type);
+    node.label = `${key}: ${node.valueText}`;
   }
 
   return node;

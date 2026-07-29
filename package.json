@@ -22,6 +22,7 @@
     "big.js": "^7.0.1",
     "encode-gb2312": "^0.0.2",
     "jsbarcode": "^3.12.3",
+    "jsonc-parser": "^3.3.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dnd": "^16.0.1",

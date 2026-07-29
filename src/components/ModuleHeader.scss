@@ -7,22 +7,64 @@
   padding: 0 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-bottom: 1px solid #e8e8e8;
+  height: auto;
+  min-height: 64px;
+  line-height: normal;
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
 
   &__title {
     margin: 0;
-    flex: 1;
     margin-bottom: 0px !important;
+  }
+
+  &__center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex: 0 0 auto;
+    max-width: 60%;
+    min-width: 0;
+
+    .ant-tabs {
+      &.ant-tabs-top {
+        > .ant-tabs-nav {
+          margin-bottom: 0;
+          padding: 0;
+        }
+
+        > .ant-tabs-nav::before {
+          border-bottom: none;
+        }
+      }
+    }
   }
 
   &__extra {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex: 1;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 768px) {
   .module-header {
-    padding: 0 16px;
+    padding: 8px 16px;
+    flex-wrap: wrap;
+
+    &__center {
+      order: 3;
+      flex: 1 1 100%;
+      max-width: 100%;
+      justify-content: flex-start;
+    }
   }
 }

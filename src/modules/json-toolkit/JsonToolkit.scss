@@ -2,36 +2,126 @@
   min-height: 100vh;
   background-color: #f5f5f5;
 
+  &__header-center {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  &__header-title {
+    margin: 0 !important;
+    font-size: 18px !important;
+  }
+
+  &__header-tabs {
+    min-width: 240px;
+
+    .ant-tabs-nav {
+      margin-bottom: 0 !important;
+      padding: 0 !important;
+      &::before {
+        border-bottom: none !important;
+      }
+    }
+
+    .ant-tabs-tab {
+      padding: 4px 10px !important;
+      font-weight: 500;
+    }
+  }
+
   &__content {
-    padding: 0;
+    padding: 12px 16px;
     overflow-y: auto;
     position: relative;
   }
 
-  &__tabs {
-    padding: 12px 16px 60px;
+  // 主区域：左编辑器 + 右预览
+  &__main {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.3fr);
+    gap: 12px;
+    align-items: start; // 左栏不再强制等高，避免编辑器下方出现大片空白
+    min-height: 480px;
+  }
+
+  &__editor-col {
+    min-width: 0;
+
+    .json-editor {
+      width: 100%;
+    }
+  }
+
+  &__preview-col {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 90px);
+    position: sticky;
+    top: 0;
+  }
+
+  &__preview-tabs-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #f0f0f0;
+    overflow: hidden;
+  }
+
+  &__preview-tabs {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 
     .ant-tabs-nav {
-      margin-bottom: 12px;
-      background: #fff;
-      padding: 0 16px;
-      border-radius: 6px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      margin-bottom: 0;
+      padding: 0 12px;
+      border-bottom: 1px solid #f0f0f0;
     }
 
     .ant-tabs-tab {
-      padding: 12px 16px;
+      padding: 10px 14px;
       font-weight: 500;
     }
 
     .ant-tabs-content-holder {
-      overflow: visible;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .ant-tabs-content {
+      height: 100%;
+    }
+
+    // 只给激活的 tabpane 设置 flex 布局
+    // 非激活 tabpane 保持 Antd 默认的 display:none，避免所有面板同时显示
+    .ant-tabs-tabpane-active {
+      height: 100%;
+      display: flex !important;
+      flex-direction: column;
+      overflow: hidden;
+    }
+  }
+
+  &__preview-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+
+    &--tree {
+      padding: 12px;
     }
   }
 
   &__two-col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.3fr);
     gap: 12px;
     align-items: start;
   }
@@ -52,18 +142,6 @@
     max-height: calc(100vh - 200px);
     overflow-y: auto;
   }
-
-  &__status-bar {
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #fff;
-    border-top: 1px solid #f0f0f0;
-    padding: 8px 24px;
-    z-index: 10;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
-  }
 }
 
 .json-editor {
@@ -80,6 +158,19 @@
     .ant-input {
       resize: vertical;
     }
+  }
+
+  // 卡片内部状态栏：放在文本框下方
+  &__status-bar {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #e8e8e8;
+    background: #fafafa;
+    margin-inline: -12px;
+    padding-inline: 12px;
+    margin-bottom: -12px;
+    padding-bottom: 10px;
+    border-radius: 0 0 8px 8px;
   }
 }
 
@@ -128,28 +219,61 @@
 }
 
 .json-tree-viewer {
-  &__legend {
-    margin-bottom: 12px;
+  height: 100%;
+
+  &__search-row {
     display: flex;
     align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  &__search-nav {
+    flex-shrink: 0;
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
-    gap: 4px;
   }
 
   &__tree {
     background: #fafafa;
-    padding: 8px 12px;
+    padding: 4px 8px;
     border-radius: 4px;
-    max-height: calc(100vh - 320px);
-    overflow-y: auto;
+
+    .ant-tree-treenode {
+      padding-top: 0px !important;
+      padding-bottom: 0px !important;
+    }
 
     .ant-tree-node-content-wrapper {
       flex: 1;
       min-width: 0;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      min-height: 20px;
+      line-height: 20px;
     }
 
     .ant-tree-title {
       width: 100%;
+    }
+
+    // 加深层级连接线颜色，使其更明显
+    .ant-tree-show-line .ant-tree-indent-unit::before {
+      border-right: 1px solid #d9d9d9;
+    }
+
+    .ant-tree-show-line .ant-tree-switcher-leaf-line::before {
+      border-bottom: 1px solid #d9d9d9;
+    }
+
+    .ant-tree-show-line .ant-tree-switcher-leaf-line::after {
+      border-right: 1px solid #d9d9d9;
     }
   }
 
@@ -161,15 +285,113 @@
     flex-wrap: wrap;
     width: 100%;
     padding-right: 4px;
+    transition: background 0.15s;
 
     &.is-dim {
       opacity: 0.35;
     }
+
+    &.is-current-match {
+      background: #fff3cd;
+      border-radius: 3px;
+      outline: 2px solid #ffc107;
+      outline-offset: -1px;
+    }
   }
 
-  &__label {
-    font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+  &__main {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  &__key {
+    color: #1890ff;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
     font-size: 13px;
+    font-weight: 500;
+  }
+
+  &__colon {
+    color: #8c8c8c;
+    margin-inline-end: 6px;
+  }
+
+  // 错误节点样式
+  &__node--error {
+    background: #fff1f0;
+    border: 1px dashed #ff7875;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 2px 0;
+  }
+
+  &__error-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: #fff1f0;
+    border-radius: 4px;
+    border: 1px solid #ffa39e;
+  }
+
+  &__error-msg {
+    display: inline-flex;
+    align-items: center;
+    color: #cf1322;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  &__error-suggest-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    border-radius: 4px;
+    color: #d48806;
+    font-size: 12px;
+    cursor: help;
+    transition: background 0.15s;
+
+    &:hover {
+      background: #fff1b8;
+    }
+  }
+
+  &__error-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  &__error-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  &__error-original-value {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    background: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 3px;
+    color: #595959;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+    font-size: 12px;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__meta {
@@ -183,6 +405,36 @@
     color: #1890ff;
     background: #e6f7ff;
     border-color: #91d5ff;
+  }
+
+  &__node--error {
+    background: #fff1f0;
+    border: 1px solid #ffccc7;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin: 2px 0;
+    display: inline-flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  &__error-box {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__error-msg {
+    color: #cf1322;
+    font-weight: 500;
+    font-size: 13px;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+  }
+
+  &__error-suggest {
+    color: #595959;
+    font-size: 12px;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
   }
 }
 
@@ -225,6 +477,19 @@
 }
 
 // 响应式
+@media (max-width: 1280px) {
+  .json-toolkit {
+    &__main {
+      grid-template-columns: 1fr;
+    }
+
+    &__preview-col {
+      position: static;
+      height: 600px;
+    }
+  }
+}
+
 @media (max-width: 1024px) {
   .json-toolkit {
     &__two-col {
@@ -236,11 +501,11 @@
 @media (max-width: 768px) {
   .json-toolkit {
     &__tabs {
-      padding: 8px 8px 60px;
+      padding: 8px 8px 16px;
     }
 
-    &__status-bar {
-      padding: 8px 12px;
+    &__preview-col {
+      height: 500px;
     }
   }
 

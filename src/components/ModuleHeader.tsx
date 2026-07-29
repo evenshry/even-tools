@@ -7,17 +7,23 @@ const { Header } = Layout;
 const { Title } = Typography;
 
 interface ModuleHeaderProps {
-  title: string;
+  title?: string;
   extra?: React.ReactNode;
+  center?: React.ReactNode;
 }
 
-const ModuleHeader: React.FC<ModuleHeaderProps> = ({ title, extra }) => {
+const ModuleHeader: React.FC<ModuleHeaderProps> = ({ title, extra, center }) => {
   return (
     <Header className="module-header">
-      <BackButton />
-      <Title level={3} className="module-header__title">
-        {title}
-      </Title>
+      <div className="module-header__left">
+        <BackButton />
+        {title && (
+          <Title level={3} className="module-header__title">
+            {title}
+          </Title>
+        )}
+      </div>
+      {center && <div className="module-header__center">{center}</div>}
       {extra && <div className="module-header__extra">{extra}</div>}
     </Header>
   );
