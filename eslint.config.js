@@ -13,6 +13,7 @@ export default defineConfig([
     rules: {
       "no-case-declarations": "off",
       "react-hooks/set-state-in-effect": "off",
+      "@typescript-eslint/no-explicit-any": "off",
     },
     languageOptions: {
       ecmaVersion: 2020,

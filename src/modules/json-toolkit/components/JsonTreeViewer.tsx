@@ -404,7 +404,6 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
 
   const root = useMemo(() => {
     const tree = data === undefined ? null : buildTree(data, "$", errorNodes, nodeOffsets);
-    // eslint-disable-next-line no-console
     console.log("[JsonTreeViewer] root tree:", JSON.stringify(tree, (key, value) => {
       if (key === "value" && typeof value === "object" && value !== null) return "[object]";
       return value;
