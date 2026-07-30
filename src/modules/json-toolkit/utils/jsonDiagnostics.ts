@@ -446,6 +446,77 @@ const detectSpecialErrors = (text: string): JsonDiagnosticError[] => {
     });
   }
 
+  // 检测尾随逗号：, 后面紧跟（跳过空白后）} 或 ]
+  // 逐字符扫描，跳过字符串内部内容
+  let inStr = false;
+  let strChar = "";
+  let escNext = false;
+  for (let p = 0; p < str.length; p++) {
+    const c = str[p];
+    if (inStr) {
+      if (escNext) { escNext = false; continue; }
+      if (c === "\\") { escNext = true; continue; }
+      if (c === strChar) { inStr = false; strChar = ""; }
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = true; strChar = c; continue; }
+    // 跳过注释
+    if (c === "/" && p + 1 < str.length) {
+      if (str[p + 1] === "/") {
+        while (p < str.length && str[p] !== "\n") p++;
+        continue;
+      }
+      if (str[p + 1] === "*") {
+        p += 2;
+        while (p < str.length - 1 && !(str[p] === "*" && str[p + 1] === "/")) p++;
+        p++;
+        continue;
+      }
+    }
+    if (c === ",") {
+      let q = p + 1;
+      while (q < str.length && /\s/.test(str[q])) q++;
+      if (q < str.length && (str[q] === "}" || str[q] === "]")) {
+        const rng = offsetRangeToLineColumn(str, p, 1);
+        errors.push({
+          position: p,
+          length: 1,
+          line: rng.line,
+          column: rng.column,
+          endLine: rng.endLine,
+          endColumn: rng.endColumn,
+          type: "trailing_comma",
+          message: "不允许尾随逗号",
+          suggestion: "删除最后一个元素后的逗号",
+          severity: "error",
+        });
+      }
+    }
+  }
+
+  // 检测非法数字：前导零的十进制整数（如 0123）、多个小数点、数字后跟非法字符
+  // 使用正则：0 后面紧跟数字（非浮点也非指数），即非允许的 0.x、0eX、0
+  const badNumRe = /(?<![\w$.])(0\d+)(?!\w)/g;
+  while ((m = badNumRe.exec(str)) !== null) {
+    if (isInString(m.index)) continue;
+    // 确保前面不是另一个数字的一部分（如 "101" 这种合法数字）
+    const before = m.index > 0 ? str[m.index - 1] : "";
+    if (/\d/.test(before)) continue;
+    const range = offsetRangeToLineColumn(str, m.index, m[1].length);
+    errors.push({
+      position: m.index,
+      length: m[1].length,
+      line: range.line,
+      column: range.column,
+      endLine: range.endLine,
+      endColumn: range.endColumn,
+      type: "invalid_number",
+      message: `数字格式错误：${m[1]}（前导零不合法）`,
+      suggestion: "使用无前置零的数字（如 123），或用字符串表示",
+      severity: "error",
+    });
+  }
+
   return errors;
 };
 
@@ -874,20 +945,21 @@ export const buildErrorNodesFromDiagnostics = (
   for (const diag of sorted) {
     // 1. 先找最近的 region
     let region: JsonFieldRegion | undefined;
+    // 使用半开区间 [startOffset, endOffset) 匹配
+    // 避免错误正好落在字段分隔符（逗号/括号）时，错误地归到前一个字段
     for (const r of regions) {
-      if (diag.position >= r.startOffset && diag.position <= r.endOffset) {
-        // 找到了
+      if (diag.position >= r.startOffset && diag.position < r.endOffset) {
         region = r;
         break;
       }
     }
-    // 若没找到：找最近的（前一个或后一个，偏移差 <40）
+    // 若没找到：找距离 diag.position 最近的 region.startOffset（阈值 <40）
+    // 只看 startOffset 距离：让字段边界处的错误（逗号处）自然归到下一个字段（startOffset更近）
+    // 而非错误地留在前一个字段的 endOffset 处
     if (!region) {
       let best: { r: JsonFieldRegion; dist: number } | undefined;
       for (const r of regions) {
-        const d1 = Math.abs(diag.position - r.startOffset);
-        const d2 = Math.abs(diag.position - r.endOffset);
-        const d = Math.min(d1, d2);
+        const d = Math.abs(diag.position - r.startOffset);
         if (d < 40 && (!best || d < best.dist)) best = { r, dist: d };
       }
       if (best) region = best.r;

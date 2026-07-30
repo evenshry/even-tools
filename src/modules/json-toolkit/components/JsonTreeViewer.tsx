@@ -66,7 +66,7 @@ const isArrayItem = (node: JsonToolkitTypes.TreeNode) => /^\d+$/.test(node.keyNa
 // 渲染节点的值部分（按类型上色）
 const renderValueText = (node: JsonToolkitTypes.TreeNode) => {
   const color = typeValueColor[node.type];
-  return <span style={{ color, fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 13 }}>{node.valueText}</span>;
+  return <span style={{ color, fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 12 }}>{node.valueText}</span>;
 };
 
 // 判断节点是否匹配关键字
@@ -125,7 +125,7 @@ const convertNode = (
       keyPart = (
         <span
           className="json-tree-viewer__key"
-          style={{ color: "#1890ff", fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 13, fontWeight: 500 }}
+          style={{ color: "#1890ff", fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 12, fontWeight: 500 }}
         >
           {node.keyName}
         </span>

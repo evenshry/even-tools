@@ -248,6 +248,8 @@
     .ant-tree-treenode {
       padding-top: 0px !important;
       padding-bottom: 0px !important;
+      line-height: 20px !important;
+      margin-bottom: 0px !important;
     }
 
     .ant-tree-node-content-wrapper {
@@ -257,6 +259,7 @@
       padding-bottom: 0 !important;
       min-height: 20px;
       line-height: 20px;
+      padding-inline: 0 !important;
     }
 
     .ant-tree-title {
@@ -310,7 +313,7 @@
   &__key {
     color: #1890ff;
     font-family: "Monaco", "Menlo", "Consolas", monospace;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
   }
 
