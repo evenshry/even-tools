@@ -14,6 +14,7 @@ export default defineConfig([
       "no-case-declarations": "off",
       "react-hooks/set-state-in-effect": "off",
       "@typescript-eslint/no-explicit-any": "off",
+      "no-useless-escape" : "off",
     },
     languageOptions: {
       ecmaVersion: 2020,
