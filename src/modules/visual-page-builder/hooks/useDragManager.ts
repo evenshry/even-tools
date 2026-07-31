@@ -1,9 +1,125 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { useDrop } from 'react-dnd';
-import type { DragItem, PageNode } from '../types';
+import type { DragItem, PageNode, AlignmentGuides } from '../types';
 import type { RefObject } from 'react';
-import { NodeType } from '../types';
 import { useCanvasStore } from '../store/useCanvasStore';
+
+/**
+ * 解析像素值（"100px" / 100 / undefined → number）
+ */
+const parsePx = (value: unknown): number => {
+  if (value === undefined || value === null || value === '') return 0;
+  if (typeof value === 'number') return value;
+  const num = parseFloat(String(value));
+  return Number.isFinite(num) ? num : 0;
+};
+
+/** 对齐吸附阈值（画布坐标，未缩放） */
+const ALIGN_THRESHOLD = 5;
+
+/**
+ * 计算拖动节点与其他节点的对齐参考线 + 吸附偏移
+ *
+ * 参考线类型：
+ * - 垂直方向：left / center / right 三条 x 坐标
+ * - 水平方向：top / middle / bottom 三条 y 坐标
+ *
+ * 当被拖节点某条线与任一目标节点的某条线差值 < ALIGN_THRESHOLD 时：
+ * 1. 吸附：将 left/top 修正到对齐位置
+ * 2. 显示参考线：在目标位置绘制红色线
+ *
+ * @returns { left, top, guides } 吸附后的 left/top 与应显示的参考线
+ */
+const computeAlignment = (
+  dragLeft: number,
+  dragTop: number,
+  dragWidth: number,
+  dragHeight: number,
+  others: Array<{ id: string; left: number; top: number; width: number; height: number }>
+): { left: number; top: number; guides: AlignmentGuides } => {
+  const dragRight = dragLeft + dragWidth;
+  const dragCenterX = dragLeft + dragWidth / 2;
+  const dragBottom = dragTop + dragHeight;
+  const dragCenterY = dragTop + dragHeight / 2;
+
+  // 候选吸附：记录最小的差值及对应的吸附后位置
+  let bestDX = ALIGN_THRESHOLD + 1;
+  let snapLeft: number | null = null;
+  let bestDY = ALIGN_THRESHOLD + 1;
+  let snapTop: number | null = null;
+
+  const verticalGuideSet = new Set<number>();
+  const horizontalGuideSet = new Set<number>();
+
+  others.forEach((other) => {
+    const oLeft = other.left;
+    const oRight = other.left + other.width;
+    const oCenterX = other.left + other.width / 2;
+    const oTop = other.top;
+    const oBottom = other.top + other.height;
+    const oCenterY = other.top + other.height / 2;
+
+    // 垂直方向：dragLeft / dragCenterX / dragRight 与 oLeft / oCenterX / oRight 对齐
+    const dragXs: Array<{ value: number; line: number }> = [
+      { value: dragLeft, line: 0 },
+      { value: dragCenterX, line: 1 },
+      { value: dragRight, line: 2 },
+    ];
+    const targetXs: Array<{ value: number; line: number }> = [
+      { value: oLeft, line: 0 },
+      { value: oCenterX, line: 1 },
+      { value: oRight, line: 2 },
+    ];
+    dragXs.forEach((dx) => {
+      targetXs.forEach((tx) => {
+        const diff = Math.abs(dx.value - tx.value);
+        if (diff < ALIGN_THRESHOLD && diff < bestDX) {
+          bestDX = diff;
+          // 吸附后的 left = 目标 x - (dx.value - dragLeft)
+          snapLeft = tx.value - (dx.value - dragLeft);
+          verticalGuideSet.clear();
+          verticalGuideSet.add(tx.value);
+        } else if (diff < ALIGN_THRESHOLD) {
+          verticalGuideSet.add(tx.value);
+        }
+      });
+    });
+
+    // 水平方向
+    const dragYs: Array<{ value: number; line: number }> = [
+      { value: dragTop, line: 0 },
+      { value: dragCenterY, line: 1 },
+      { value: dragBottom, line: 2 },
+    ];
+    const targetYs: Array<{ value: number; line: number }> = [
+      { value: oTop, line: 0 },
+      { value: oCenterY, line: 1 },
+      { value: oBottom, line: 2 },
+    ];
+    dragYs.forEach((dy) => {
+      targetYs.forEach((ty) => {
+        const diff = Math.abs(dy.value - ty.value);
+        if (diff < ALIGN_THRESHOLD && diff < bestDY) {
+          bestDY = diff;
+          snapTop = ty.value - (dy.value - dragTop);
+          horizontalGuideSet.clear();
+          horizontalGuideSet.add(ty.value);
+        } else if (diff < ALIGN_THRESHOLD) {
+          horizontalGuideSet.add(ty.value);
+        }
+      });
+    });
+  });
+
+  return {
+    left: snapLeft !== null ? snapLeft : dragLeft,
+    top: snapTop !== null ? snapTop : dragTop,
+    guides: {
+      horizontal: Array.from(horizontalGuideSet),
+      vertical: Array.from(verticalGuideSet),
+    },
+  };
+};
 
 /**
  * 拖拽管理器接口定义
@@ -62,8 +178,17 @@ export const useDragManager = (
     enableBoundaryCheck = true
   } = options;
 
-  // 从store获取状态和操作
-  const { nodes, hoveredNodeId, dragTargetNodeId, addNode, selectNode, hoverNode, setDragTargetNodeId, updateNode } = useCanvasStore();
+  // 从store获取状态和操作（按字段精确订阅，避免任意 store 变化触发重渲染）
+  const nodes = useCanvasStore(s => s.nodes);
+  const hoveredNodeId = useCanvasStore(s => s.hoveredNodeId);
+  const dragTargetNodeId = useCanvasStore(s => s.dragTargetNodeId);
+  const alignmentGuidesVisible = useCanvasStore(s => s.alignmentGuidesVisible);
+  const addNode = useCanvasStore(s => s.addNode);
+  const selectNode = useCanvasStore(s => s.selectNode);
+  const hoverNode = useCanvasStore(s => s.hoverNode);
+  const setDragTargetNodeId = useCanvasStore(s => s.setDragTargetNodeId);
+  const setAlignmentGuides = useCanvasStore(s => s.setAlignmentGuides);
+  const updateNode = useCanvasStore(s => s.updateNode);
 
   // 节点拖拽状态
   const [isDragging, setIsDragging] = useState(false);
@@ -71,7 +196,6 @@ export const useDragManager = (
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   
   // 性能优化相关
-  const lastHoverTimeRef = useRef<number>(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -94,193 +218,42 @@ export const useDragManager = (
 
   /**
    * 查找指定位置的节点
-   * 
-   * @param x 鼠标在画布中的X坐标
-   * @param y 鼠标在画布中的Y坐标
-   * @param nodeMap 节点映射表
+   *
+   * 性能优化方案：
+   * 1. 批量 DOM 查询（querySelectorAll 一次），避免每个节点单独 querySelector
+   * 2. 直接读 getBoundingClientRect，浏览器已计算累积位置
+   * 3. 按 DOM 顺序从后往前命中测试（后渲染的节点在视觉上更靠前）
+   *
+   * @param x 鼠标在画布中的X坐标（已除以 zoom）
+   * @param y 鼠标在画布中的Y坐标（已除以 zoom）
+   * @param nodeMap 节点映射表（保留参数兼容性，内部未使用）
    * @returns 找到的节点ID，如果没有找到则返回null
    */
-  const findNodeAtPosition = useCallback((x: number, y: number, nodeMap: Record<string, PageNode>): string | null => {
-    // 性能优化：使用 requestAnimationFrame 节流而非返回旧值
-    const now = Date.now();
-    if (enableDebounce && now - lastHoverTimeRef.current < debounceDelay) {
-      // 仍执行查找，但不更新时间戳，避免阻塞悬停反馈
-    }
-    lastHoverTimeRef.current = now;
+  const findNodeAtPosition = useCallback((x: number, y: number, _nodeMap?: Record<string, PageNode>): string | null => {
+    if (!canvasRef.current) return null;
 
-    /**
-     * 递归查找节点树中的节点
-     */
-    const findNodeInTree = (nodeId: string, x: number, y: number, nodeMap: Record<string, PageNode>): string | null => {
-      const node = nodeMap[nodeId];
-      if (!node) return null;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    // 鼠标在屏幕中的坐标
+    const clientX = canvasRect.left + x * zoom + (canvasRef.current.scrollLeft || 0);
+    const clientY = canvasRect.top + y * zoom + (canvasRef.current.scrollTop || 0);
 
-      // 尝试获取节点的实际DOM元素尺寸
-      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement;
-      
-      if (nodeElement) {
-        // 使用实际DOM元素尺寸进行精确检测
-        const rect = nodeElement.getBoundingClientRect();
-        const canvasRect = canvasRef.current?.getBoundingClientRect();
-        
-        if (canvasRect) {
-          // 转换为相对于画布的坐标
-          const left = rect.left - canvasRect.left + (canvasRef.current?.scrollLeft || 0);
-          const top = rect.top - canvasRect.top + (canvasRef.current?.scrollTop || 0);
-          const width = rect.width;
-          const height = rect.height;
-          
-          const isInside = x >= left && x <= left + width && y >= top && y <= top + height;
-          
-          if (isInside) {
-            // 检查子节点（深度优先搜索）
-            if (node.content.children && node.content.children.length > 0) {
-              for (const childId of node.content.children) {
-                const childResult = findNodeInTree(childId, x, y, nodeMap);
-                if (childResult) return childResult;
-              }
-            }
-            return nodeId;
-          }
-        }
-      } else {
-        // 备用方法：如果无法获取DOM元素，使用样式计算
-        let left = 0;
-        let top = 0;
-        let width = 100;
-        let height = 100;
+    // 一次性查询所有节点 DOM
+    const nodeElements = canvasRef.current.querySelectorAll<HTMLElement>('[data-node-id]');
+    if (nodeElements.length === 0) return null;
 
-        // 根据布局类型计算位置
-        if (node.layout.position === 'static' || node.layout.position === 'relative') {
-          // 流布局节点：需要计算累积位置
-          
-          // 计算宽度
-          if (node.style.width) {
-            if (typeof node.style.width === 'string' && node.style.width.includes('%')) {
-              const canvasWidth = canvasRef.current?.clientWidth || 722;
-              width = (parseFloat(node.style.width) / 100) * canvasWidth;
-            } else {
-              width = parseFloat(String(node.style.width));
-            }
-          }
-          
-          // 计算高度 - 使用更合理的默认值
-          if (node.style.height) {
-            if (typeof node.style.height === 'string' && node.style.height === 'auto') {
-              // 对于auto高度，根据内容类型使用不同的默认值
-              switch (node.type) {
-                case NodeType.SECTION:
-                  height = 300; // 内容区块默认高度
-                  break;
-                case NodeType.CONTAINER:
-                  height = 200; // 容器默认高度
-                  break;
-                default:
-                  height = 100; // 其他组件默认高度
-              }
-            } else if (typeof node.style.height === 'string' && node.style.height.includes('%')) {
-              const canvasHeight = canvasRef.current?.clientHeight || 769;
-              height = (parseFloat(node.style.height) / 100) * canvasHeight;
-            } else {
-              height = parseFloat(String(node.style.height));
-            }
-          }
-          
-          // 流布局节点在文档流中，需要计算累积的top位置
-          let accumulatedTop = 0;
-          const rootNodeIds = Object.keys(nodeMap).filter(id => {
-            return !Object.values(nodeMap).some(parentNode => 
-              parentNode.content.children && parentNode.content.children.includes(id)
-            );
-          });
-          
-          for (const rootId of rootNodeIds) {
-            if (rootId === nodeId) break;
-            const currentNode = nodeMap[rootId];
-            if (currentNode.layout.position === 'static' || currentNode.layout.position === 'relative') {
-              let currentHeight = 100;
-              if (currentNode.style.height) {
-                if (typeof currentNode.style.height === 'string' && currentNode.style.height === 'auto') {
-                  switch (currentNode.type) {
-                    case NodeType.SECTION:
-                      currentHeight = 300;
-                      break;
-                    case NodeType.CONTAINER:
-                      currentHeight = 200;
-                      break;
-                    default:
-                      currentHeight = 100;
-                  }
-                } else if (typeof currentNode.style.height === 'string' && currentNode.style.height.includes('%')) {
-                  const canvasHeight = canvasRef.current?.clientHeight || 769;
-                  currentHeight = (parseFloat(currentNode.style.height) / 100) * canvasHeight;
-                } else {
-                  currentHeight = parseFloat(String(currentNode.style.height));
-                }
-              }
-              accumulatedTop += currentHeight + 20; // 加上margin
-            }
-          }
-          
-          top = accumulatedTop;
-        } else {
-          // 绝对定位节点：使用样式中的位置
-          left = node.style.left ? parseFloat(String(node.style.left)) : 0;
-          top = node.style.top ? parseFloat(String(node.style.top)) : 0;
-          
-          if (node.style.width) {
-            if (typeof node.style.width === 'string' && node.style.width.includes('%')) {
-              const canvasWidth = canvasRef.current?.clientWidth || 722;
-              width = (parseFloat(node.style.width) / 100) * canvasWidth;
-            } else {
-              width = parseFloat(String(node.style.width));
-            }
-          }
-          
-          if (node.style.height) {
-            if (typeof node.style.height === 'string' && node.style.height === 'auto') {
-              height = 200;
-            } else if (typeof node.style.height === 'string' && node.style.height.includes('%')) {
-              const canvasHeight = canvasRef.current?.clientHeight || 769;
-              height = (parseFloat(node.style.height) / 100) * canvasHeight;
-            } else {
-              height = parseFloat(String(node.style.height));
-            }
-          }
-        }
-        
-        const nodeRect = { left, top, width, height };
-        const isInside = x >= nodeRect.left && x <= nodeRect.left + nodeRect.width && y >= nodeRect.top && y <= nodeRect.top + nodeRect.height;
-        
-        if (isInside) {
-          // 检查子节点
-          if (node.content.children && node.content.children.length > 0) {
-            for (const childId of node.content.children) {
-              const childResult = findNodeInTree(childId, x, y, nodeMap);
-              if (childResult) return childResult;
-            }
-          }
-          return nodeId;
-        }
+    // 从后往前遍历（DOM 顺序后面的节点视觉上更靠前）
+    for (let i = nodeElements.length - 1; i >= 0; i--) {
+      const el = nodeElements[i];
+      const rect = el.getBoundingClientRect();
+      // 命中测试
+      if (clientX >= rect.left && clientX <= rect.right &&
+          clientY >= rect.top && clientY <= rect.bottom) {
+        return el.dataset.nodeId || null;
       }
-      
-      return null;
-    };
-
-    // 从根节点开始查找
-    const rootNodeIds = Object.keys(nodeMap).filter(id => {
-      return !Object.values(nodeMap).some(parentNode => 
-        parentNode.content.children && parentNode.content.children.includes(id)
-      );
-    });
-
-    for (const rootId of rootNodeIds) {
-      const result = findNodeInTree(rootId, x, y, nodeMap);
-      if (result) return result;
     }
 
     return null;
-  }, [canvasRef, enableDebounce, debounceDelay, hoveredNodeId]);
+  }, [canvasRef, zoom]);
 
   /**
    * 判断拖拽项是否可以放置到当前悬停位置
@@ -425,7 +398,7 @@ export const useDragManager = (
   }, [selectNode, nodes]);
 
   /**
-   * 处理节点拖拽移动（带边界检查）
+   * 处理节点拖拽移动（带边界检查 + 对齐吸附）
    */
   const handleNodeDragMove = useCallback(
     (e: React.MouseEvent) => {
@@ -437,30 +410,63 @@ export const useDragManager = (
       const deltaX = (e.clientX - dragStartPos.x) / zoom;
       const deltaY = (e.clientY - dragStartPos.y) / zoom;
 
-      const newLeft = parseFloat(node.style.left?.toString() || "0") + deltaX;
-      const newTop = parseFloat(node.style.top?.toString() || "0") + deltaY;
+      const nodeWidth = parsePx(node.style.width) || 100;
+      const nodeHeight = parsePx(node.style.height) || 100;
+      let newLeft = parsePx(node.style.left) + deltaX;
+      let newTop = parsePx(node.style.top) + deltaY;
 
       // 边界检查
-      const nodeWidth = parseFloat(node.style.width?.toString() || "100");
-      const nodeHeight = parseFloat(node.style.height?.toString() || "100");
-      
       const constrainedPos = checkBoundary(newLeft, newTop, nodeWidth, nodeHeight);
+      newLeft = constrainedPos.left;
+      newTop = constrainedPos.top;
+
+      // 对齐吸附 + 参考线（仅在对齐参考线开关打开时计算）
+      let guides: AlignmentGuides | null = null;
+      if (alignmentGuidesVisible && nodes) {
+        const others: Array<{ id: string; left: number; top: number; width: number; height: number }> = [];
+        Object.values(nodes).forEach((n) => {
+          if (n.id === dragNodeId) return;
+          // 仅绝对/固定定位的可见节点参与对齐
+          if (n.layout.position !== 'absolute' && n.layout.position !== 'fixed') return;
+          if (n.layout.display === 'none') return;
+          others.push({
+            id: n.id,
+            left: parsePx(n.style.left),
+            top: parsePx(n.style.top),
+            width: parsePx(n.style.width) || 100,
+            height: parsePx(n.style.height) || 100,
+          });
+        });
+
+        if (others.length > 0) {
+          const result = computeAlignment(newLeft, newTop, nodeWidth, nodeHeight, others);
+          newLeft = result.left;
+          newTop = result.top;
+          guides = result.guides;
+        }
+      }
 
       try {
         updateNode(dragNodeId, {
           style: {
             ...node.style,
-            left: `${constrainedPos.left}px`,
-            top: `${constrainedPos.top}px`,
+            left: `${newLeft}px`,
+            top: `${newTop}px`,
           },
         });
+        // 同步参考线（仅当有参考线时设置；无则清空）
+        if (guides && (guides.horizontal.length > 0 || guides.vertical.length > 0)) {
+          setAlignmentGuides(guides);
+        } else if (useCanvasStore.getState().alignmentGuides) {
+          setAlignmentGuides(null);
+        }
       } catch (error) {
         console.error('Failed to update node position:', error);
       }
 
       setDragStartPos({ x: e.clientX, y: e.clientY });
     },
-    [isDragging, dragNodeId, dragStartPos, nodes, zoom, updateNode, checkBoundary]
+    [isDragging, dragNodeId, dragStartPos, nodes, zoom, updateNode, checkBoundary, alignmentGuidesVisible, setAlignmentGuides]
   );
 
   /**
@@ -469,7 +475,11 @@ export const useDragManager = (
   const handleNodeDragEnd = useCallback(() => {
     setIsDragging(false);
     setDragNodeId(null);
-  }, []);
+    // 清空对齐参考线
+    if (useCanvasStore.getState().alignmentGuides) {
+      setAlignmentGuides(null);
+    }
+  }, [setAlignmentGuides]);
 
   // 添加全局鼠标事件监听器
   React.useEffect(() => {
@@ -497,7 +507,8 @@ export const useDragManager = (
     };
   }, [isDragging, handleNodeDragMove, handleNodeDragEnd]);
 
-  return {
+  // 使用 useMemo 稳定返回对象引用，避免每帧新建导致子组件 memo 失效
+  return useMemo<DragManager>(() => ({
     drop,
     isOver,
     canDrop,
@@ -507,5 +518,5 @@ export const useDragManager = (
     handleNodeDragMove,
     handleNodeDragEnd,
     findNodeAtPosition,
-  };
+  }), [drop, isOver, canDrop, dragNodeId, dragTargetNodeId, handleNodeDragStart, handleNodeDragMove, handleNodeDragEnd, findNodeAtPosition]);
 };

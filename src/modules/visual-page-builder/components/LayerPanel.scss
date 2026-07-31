@@ -1,0 +1,80 @@
+.layer-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .layer-tree-wrapper {
+    flex: 1;
+    overflow: auto;
+    padding: 4px 0;
+
+    // 自定义 antd Tree 节点样式
+    .ant-tree {
+      font-size: 12px;
+
+      .ant-tree-node-content-wrapper {
+        flex: 1;
+        min-width: 0;
+
+        &:hover {
+          background-color: rgba(24, 144, 255, 0.08);
+        }
+      }
+
+      .ant-tree-node-selected {
+        background-color: rgba(24, 144, 255, 0.16);
+      }
+    }
+  }
+
+  .layer-node-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    width: 100%;
+    min-width: 0;
+
+    .layer-node-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .layer-node-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      color: rgba(0, 0, 0, 0.85);
+
+      &.is-hidden {
+        color: rgba(0, 0, 0, 0.35);
+        text-decoration: line-through;
+      }
+    }
+
+    .layer-node-toggle {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      font-size: 12px;
+      color: rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s;
+
+      &:hover {
+        color: #1890ff;
+        background-color: rgba(24, 144, 255, 0.1);
+      }
+    }
+  }
+}

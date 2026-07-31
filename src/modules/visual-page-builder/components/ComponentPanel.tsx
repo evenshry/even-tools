@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useDrag } from "react-dnd";
-import { Input, Tabs, Space, Typography, Empty } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import { Input, Tabs, Space, Typography, Empty, Button } from "antd";
+import { SearchOutlined, QuestionCircleOutlined } from "@ant-design/icons";
 import { getComponentsByCategory } from "../data/componentLibrary";
 import { NodeType } from "../types";
+import { showShortcutsModal } from "../hooks/useKeyboardShortcuts";
 import "./ComponentPanel.scss";
 
 const { Search } = Input;
@@ -22,26 +23,16 @@ interface DraggableComponentProps {
 const DraggableComponent: React.FC<DraggableComponentProps> = ({ component }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: "component",
-    item: () => {
-      console.log(`开始拖拽组件: ${component.name} (${component.type})`);
-      return {
-        type: "component",
-        id: component.id,
-        componentType: component.type,
-        name: component.name,
-        icon: component.icon,
-      };
-    },
+    item: () => ({
+      type: "component",
+      id: component.id,
+      componentType: component.type,
+      name: component.name,
+      icon: component.icon,
+    }),
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-    end: (_, monitor) => {
-      if (monitor.didDrop()) {
-        console.log(`组件 ${component.name} 成功放置`);
-      } else {
-        console.log(`组件 ${component.name} 拖拽取消`);
-      }
-    },
   }));
 
   return (
@@ -83,7 +74,7 @@ const ComponentPanel: React.FC = () => {
       children: (
         <div className="component-list-content">
           {filteredComponents.length > 0 ? (
-            <Space orientation="vertical" style={{ width: "100%" }} size="small">
+            <Space direction="vertical" style={{ width: "100%" }} size="small">
               {filteredComponents.map((component) => (
                 <DraggableComponent key={component.id} component={component} />
               ))}
@@ -117,15 +108,24 @@ const ComponentPanel: React.FC = () => {
         items={tabItems}
         size="small"
         style={{ height: "calc(100% - 60px)" }}
-        tabPlacement="top"
+        tabPosition="top"
         tabBarGutter={8}
       />
 
       {/* 底部信息 */}
       <div className="panel-footer">
-        <Text type="secondary" style={{ fontSize: "12px" }}>
+        <Text type="secondary" style={{ fontSize: "12px", flex: 1 }}>
           拖拽组件到画布
         </Text>
+        <Button
+          size="small"
+          type="text"
+          icon={<QuestionCircleOutlined />}
+          onClick={showShortcutsModal}
+          title="键盘快捷键"
+        >
+          快捷键
+        </Button>
       </div>
     </div>
   );

@@ -32,8 +32,10 @@
   }
   
   .panel-footer {
+    display: flex;
+    align-items: center;
     padding: 8px 0;
-    text-align: center;
+    gap: 8px;
     border-top: 1px solid #f0f0f0;
     margin-top: auto;
   }

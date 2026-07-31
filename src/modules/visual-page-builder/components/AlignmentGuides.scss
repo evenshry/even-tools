@@ -1,0 +1,28 @@
+.alignment-guides-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: visible;
+}
+
+.alignment-guide {
+  position: absolute;
+  background-color: #ff4d4f;
+  box-shadow: 0 0 1px rgba(255, 77, 79, 0.6);
+
+  &--horizontal {
+    left: 0;
+    width: 100%;
+    height: 1px;
+  }
+
+  &--vertical {
+    top: 0;
+    height: 100%;
+    width: 1px;
+  }
+}

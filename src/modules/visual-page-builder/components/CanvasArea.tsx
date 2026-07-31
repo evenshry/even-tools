@@ -1,7 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { NodeType } from '../types';
+import React, { useRef, useState, useMemo } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { useDragManager } from '../hooks/useDragManager';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import CanvasNode from './CanvasNode';
+import AlignmentGuides from './AlignmentGuides';
 import './CanvasArea.scss';
 
 const CanvasArea: React.FC = () => {
@@ -10,6 +12,10 @@ const CanvasArea: React.FC = () => {
   const [zoom, setZoom] = useState(1);
   const [gridVisible, setGridVisible] = useState(true);
 
+  // 对齐参考线开关（来自 store，与拖拽逻辑共享）
+  const alignmentGuidesVisible = useCanvasStore((s) => s.alignmentGuidesVisible);
+  const toggleAlignmentGuides = useCanvasStore((s) => s.toggleAlignmentGuides);
+
   // 使用拖拽管理器（带性能优化配置）
   const dragManager = useDragManager(canvasRef as React.RefObject<HTMLDivElement>, zoom, {
     enableDebounce: true,
@@ -17,116 +23,31 @@ const CanvasArea: React.FC = () => {
     enableBoundaryCheck: true,
     enableDragConstraints: true
   });
-  
-  // 从store获取状态
-  const { nodes, selectedNodeId, hoveredNodeId } = useCanvasStore();
+
+  // 仅订阅 nodes 引用（用于根节点列表）
+  const nodes = useCanvasStore(s => s.nodes);
+
+  // 启用键盘快捷键
+  useKeyboardShortcuts(true);
 
   // 合并refs - 将拖拽管理器的drop引用与canvas引用合并
   const setCanvasRef = (element: HTMLDivElement | null) => {
     canvasRef.current = element;
     dragManager.drop(element);
-
-    if (element) {
-      // 画布容器已设置ref
-    }
   };
 
-  /**
-   * 渲染单个节点
-   */
-  const renderNode = (nodeId: string) => {
-    const node = nodes[nodeId];
-    if (!node) return null;
+  // O(n) 过滤根节点（通过 parentId 字段）
+  const rootNodes = useMemo(
+    () => Object.values(nodes).filter((node) => !node.parentId),
+    [nodes]
+  );
 
-    const isSelected = selectedNodeId === nodeId;
-    const isHovered = hoveredNodeId === nodeId;
-    const isDragTarget = dragManager.dragTargetNodeId === nodeId;
-
-    // 检查是否支持拖动：只有绝对定位和固定定位支持拖动
-    const supportsDrag = node.layout.position === 'absolute' || node.layout.position === 'fixed';
-
-    // 节点样式
-    const nodeStyle: React.CSSProperties = {
-      position: node.layout.position,
-      left: node.style.left,
-      top: node.style.top,
-      width: node.style.width,
-      height: node.style.height,
-      backgroundColor: node.style.backgroundColor,
-      border: node.style.border,
-      borderRadius: node.style.borderRadius,
-      padding: node.style.padding,
-      margin: node.style.margin,
-      transform: `scale(${zoom})`,
-      transformOrigin: 'top left',
-      zIndex: isSelected ? 1000 : isHovered ? 500 : 100,
-    };
-
-    // 节点内容
-    let nodeContent: React.ReactNode;
-    switch (node.type) {
-      case NodeType.SECTION:
-        nodeContent = <div className="section-content">内容区块</div>;
-        break;
-      case NodeType.CONTAINER:
-        nodeContent = <div className="container-content">容器</div>;
-        break;
-      case NodeType.BUTTON:
-        nodeContent = <button className="button-content">按钮</button>;
-        break;
-      case NodeType.TEXT:
-        nodeContent = <div className="text-content">文本</div>;
-        break;
-      case NodeType.IMAGE:
-        nodeContent = <div className="image-content">图片</div>;
-        break;
-      default:
-        nodeContent = <div className="unknown-content">未知组件</div>;
-    }
-
-    return (
-      <div
-        key={nodeId}
-        data-node-id={nodeId}
-        className={`canvas-node ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""} ${dragManager.dragNodeId === nodeId ? "dragging" : ""} ${
-          supportsDrag ? "draggable" : "flow-layout"
-        } ${isDragTarget ? "drag-target" : ""}`}
-        style={nodeStyle}
-        onClick={(e) => {
-          e.stopPropagation();
-          // 使用store中的selectNode
-          const { selectNode } = useCanvasStore.getState();
-          selectNode(nodeId);
-        }}
-        onMouseDown={supportsDrag ? (e) => dragManager.handleNodeDragStart(e, nodeId) : undefined}
-        onMouseEnter={() => {
-          const { hoverNode } = useCanvasStore.getState();
-          hoverNode(nodeId);
-        }}
-        onMouseLeave={() => {
-          const { hoverNode } = useCanvasStore.getState();
-          hoverNode(null);
-        }}
-      >
-        {nodeContent}
-        
-        {/* 渲染子节点 */}
-        {node.content.children && node.content.children.length > 0 && (
-          <div className="node-children">
-            {node.content.children.map((childId) => renderNode(childId))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // 过滤出根节点（没有父节点的节点）
-  const rootNodes = Object.values(nodes).filter((node) => {
-    const isChild = Object.values(nodes).some((parentNode) => 
-      parentNode.content.children && parentNode.content.children.includes(node.id)
-    );
-    return !isChild;
-  });
+  // 节点树容器的缩放样式（统一处理，避免每个节点单独 transform）
+  const nodeTreeStyle: React.CSSProperties = useMemo(() => ({
+    transform: `scale(${zoom})`,
+    transformOrigin: 'top left',
+    width: `${100 / zoom}%`,
+  }), [zoom]);
 
   return (
     <div className="canvas-area">
@@ -136,13 +57,20 @@ const CanvasArea: React.FC = () => {
           <button className={`toolbar-btn ${gridVisible ? "active" : ""}`} onClick={() => setGridVisible(!gridVisible)} title="切换网格">
             📐
           </button>
+          <button
+            className={`toolbar-btn ${alignmentGuidesVisible ? "active" : ""}`}
+            onClick={toggleAlignmentGuides}
+            title="切换对齐参考线"
+          >
+            📏
+          </button>
         </div>
 
         <div className="toolbar-group">
-          <button className="toolbar-btn" onClick={() => setZoom((zoom) => Math.min(zoom + 0.1, 3))} title="放大">
+          <button className="toolbar-btn" onClick={() => setZoom((z) => Math.min(z + 0.1, 3))} title="放大">
             🔍+
           </button>
-          <button className="toolbar-btn" onClick={() => setZoom((zoom) => Math.max(zoom - 0.1, 0.1))} title="缩小">
+          <button className="toolbar-btn" onClick={() => setZoom((z) => Math.max(z - 0.1, 0.1))} title="缩小">
             🔍-
           </button>
           <button className="toolbar-btn" onClick={() => setZoom(1)} title="重置缩放">
@@ -155,14 +83,10 @@ const CanvasArea: React.FC = () => {
 
       {/* 画布容器 */}
       <div
-        ref={(node) => {
-          // 画布容器ref绑定
-          setCanvasRef(node);
-        }}
+        ref={setCanvasRef}
         className={`canvas-container ${dragManager.isOver ? (dragManager.canDrop ? "drag-over-valid" : "drag-over-invalid") : ""}`}
         onClick={() => {
-          const { selectNode } = useCanvasStore.getState();
-          selectNode(null);
+          useCanvasStore.getState().selectNode(null);
         }}
       >
         {/* 网格背景 */}
@@ -175,9 +99,15 @@ const CanvasArea: React.FC = () => {
           />
         )}
 
-        {/* 节点树 */}
+        {/* 节点树（缩放放在容器上，子节点不再单独 transform） */}
         {rootNodes.length > 0 ? (
-          <div className="node-tree">{rootNodes.map((node) => renderNode(node.id))}</div>
+          <div className="node-tree" style={nodeTreeStyle}>
+            {rootNodes.map((node) => (
+              <CanvasNode key={node.id} nodeId={node.id} zoom={zoom} dragManager={dragManager} />
+            ))}
+            {/* 对齐参考线 overlay（画布坐标系，跟随 .node-tree 的 scale） */}
+            <AlignmentGuides />
+          </div>
         ) : (
           <div className="empty-canvas">
             <div className="empty-content">

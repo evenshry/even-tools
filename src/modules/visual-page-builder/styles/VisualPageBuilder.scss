@@ -42,12 +42,35 @@
     overflow: hidden;
   }
 
-  // 组件面板容器
+  // 组件面板容器（含"组件库 / 图层" Tabs）
   .component-panel-container {
     .ant-card-body {
       padding: 0;
-      height: calc(100% - 57px); // 减去标题栏高度
-      overflow: auto;
+      height: calc(100% - 40px) !important; // 减去 Tabs 头部高度
+      overflow: hidden;
+    }
+
+    .left-panel-tabs {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+
+      .ant-tabs-nav {
+        margin: 0;
+        padding: 4px 8px 0;
+        flex-shrink: 0;
+      }
+
+      .ant-tabs-content-holder {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .ant-tabs-content,
+      .ant-tabs-tabpane {
+        height: 100%;
+      }
     }
   }
 

@@ -139,6 +139,60 @@
       }
     }
   }
+
+  // 多选批量操作面板（T4.3e）
+  &.multi-select-panel {
+    padding: 12px;
+    overflow-y: auto;
+
+    .multi-select-header {
+      .multi-select-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        background: #1890ff;
+        color: #fff;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+    }
+
+    .batch-section {
+      .align-button-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+
+        .ant-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+    }
+
+    .selected-node-list {
+      .selected-node-item {
+        display: flex;
+        align-items: center;
+        padding: 6px 4px;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 12px;
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .ant-typography {
+          max-width: 140px;
+        }
+      }
+    }
+  }
 }
 
 // 响应式调整

@@ -19,14 +19,8 @@ const PreviewArea: React.FC = () => {
     setPreviewScale
   } = useCanvasStore();
 
-  // 获取所有根节点（没有父节点的节点）
-  const rootNodes = Object.values(nodes).filter(node => {
-    // 检查该节点是否被其他节点包含
-    const isChild = Object.values(nodes).some(parentNode => 
-      parentNode.content.children?.includes(node.id)
-    );
-    return !isChild;
-  });
+  // O(n) 过滤根节点（通过 parentId 字段）
+  const rootNodes = Object.values(nodes).filter(node => !node.parentId);
 
   // 渲染预览内容
   const renderPreviewContent = () => {

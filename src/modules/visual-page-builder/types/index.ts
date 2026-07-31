@@ -45,13 +45,25 @@ export const LayoutType = {
 
 export type LayoutType = typeof LayoutType[keyof typeof LayoutType];
 
-// CSS属性接口
-export interface CSSProperties extends ReactCSSProperties {
-  [key: string]: string | number | undefined;
+// CSS属性接口（直接使用 React.CSSProperties，移除索引签名以保留类型安全）
+export type CSSProperties = ReactCSSProperties;
+
+/**
+ * 事件配置（可序列化，运行时映射到真实 handler）
+ * 替代旧的 EventHandler 函数引用，使 nodes 可被 JSON.stringify 持久化
+ */
+export interface EventConfig {
+  /** 事件类型 */
+  actionType: 'navigate' | 'alert' | 'toggleVisibility' | 'custom';
+  /** 动作参数（如跳转 URL、提示文本） */
+  payload?: string;
 }
 
-// 事件处理器
-export type EventHandler = (event: React.SyntheticEvent) => void;
+// 事件配置映射
+export interface EventsConfig {
+  onClick?: EventConfig;
+  onHover?: EventConfig;
+}
 
 // 页面节点接口
 export interface PageNode {
@@ -60,7 +72,10 @@ export interface PageNode {
   type: NodeType;
   name: string;
   alias?: string;
-  
+
+  /** 父节点 ID（根节点为 undefined）- 用于 O(1) 查找根节点 */
+  parentId?: string;
+
   // 布局属性
   layout: {
     type: LayoutType;
@@ -71,11 +86,11 @@ export interface PageNode {
     gridTemplateColumns?: string;
     gridTemplateRows?: string;
   };
-  
+
   // 样式属性
   style: CSSProperties;
   className?: string[];
-  
+
   // 内容属性
   content: {
     text?: string;
@@ -83,20 +98,17 @@ export interface PageNode {
     src?: string;
     children?: string[]; // 子节点ID数组
   };
-  
-  // 交互属性
-  events: {
-    onClick?: EventHandler;
-    onHover?: EventHandler;
-  };
-  
+
+  // 交互属性（可序列化配置，运行时映射到 handler）
+  events: EventsConfig;
+
   // 数据绑定
   dataBinding: {
     model?: string;
     prop?: string;
     type: 'static' | 'dynamic' | 'computed';
   };
-  
+
   // 元数据
   meta: {
     createdAt: Date;
@@ -105,7 +117,7 @@ export interface PageNode {
     tags: string[];
     version: number;
   };
-  
+
   // 约束条件
   constraints: {
     minWidth?: number;
@@ -117,98 +129,6 @@ export interface PageNode {
     canResize: boolean;
     allowedChildren?: NodeType[];
   };
-}
-
-// 主题配置
-export interface ThemeConfig {
-  colors: Record<string, string>;
-  spacing: Record<string, string>;
-  typography: {
-    fontFamily: Record<string, string>;
-    fontSize: Record<string, string>;
-    fontWeight: Record<string, string>;
-  };
-  shadows: Record<string, string>;
-  borderRadius: Record<string, string>;
-}
-
-// 断点配置
-export interface BreakpointConfig {
-  xs: string;
-  sm: string;
-  md: string;
-  lg: string;
-  xl: string;
-}
-
-// 自定义组件
-export interface CustomComponent {
-  id: string;
-  name: string;
-  component: React.ComponentType;
-  props: Record<string, unknown>;
-  slots?: Record<string, string>;
-}
-
-// 外部依赖
-export interface ExternalDependency {
-  name: string;
-  version: string;
-  url: string;
-  type: 'css' | 'js' | 'module';
-}
-
-// 数据源
-export interface DataSource {
-  id: string;
-  name: string;
-  type: 'api' | 'localStorage' | 'indexedDB' | 'mock';
-  endpoint?: string;
-  schema?: Record<string, unknown>;
-}
-
-// 页面元数据
-export interface PageMeta {
-  title: string;
-  description: string;
-  keywords: string[];
-  author: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// 页面数据结构
-export interface PageSchema {
-  id: string;
-  title: string;
-  description: string;
-  rootNode: PageNode;
-  
-  // 全局样式
-  globalStyles: {
-    theme: ThemeConfig;
-    variables: Record<string, string>;
-    breakpoints: BreakpointConfig;
-  };
-  
-  // 组件库引用
-  components: {
-    local: Record<string, CustomComponent>;
-    external: ExternalDependency[];
-  };
-  
-  // 数据源配置
-  dataSources: DataSource[];
-  
-  // 路由配置
-  routing: {
-    path: string;
-    params?: Record<string, string>;
-    query?: Record<string, string>;
-  };
-  
-  // 元数据
-  meta: PageMeta;
 }
 
 // 组件库项
@@ -225,11 +145,18 @@ export interface ComponentLibraryItem {
 // 预览模式枚举
 export const PreviewMode = {
   EDIT: 'edit',
-  PREVIEW: 'preview',
-  LIVE: 'live'
+  PREVIEW: 'preview'
 } as const;
 
 export type PreviewMode = typeof PreviewMode[keyof typeof PreviewMode];
+
+// 对齐参考线（拖动时显示，画布坐标系，未缩放）
+export interface AlignmentGuides {
+  /** 水平参考线的 y 坐标数组（画布坐标） */
+  horizontal: number[];
+  /** 垂直参考线的 x 坐标数组（画布坐标） */
+  vertical: number[];
+}
 
 // 画布状态
 export interface CanvasState {
@@ -240,7 +167,9 @@ export interface CanvasState {
   zoom: number;
   gridVisible: boolean;
   alignmentGuidesVisible: boolean;
-  
+  /** 当前显示的对齐参考线（拖动结束自动清空） */
+  alignmentGuides: AlignmentGuides | null;
+
   // 预览相关状态
   previewMode: PreviewMode;
   previewDevice: 'desktop' | 'tablet' | 'mobile';

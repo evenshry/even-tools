@@ -13,14 +13,32 @@ export interface SavedPage {
 }
 
 /**
+ * 已保存的模板结构（用户自定义模板）
+ */
+export interface SavedTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  nodes: Record<string, PageNode>;
+  /** 根节点 ID 列表（保留以方便后续扩展） */
+  rootIds?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
  * 可视化页面构建器的 IndexedDB 封装
- * 存储：visual_page_builder / pages
+ * 存储：visual_page_builder / pages + templates
+ *
+ * DB 版本演进：
+ * - v1：创建 pages store
+ * - v2：新增 templates store（用户自定义模板）
  */
 class PageDB extends BaseIndexedDB {
   private static instance: PageDB | null = null;
 
   private constructor() {
-    super('visual_page_builder', 1);
+    super('visual_page_builder', 2);
   }
 
   static getInstance(): PageDB {
@@ -35,7 +53,13 @@ class PageDB extends BaseIndexedDB {
       const store = db.createObjectStore('pages', { keyPath: 'id' });
       store.createIndex('updatedAt', 'updatedAt', { unique: false });
     }
+    if (!db.objectStoreNames.contains('templates')) {
+      const store = db.createObjectStore('templates', { keyPath: 'id' });
+      store.createIndex('updatedAt', 'updatedAt', { unique: false });
+    }
   }
+
+  // ===== 页面 CRUD =====
 
   async savePage(page: SavedPage): Promise<void> {
     await this.updateRecord('pages', page);
@@ -47,7 +71,6 @@ class PageDB extends BaseIndexedDB {
 
   async listPages(): Promise<SavedPage[]> {
     const pages = await this.getAllRecords<SavedPage>('pages');
-    // 按 updatedAt 倒序
     return pages.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
@@ -58,6 +81,25 @@ class PageDB extends BaseIndexedDB {
   async getLatestPage(): Promise<SavedPage | undefined> {
     const pages = await this.listPages();
     return pages[0];
+  }
+
+  // ===== 模板 CRUD（用户自定义模板） =====
+
+  async saveTemplate(template: SavedTemplate): Promise<void> {
+    await this.updateRecord('templates', template);
+  }
+
+  async getTemplate(id: string): Promise<SavedTemplate | undefined> {
+    return this.getRecord<SavedTemplate>('templates', id);
+  }
+
+  async listTemplates(): Promise<SavedTemplate[]> {
+    const templates = await this.getAllRecords<SavedTemplate>('templates');
+    return templates.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    await this.deleteRecord('templates', id);
   }
 }
 

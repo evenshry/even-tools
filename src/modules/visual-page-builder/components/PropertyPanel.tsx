@@ -1,23 +1,34 @@
 import React from 'react';
-import { 
-  Card, 
-  Tabs, 
-  Input, 
-  Select, 
-  ColorPicker, 
-  Typography, 
-  Space, 
+import {
+  Card,
+  Tabs,
+  Input,
+  Select,
+  ColorPicker,
+  Typography,
+  Space,
   Empty,
   Divider,
   Row,
-  Col
+  Col,
+  Button,
+  Tooltip,
+  message
 } from 'antd';
-import { 
-  EditOutlined, 
-  LayoutOutlined, 
-  FileTextOutlined, 
+import {
+  EditOutlined,
+  LayoutOutlined,
+  FileTextOutlined,
   ThunderboltOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CopyOutlined,
+  AlignLeftOutlined,
+  AlignCenterOutlined,
+  AlignRightOutlined,
+  VerticalAlignTopOutlined,
+  VerticalAlignMiddleOutlined,
+  VerticalAlignBottomOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { NodeType, type PageNode } from '../types';
@@ -358,46 +369,241 @@ const InteractionEditor: React.FC<InteractionEditorProps> = ({ node, onUpdate })
         <Text strong style={{ fontSize: '12px' }}>点击事件</Text>
         <Select
           size="small"
-          value={node.events.onClick ? 'enabled' : 'disabled'}
+          value={node.events.onClick?.actionType || 'none'}
           onChange={(value) => {
-            const events = value === 'enabled' 
-              ? { ...node.events, onClick: () => console.log('点击事件') }
-              : { ...node.events, onClick: undefined };
+            const events = value === 'none'
+              ? { ...node.events, onClick: undefined }
+              : { ...node.events, onClick: { actionType: value as 'navigate' | 'alert' | 'toggleVisibility' | 'custom', payload: '' } };
             onUpdate({ events });
           }}
           style={{ width: '100%' }}
         >
-          <Option value="disabled">禁用</Option>
-          <Option value="enabled">启用</Option>
+          <Option value="none">无</Option>
+          <Option value="alert">弹出提示</Option>
+          <Option value="navigate">跳转链接</Option>
+          <Option value="toggleVisibility">切换显隐</Option>
+          <Option value="custom">自定义</Option>
         </Select>
+        {node.events.onClick && (
+          <Input
+            size="small"
+            placeholder={node.events.onClick.actionType === 'navigate' ? 'https://...' : '提示文本 / 自定义参数'}
+            value={node.events.onClick.payload || ''}
+            onChange={(e) => {
+              onUpdate({
+                events: {
+                  ...node.events,
+                  onClick: { ...node.events.onClick!, payload: e.target.value }
+                }
+              });
+            }}
+            style={{ marginTop: 4 }}
+          />
+        )}
       </div>
-      
+
       <div className="property-group">
         <Text strong style={{ fontSize: '12px' }}>悬停事件</Text>
         <Select
           size="small"
-          value={node.events.onHover ? 'enabled' : 'disabled'}
+          value={node.events.onHover?.actionType || 'none'}
           onChange={(value) => {
-            const events = value === 'enabled' 
-              ? { ...node.events, onHover: () => console.log('悬停事件') }
-              : { ...node.events, onHover: undefined };
+            const events = value === 'none'
+              ? { ...node.events, onHover: undefined }
+              : { ...node.events, onHover: { actionType: value as 'navigate' | 'alert' | 'toggleVisibility' | 'custom', payload: '' } };
             onUpdate({ events });
           }}
           style={{ width: '100%' }}
         >
-          <Option value="disabled">禁用</Option>
-          <Option value="enabled">启用</Option>
+          <Option value="none">无</Option>
+          <Option value="alert">弹出提示</Option>
+          <Option value="toggleVisibility">切换显隐</Option>
+          <Option value="custom">自定义</Option>
         </Select>
       </div>
     </Space>
   </div>
 );
 
+// 多选批量操作工具栏组件（T4.3e）
+const MultiSelectToolbar: React.FC = () => {
+  const selectedNodeIds = useCanvasStore((s) => s.selectedNodeIds);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const alignSelected = useCanvasStore((s) => s.alignSelected);
+  const deleteSelected = useCanvasStore((s) => s.deleteSelected);
+  const duplicateSelected = useCanvasStore((s) => s.duplicateSelected);
+  const clearSelection = useCanvasStore((s) => s.clearSelection);
+
+  // 计算选中节点中可对齐（绝对/固定定位）的数量
+  const alignableCount = selectedNodeIds.filter((id) => {
+    const n = nodes[id];
+    return n && (n.layout.position === 'absolute' || n.layout.position === 'fixed');
+  }).length;
+
+  const handleAlign = (align: 'left' | 'right' | 'top' | 'bottom' | 'centerHorizontal' | 'centerVertical') => {
+    if (alignableCount < 2) {
+      message.warning('至少需要 2 个绝对/固定定位节点才能对齐');
+      return;
+    }
+    alignSelected(align);
+  };
+
+  const handleDelete = () => {
+    deleteSelected();
+    message.success(`已删除 ${selectedNodeIds.length} 个节点`);
+  };
+
+  const handleDuplicate = () => {
+    duplicateSelected();
+    message.success(`已复制 ${selectedNodeIds.length} 个节点`);
+  };
+
+  // 对齐按钮配置
+  const alignButtons: Array<{
+    key: string;
+    icon: React.ReactNode;
+    label: string;
+    align: 'left' | 'right' | 'top' | 'bottom' | 'centerHorizontal' | 'centerVertical';
+  }> = [
+    { key: 'left', icon: <AlignLeftOutlined />, label: '左对齐', align: 'left' },
+    { key: 'centerH', icon: <AlignCenterOutlined />, label: '水平居中', align: 'centerHorizontal' },
+    { key: 'right', icon: <AlignRightOutlined />, label: '右对齐', align: 'right' },
+    { key: 'top', icon: <VerticalAlignTopOutlined />, label: '顶对齐', align: 'top' },
+    { key: 'centerV', icon: <VerticalAlignMiddleOutlined />, label: '垂直居中', align: 'centerVertical' },
+    { key: 'bottom', icon: <VerticalAlignBottomOutlined />, label: '底对齐', align: 'bottom' },
+  ];
+
+  return (
+    <div className="property-panel multi-select-panel">
+      {/* 多选状态头部 */}
+      <Card
+        size="small"
+        style={{ marginBottom: '12px' }}
+        bodyStyle={{ padding: '12px' }}
+      >
+        <div className="multi-select-header">
+          <Space align="center" style={{ width: '100%' }}>
+            <div className="multi-select-badge">{selectedNodeIds.length}</div>
+            <div style={{ flex: 1 }}>
+              <Text strong style={{ fontSize: '14px', display: 'block' }}>
+                已选 {selectedNodeIds.length} 个节点
+              </Text>
+              <Text type="secondary" style={{ fontSize: '11px' }}>
+                可对齐: {alignableCount} 个（绝对/固定定位）
+              </Text>
+            </div>
+            <Tooltip title="取消多选">
+              <CloseOutlined
+                style={{ cursor: 'pointer', color: '#8c8c8c' }}
+                onClick={clearSelection}
+              />
+            </Tooltip>
+          </Space>
+        </div>
+      </Card>
+
+      {/* 批量操作 */}
+      <Card size="small" style={{ marginBottom: '12px' }} bodyStyle={{ padding: '12px' }}>
+        <div className="batch-section">
+          <Text strong style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+            批量对齐
+          </Text>
+          <div className="align-button-grid">
+            {alignButtons.map((btn) => (
+              <Tooltip key={btn.key} title={btn.label}>
+                <Button
+                  size="small"
+                  icon={btn.icon}
+                  onClick={() => handleAlign(btn.align)}
+                  disabled={alignableCount < 2}
+                />
+              </Tooltip>
+            ))}
+          </div>
+          {alignableCount < 2 && (
+            <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '6px' }}>
+              提示：仅对绝对/固定定位节点生效，至少需 2 个
+            </Text>
+          )}
+        </div>
+
+        <Divider style={{ margin: '10px 0' }} />
+
+        <div className="batch-section">
+          <Text strong style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+            批量操作
+          </Text>
+          <Space style={{ width: '100%' }}>
+            <Button
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={handleDuplicate}
+            >
+              复制
+            </Button>
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={handleDelete}
+            >
+              删除
+            </Button>
+          </Space>
+        </div>
+      </Card>
+
+      {/* 选中节点列表 */}
+      <Card
+        size="small"
+        title={<Text strong style={{ fontSize: '12px' }}>选中节点列表</Text>}
+        bodyStyle={{ padding: '8px', maxHeight: '300px', overflow: 'auto' }}
+      >
+        <div className="selected-node-list">
+          {selectedNodeIds.map((id) => {
+            const n = nodes[id];
+            if (!n) return null;
+            const icon = ({
+              [NodeType.TEXT]: '📝',
+              [NodeType.HEADING]: '📋',
+              [NodeType.BUTTON]: '🔘',
+              [NodeType.IMAGE]: '🖼️',
+              [NodeType.DIV]: '🧱',
+              [NodeType.SECTION]: '📦',
+              [NodeType.CONTAINER]: '📁',
+              [NodeType.FLEX]: '📐',
+              [NodeType.GRID]: '🔲',
+              [NodeType.INPUT]: '⌨️',
+              [NodeType.FORM]: '📝',
+            } as Record<string, string>)[n.type] || '📄';
+            return (
+              <div key={id} className="selected-node-item">
+                <span style={{ marginRight: '6px' }}>{icon}</span>
+                <Text style={{ fontSize: '12px' }} ellipsis>
+                  {n.name}
+                </Text>
+                <Text type="secondary" style={{ fontSize: '10px', marginLeft: 'auto' }}>
+                  {n.layout.position === 'absolute' || n.layout.position === 'fixed' ? '可对齐' : '流式'}
+                </Text>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
 // 主属性面板组件
 const PropertyPanel: React.FC = () => {
-  const { nodes, selectedNodeId, updateNode, deleteNode } = useCanvasStore();
-  
+  const { nodes, selectedNodeId, selectedNodeIds, updateNode, deleteNode } = useCanvasStore();
+
   const selectedNode = selectedNodeId ? nodes[selectedNodeId] : null;
+
+  // 多选模式：选中多于 1 个节点时显示批量操作工具栏
+  if (selectedNodeIds.length > 1) {
+    return <MultiSelectToolbar />;
+  }
 
   if (!selectedNode) {
     return (
@@ -411,6 +617,10 @@ const PropertyPanel: React.FC = () => {
               <br />
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 点击画布上的节点开始编辑
+              </Text>
+              <br />
+              <Text type="secondary" style={{ fontSize: '11px', marginTop: '8px', display: 'block' }}>
+                Shift+点击追加 · Ctrl+点击切换
               </Text>
             </div>
           }

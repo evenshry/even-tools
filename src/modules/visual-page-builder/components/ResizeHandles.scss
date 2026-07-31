@@ -1,0 +1,101 @@
+.resize-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid #1890ff;
+  border-radius: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 0 2px rgba(24, 144, 255, 0.4);
+
+  // 四角
+  &--nw {
+    top: -5px;
+    left: -5px;
+    cursor: nwse-resize;
+  }
+
+  &--ne {
+    top: -5px;
+    right: -5px;
+    cursor: nesw-resize;
+  }
+
+  &--sw {
+    bottom: -5px;
+    left: -5px;
+    cursor: nesw-resize;
+  }
+
+  &--se {
+    bottom: -5px;
+    right: -5px;
+    cursor: nwse-resize;
+  }
+
+  // 四边中点
+  &--n {
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+  }
+
+  &--s {
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+  }
+
+  &--e {
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+  }
+
+  &--w {
+    left: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+  }
+
+  // 流布局节点只有 'e' 手柄，调整样式避免遮挡
+  &--flow {
+    background: #1890ff;
+    border-color: #fff;
+  }
+
+  &:hover {
+    background: #1890ff;
+    border-color: #fff;
+    transform: scale(1.2);
+  }
+
+  // n/s 手柄 hover 时保持水平居中
+  &--n:hover,
+  &--s:hover {
+    transform: translateX(-50%) scale(1.2);
+  }
+
+  // e/w 手柄 hover 时保持垂直居中
+  &--e:hover,
+  &--w:hover {
+    transform: translateY(-50%) scale(1.2);
+  }
+
+  // 流布局 'e' 手柄 hover
+  &--flow:hover {
+    transform: translateY(-50%) scale(1.2);
+  }
+}

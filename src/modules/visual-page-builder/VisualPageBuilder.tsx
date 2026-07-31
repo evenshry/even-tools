@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip } from "antd";
-import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined } from "@ant-design/icons";
+import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip, Tabs } from "antd";
+import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined, AppstoreOutlined, BlockOutlined, LayoutOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
 import ComponentPanel from "./components/ComponentPanel";
+import LayerPanel from "./components/LayerPanel";
+import TemplateGallery from "./components/TemplateGallery";
 import CanvasArea from "./components/CanvasArea";
 import PropertyPanel from "./components/PropertyPanel";
 import PreviewArea from "./components/PreviewArea";
+import CodeExportModal from "./components/CodeExportModal";
 import { useCanvasStore } from "./store/useCanvasStore";
 import { PreviewMode } from "./types";
 import "./styles/VisualPageBuilder.scss";
@@ -37,7 +40,8 @@ const VisualPageBuilder: React.FC = () => {
     saveCurrentPage
   } = useCanvasStore();
 
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [leftPanelTab, setLeftPanelTab] = useState<'components' | 'layers' | 'templates'>('components');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 初始化：加载最近一次保存的页面
@@ -120,20 +124,59 @@ const VisualPageBuilder: React.FC = () => {
     });
   }, [nodes, resetCanvas]);
 
-  // 导出（T4.1 实现完整代码生成，此处先提示）
+  // 导出代码（弹出 Modal，支持 HTML / React / Schema 三种格式）
   const handleExport = useCallback(() => {
     if (Object.keys(nodes).length === 0) {
       message.warning("画布为空，无可导出内容");
       return;
     }
-    message.info("导出功能将在 T4.1 实现（HTML / React / Schema）");
+    setExportModalOpen(true);
   }, [nodes]);
 
   // 渲染编辑模式界面
   const renderEditMode = () => (
     <div className="workspace-layout">
-      <Card className="component-panel-container" title="组件库" size="small" style={{ height: "100%" }}>
-        <ComponentPanel />
+      <Card
+        className="component-panel-container"
+        size="small"
+        style={{ height: "100%", overflow: "hidden" }}
+        bodyStyle={{ height: "calc(100% - 40px)", padding: 0 }}
+      >
+        <Tabs
+          activeKey={leftPanelTab}
+          onChange={(k) => setLeftPanelTab(k as 'components' | 'layers' | 'templates')}
+          size="small"
+          className="left-panel-tabs"
+          items={[
+            {
+              key: 'components',
+              label: (
+                <span>
+                  <AppstoreOutlined /> 组件库
+                </span>
+              ),
+              children: <ComponentPanel />,
+            },
+            {
+              key: 'layers',
+              label: (
+                <span>
+                  <BlockOutlined /> 图层
+                </span>
+              ),
+              children: <LayerPanel />,
+            },
+            {
+              key: 'templates',
+              label: (
+                <span>
+                  <LayoutOutlined /> 模板
+                </span>
+              ),
+              children: <TemplateGallery />,
+            },
+          ]}
+        />
       </Card>
       <Card className="canvas-area-container" title="画布" size="small" style={{ height: "100%", overflow: "hidden" }}>
         <CanvasArea />
@@ -189,7 +232,7 @@ const VisualPageBuilder: React.FC = () => {
   );
 
   const headerTitle = `可视化页面构建器${
-    previewMode !== PreviewMode.EDIT ? ` - ${previewMode === PreviewMode.PREVIEW ? "预览模式" : "实时模式"}` : ""
+    previewMode !== PreviewMode.EDIT ? " - 预览模式" : ""
   }`;
 
   return (
@@ -197,6 +240,11 @@ const VisualPageBuilder: React.FC = () => {
       <Layout className="visual-page-builder">
         <ModuleHeader title={headerTitle} extra={headerExtra} />
         <Content className="builder-body">{previewMode === PreviewMode.EDIT ? renderEditMode() : renderPreviewMode()}</Content>
+        <CodeExportModal
+          open={exportModalOpen}
+          nodes={nodes}
+          onClose={() => setExportModalOpen(false)}
+        />
       </Layout>
     </DndProvider>
   );
