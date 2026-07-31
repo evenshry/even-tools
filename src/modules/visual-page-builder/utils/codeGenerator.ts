@@ -68,7 +68,7 @@ const mergeStyleAndLayout = (node: PageNode): Record<string, string | number> =>
   return merged;
 };
 
-/** HTML 标签映射（覆盖所有 NodeType） */
+/** HTML 标签映射（显式覆盖所有 NodeType，避免 default fallback 隐藏语义错误） */
 const getHtmlTag = (type: NodeType): string => {
   switch (type) {
     case NodeTypeEnum.SECTION: return 'section';
@@ -78,11 +78,23 @@ const getHtmlTag = (type: NodeType): string => {
     case NodeTypeEnum.INPUT: return 'input';
     case NodeTypeEnum.FORM: return 'form';
     case NodeTypeEnum.SPAN: return 'span';
+    case NodeTypeEnum.TEXT: return 'span';
     case NodeTypeEnum.SELECT: return 'select';
     case NodeTypeEnum.CHECKBOX: return 'input';
     case NodeTypeEnum.VIDEO: return 'video';
     case NodeTypeEnum.ICON: return 'i';
-    default: return 'div';
+    // 容器类节点统一用 div，布局差异通过 style.display 表达
+    case NodeTypeEnum.PAGE:
+    case NodeTypeEnum.CONTAINER:
+    case NodeTypeEnum.GRID:
+    case NodeTypeEnum.FLEX:
+    case NodeTypeEnum.STACK:
+    case NodeTypeEnum.DIV:
+    case NodeTypeEnum.CUSTOM:
+      return 'div';
+    default:
+      // 兜底：未知类型用 div，避免崩溃
+      return 'div';
   }
 };
 
@@ -220,21 +232,30 @@ export default ExportedPage;
 };
 
 /**
- * 序列化节点：将 Date 对象转为 ISO 字符串，确保 JSON.stringify 稳定
+ * 将任意值转换为有效的 Date，无效时回退到 epoch（1970-01-01）
+ * 用于序列化/反序列化时防御性处理 meta.createdAt/updatedAt
  */
-const serializeNodesForSchema = (nodes: Record<string, PageNode>): Record<string, PageNode> => {
-  const result: Record<string, PageNode> = {};
+const toValidDate = (v: unknown): Date => {
+  if (v instanceof Date) {
+    return Number.isNaN(v.getTime()) ? new Date(0) : v;
+  }
+  const d = new Date(v as string);
+  return Number.isNaN(d.getTime()) ? new Date(0) : d;
+};
+
+/**
+ * 序列化节点：将 Date 对象转为 ISO 字符串，确保 JSON.stringify 稳定
+ * 返回类型放宽为 Record<string, unknown>，因为 meta 中的 Date 被转为 string
+ */
+const serializeNodesForSchema = (nodes: Record<string, PageNode>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
   for (const [id, node] of Object.entries(nodes)) {
     result[id] = {
       ...node,
       meta: {
         ...node.meta,
-        createdAt: node.meta.createdAt instanceof Date
-          ? node.meta.createdAt.toISOString()
-          : new Date(node.meta.createdAt as unknown as string).toISOString(),
-        updatedAt: node.meta.updatedAt instanceof Date
-          ? node.meta.updatedAt.toISOString()
-          : new Date(node.meta.updatedAt as unknown as string).toISOString(),
+        createdAt: toValidDate(node.meta.createdAt).toISOString(),
+        updatedAt: toValidDate(node.meta.updatedAt).toISOString(),
       }
     };
   }
@@ -271,4 +292,88 @@ export const downloadTextFile = (filename: string, content: string, mimeType: st
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+};
+
+/**
+ * Schema JSON 解析结果
+ * - ok=false 时 error 描述失败原因
+ * - ok=true 时 nodes 为可加载的节点映射
+ */
+export interface SchemaParseResult {
+  ok: boolean;
+  nodes?: Record<string, PageNode>;
+  error?: string;
+}
+
+/**
+ * 反向解析 generateSchema 输出的 JSON 字符串为可加载的 PageNode 映射
+ *
+ * 校验：
+ * - 顶层必须是对象，且 type === 'visual-page-builder-schema'
+ * - nodes 必须是非空对象
+ * - 每个 node.meta.createdAt/updatedAt 必须能被 Date 解析
+ *
+ * 转换：将 meta.createdAt/updatedAt 从 ISO 字符串还原为 Date 对象
+ * 严格模式：遇到任何结构异常都返回 { ok: false, error } 而不抛出
+ */
+export const parseSchema = (raw: string): SchemaParseResult => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    return { ok: false, error: `JSON 解析失败：${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, error: 'Schema 必须是 JSON 对象' };
+  }
+
+  const schema = parsed as { type?: unknown; nodes?: unknown; rootIds?: unknown };
+  if (schema.type !== 'visual-page-builder-schema') {
+    return { ok: false, error: '缺少 type=visual-page-builder-schema 标识，可能不是可视化构建器导出的 schema' };
+  }
+
+  if (!schema.nodes || typeof schema.nodes !== 'object' || Array.isArray(schema.nodes)) {
+    return { ok: false, error: 'nodes 字段缺失或不是对象' };
+  }
+
+  const sourceNodes = schema.nodes as Record<string, unknown>;
+  const result: Record<string, PageNode> = {};
+
+  for (const [id, rawNode] of Object.entries(sourceNodes)) {
+    if (!rawNode || typeof rawNode !== 'object' || Array.isArray(rawNode)) {
+      return { ok: false, error: `节点 ${id} 不是有效对象` };
+    }
+    const node = rawNode as Record<string, unknown>;
+    const meta = node.meta as { createdAt?: unknown; updatedAt?: unknown } | undefined;
+    if (!meta) {
+      return { ok: false, error: `节点 ${id} 缺少 meta 字段` };
+    }
+
+    const createdAtRaw = meta.createdAt;
+    const updatedAtRaw = meta.updatedAt;
+    const createdAt = toValidDate(createdAtRaw);
+    const updatedAt = toValidDate(updatedAtRaw);
+    // toValidDate 对无效日期回退到 epoch，这里检测原始值是否有效
+    if ((createdAtRaw !== undefined && createdAtRaw !== null && Number.isNaN(new Date(createdAtRaw as string).getTime())) ||
+        (updatedAtRaw !== undefined && updatedAtRaw !== null && Number.isNaN(new Date(updatedAtRaw as string).getTime()))) {
+      return { ok: false, error: `节点 ${id} 的 meta.createdAt/updatedAt 不是有效日期` };
+    }
+
+    // 还原 Date 类型，其余字段保持原样（结构由 PageNode 类型约束）
+    result[id] = {
+      ...(node as unknown as PageNode),
+      meta: {
+        ...(node.meta as PageNode['meta']),
+        createdAt,
+        updatedAt,
+      },
+    };
+  }
+
+  if (Object.keys(result).length === 0) {
+    return { ok: false, error: 'nodes 为空' };
+  }
+
+  return { ok: true, nodes: result };
 };

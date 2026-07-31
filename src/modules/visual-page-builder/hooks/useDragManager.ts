@@ -1,18 +1,9 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
 import type { DragItem, PageNode, AlignmentGuides } from '../types';
 import type { RefObject } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
-
-/**
- * 解析像素值（"100px" / 100 / undefined → number）
- */
-const parsePx = (value: unknown): number => {
-  if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return value;
-  const num = parseFloat(String(value));
-  return Number.isFinite(num) ? num : 0;
-};
+import { parsePx } from '../utils/styleUtils';
 
 /** 对齐吸附阈值（画布坐标，未缩放） */
 const ALIGN_THRESHOLD = 5;
@@ -141,8 +132,13 @@ export interface DragManager {
   handleNodeDragMove: (e: React.MouseEvent) => void;
   /** 处理节点拖拽结束 */
   handleNodeDragEnd: () => void;
-  /** 查找指定位置的节点 */
-  findNodeAtPosition: (x: number, y: number, nodeMap: Record<string, PageNode>) => string | null;
+  /**
+   * 查找指定位置的节点
+   * @param x 鼠标在画布中的X坐标（已除以 zoom）
+   * @param y 鼠标在画布中的Y坐标（已除以 zoom）
+   * @param nodeMap 已废弃，实现内部通过 DOM 查询定位，保留参数仅为接口兼容
+   */
+  findNodeAtPosition: (x: number, y: number, nodeMap?: Record<string, PageNode>) => string | null;
 }
 
 /**
@@ -194,9 +190,10 @@ export const useDragManager = (
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
-  
-  // 性能优化相关
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 性能优化相关：ref 缓存最新的 handler，避免拖动时频繁重绑事件监听器
+  const handleNodeDragMoveRef = useRef<(e: React.MouseEvent) => void>(() => {});
+  const handleNodeDragEndRef = useRef<() => void>(() => {});
 
   /**
    * 边界检查 - 确保节点不会移出画布
@@ -221,7 +218,7 @@ export const useDragManager = (
    *
    * 性能优化方案：
    * 1. 批量 DOM 查询（querySelectorAll 一次），避免每个节点单独 querySelector
-   * 2. 直接读 getBoundingClientRect，浏览器已计算累积位置
+   * 2. 直接读 getBoundingClientRect，浏览器已计算累积位置（含滚动偏移）
    * 3. 按 DOM 顺序从后往前命中测试（后渲染的节点在视觉上更靠前）
    *
    * @param x 鼠标在画布中的X坐标（已除以 zoom）
@@ -233,9 +230,10 @@ export const useDragManager = (
     if (!canvasRef.current) return null;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    // 鼠标在屏幕中的坐标
-    const clientX = canvasRect.left + x * zoom + (canvasRef.current.scrollLeft || 0);
-    const clientY = canvasRect.top + y * zoom + (canvasRef.current.scrollTop || 0);
+    // getBoundingClientRect 已包含滚动影响，直接用画布矩形 + 画布坐标 * zoom
+    // 不再额外加 scrollLeft/scrollTop，避免双重偏移
+    const clientX = canvasRect.left + x * zoom;
+    const clientY = canvasRect.top + y * zoom;
 
     // 一次性查询所有节点 DOM
     const nodeElements = canvasRef.current.querySelectorAll<HTMLElement>('[data-node-id]');
@@ -305,8 +303,12 @@ export const useDragManager = (
 
   /**
    * 防抖化的 hover 处理器
-   * 使用 useRef 缓存防抖函数，避免每次依赖变化时重建导致防抖失效
+   * 使用 ref 保存最新的 handleHoverCore，避免闭包陷阱（旧实现仅初始化一次，
+   * 捕获的 handleHoverCore 永远是首次版本，导致拖动中 hover 判定基于过期 nodes）
    */
+  const handleHoverCoreRef = useRef(handleHoverCore);
+  handleHoverCoreRef.current = handleHoverCore;
+
   const debouncedHoverRef = useRef<((item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => void) | null>(null);
   if (debouncedHoverRef.current === null) {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -318,7 +320,8 @@ export const useDragManager = (
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (lastItem && lastMonitor) {
-          handleHoverCore(lastItem, lastMonitor);
+          // 通过 ref 读取最新的 handleHoverCore，避免闭包陷阱
+          handleHoverCoreRef.current(lastItem, lastMonitor);
         }
         timer = null;
       }, debounceDelay);
@@ -481,31 +484,32 @@ export const useDragManager = (
     }
   }, [setAlignmentGuides]);
 
+  // 同步最新 handler 到 ref，供全局事件监听器使用
+  // 这样 useEffect 只依赖 isDragging，避免拖动时每帧重绑 document 事件
+  handleNodeDragMoveRef.current = handleNodeDragMove;
+  handleNodeDragEndRef.current = handleNodeDragEnd;
+
   // 添加全局鼠标事件监听器
-  React.useEffect(() => {
+  // 仅在 isDragging 切换时绑定/解绑，不依赖 handleNodeDragMove（每帧变化）
+  useEffect(() => {
+    if (!isDragging) return;
+
     const handleMouseMove = (e: MouseEvent) => {
-      handleNodeDragMove(e as unknown as React.MouseEvent);
+      handleNodeDragMoveRef.current(e as unknown as React.MouseEvent);
     };
 
     const handleMouseUp = () => {
-      handleNodeDragEnd();
+      handleNodeDragEndRef.current();
     };
 
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    }
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
-      
-      // 清理防抖定时器
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
     };
-  }, [isDragging, handleNodeDragMove, handleNodeDragEnd]);
+  }, [isDragging]);
 
   // 使用 useMemo 稳定返回对象引用，避免每帧新建导致子组件 memo 失效
   return useMemo<DragManager>(() => ({

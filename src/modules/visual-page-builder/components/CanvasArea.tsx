@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { useDragManager } from '../hooks/useDragManager';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -10,9 +10,10 @@ const CanvasArea: React.FC = () => {
   // 画布引用和状态
   const canvasRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [gridVisible, setGridVisible] = useState(true);
 
-  // 对齐参考线开关（来自 store，与拖拽逻辑共享）
+  // 网格与对齐参考线开关统一来自 store，避免本地状态与 store 不同步
+  const gridVisible = useCanvasStore((s) => s.gridVisible);
+  const toggleGrid = useCanvasStore((s) => s.toggleGrid);
   const alignmentGuidesVisible = useCanvasStore((s) => s.alignmentGuidesVisible);
   const toggleAlignmentGuides = useCanvasStore((s) => s.toggleAlignmentGuides);
 
@@ -31,10 +32,11 @@ const CanvasArea: React.FC = () => {
   useKeyboardShortcuts(true);
 
   // 合并refs - 将拖拽管理器的drop引用与canvas引用合并
-  const setCanvasRef = (element: HTMLDivElement | null) => {
+  // 用 useCallback 稳定引用，避免每次渲染触发 ref null 重新挂载
+  const setCanvasRef = useCallback((element: HTMLDivElement | null) => {
     canvasRef.current = element;
     dragManager.drop(element);
-  };
+  }, [dragManager]);
 
   // O(n) 过滤根节点（通过 parentId 字段）
   const rootNodes = useMemo(
@@ -54,7 +56,7 @@ const CanvasArea: React.FC = () => {
       {/* 画布工具栏 */}
       <div className="canvas-toolbar">
         <div className="toolbar-group">
-          <button className={`toolbar-btn ${gridVisible ? "active" : ""}`} onClick={() => setGridVisible(!gridVisible)} title="切换网格">
+          <button className={`toolbar-btn ${gridVisible ? "active" : ""}`} onClick={toggleGrid} title="切换网格">
             📐
           </button>
           <button

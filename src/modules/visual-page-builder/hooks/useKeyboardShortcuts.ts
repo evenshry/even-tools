@@ -2,14 +2,8 @@ import { useEffect } from 'react';
 import { createElement } from 'react';
 import { message, Modal } from 'antd';
 import { useCanvasStore } from '../store/useCanvasStore';
-
-/** 解析像素值 */
-const parsePx = (value: unknown): number => {
-  if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return value;
-  const num = parseFloat(String(value));
-  return Number.isFinite(num) ? num : 0;
-};
+import { NodeType } from '../types';
+import { parsePx } from '../utils/styleUtils';
 
 /** 快捷键说明表（用于弹出 Modal 展示） */
 export const SHORTCUT_TABLE: Array<{ keys: string; action: string }> = [
@@ -34,28 +28,11 @@ export const SHORTCUT_TABLE: Array<{ keys: string; action: string }> = [
  *
  * 集中注册所有快捷键，避免分散在多个组件
  * 当焦点在 input/textarea/contentEditable 中时，除 Esc 外不触发节点操作
+ *
+ * 性能：依赖数组仅保留 enabled，handler 内通过 useCanvasStore.getState() 读取
+ * 动态状态（nodes/selectedNodeId 等），避免拖动时每帧重绑 keydown 监听器
  */
 export const useKeyboardShortcuts = (enabled: boolean = true) => {
-  const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
-  const selectedNodeIds = useCanvasStore((s) => s.selectedNodeIds);
-  const nodes = useCanvasStore((s) => s.nodes);
-  const canUndo = useCanvasStore((s) => s.canUndo);
-  const canRedo = useCanvasStore((s) => s.canRedo);
-  const deleteNode = useCanvasStore((s) => s.deleteNode);
-  const deleteSelected = useCanvasStore((s) => s.deleteSelected);
-  const duplicateNode = useCanvasStore((s) => s.duplicateNode);
-  const duplicateSelected = useCanvasStore((s) => s.duplicateSelected);
-  const copyNode = useCanvasStore((s) => s.copyNode);
-  const pasteNode = useCanvasStore((s) => s.pasteNode);
-  const selectAllRootNodes = useCanvasStore((s) => s.selectAllRootNodes);
-  const undo = useCanvasStore((s) => s.undo);
-  const redo = useCanvasStore((s) => s.redo);
-  const selectNode = useCanvasStore((s) => s.selectNode);
-  const clearSelection = useCanvasStore((s) => s.clearSelection);
-  const updateNode = useCanvasStore((s) => s.updateNode);
-  const saveCurrentPage = useCanvasStore((s) => s.saveCurrentPage);
-  const togglePreview = useCanvasStore((s) => s.togglePreview);
-
   useEffect(() => {
     if (!enabled) return;
 
@@ -68,14 +45,18 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         target?.tagName === 'SELECT' ||
         target?.isContentEditable;
 
+      // 实时读取 store 状态，避免闭包陷阱
+      const state = useCanvasStore.getState();
+      const { selectedNodeId, selectedNodeIds, nodes, canUndo, canRedo } = state;
+
       // Esc 始终生效（取消选中）
-    if (e.key === 'Escape') {
-      if (selectedNodeId || selectedNodeIds.length > 0) {
-        clearSelection();
-        e.preventDefault();
+      if (e.key === 'Escape') {
+        if (selectedNodeId || selectedNodeIds.length > 0) {
+          state.clearSelection();
+          e.preventDefault();
+        }
+        return;
       }
-      return;
-    }
 
       // 以下快捷键在可编辑元素中不触发
       if (isEditable) return;
@@ -85,8 +66,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       // Ctrl+S：保存
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        const state = useCanvasStore.getState();
-        if (Object.keys(state.nodes).length === 0) {
+        if (Object.keys(nodes).length === 0) {
           message.warning('画布为空，无需保存');
           return;
         }
@@ -100,21 +80,21 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       // Ctrl+Shift+P：切换预览
       if (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        togglePreview();
+        state.togglePreview();
         return;
       }
 
       // Ctrl+A：全选根节点
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        selectAllRootNodes();
+        state.selectAllRootNodes();
         return;
       }
 
       // 撤销 Ctrl+Z
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z') {
         if (canUndo) {
-          undo();
+          state.undo();
           e.preventDefault();
         }
         return;
@@ -124,7 +104,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       if ((isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'z') ||
           (isCtrlOrCmd && e.key.toLowerCase() === 'y')) {
         if (canRedo) {
-          redo();
+          state.redo();
           e.preventDefault();
         }
         return;
@@ -134,7 +114,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'c' && selectedNodeId) {
         const node = nodes[selectedNodeId];
         if (node && node.constraints.canDuplicate) {
-          copyNode(selectedNodeId);
+          state.copyNode(selectedNodeId);
           message.success(`已复制：${node.name}`);
           e.preventDefault();
         }
@@ -143,7 +123,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
 
       // 粘贴 Ctrl+V
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'v') {
-        pasteNode();
+        state.pasteNode();
         e.preventDefault();
         return;
       }
@@ -153,11 +133,11 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         if (selectedNodeIds.length === 1) {
           const node = nodes[selectedNodeIds[0]];
           if (node && node.constraints.canDuplicate) {
-            duplicateNode(selectedNodeIds[0]);
+            state.duplicateNode(selectedNodeIds[0]);
             e.preventDefault();
           }
         } else {
-          duplicateSelected();
+          state.duplicateSelected();
           e.preventDefault();
         }
         return;
@@ -166,13 +146,13 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       // 删除节点 Delete / Backspace（支持批量）
       if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedNodeId || selectedNodeIds.length > 0)) {
         if (selectedNodeIds.length > 1) {
-          deleteSelected();
+          state.deleteSelected();
           e.preventDefault();
         } else if (selectedNodeId) {
           const node = nodes[selectedNodeId];
           if (node && node.constraints.canDelete) {
-            if (node.type === 'page') return; // PAGE 特殊保护
-            deleteNode(selectedNodeId);
+            if (node.type === NodeType.PAGE) return; // PAGE 特殊保护
+            state.deleteNode(selectedNodeId);
             e.preventDefault();
           }
         }
@@ -195,7 +175,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         if (e.key === 'ArrowLeft') newLeft -= step;
         if (e.key === 'ArrowRight') newLeft += step;
 
-        updateNode(selectedNodeId, {
+        state.updateNode(selectedNodeId, {
           style: {
             ...node.style,
             left: `${newLeft}px`,
@@ -209,28 +189,7 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    enabled,
-    selectedNodeId,
-    selectedNodeIds,
-    nodes,
-    canUndo,
-    canRedo,
-    deleteNode,
-    deleteSelected,
-    duplicateNode,
-    duplicateSelected,
-    copyNode,
-    pasteNode,
-    selectAllRootNodes,
-    undo,
-    redo,
-    selectNode,
-    clearSelection,
-    updateNode,
-    saveCurrentPage,
-    togglePreview,
-  ]);
+  }, [enabled]);
 };
 
 /**

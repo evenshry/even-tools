@@ -10,21 +10,9 @@ import {
   ArrowDownOutlined,
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
-import { componentLibrary } from '../data/componentLibrary';
 import type { PageNode } from '../types';
+import { getNodeTypeIcon } from '../utils/nodeIcons';
 import './LayerPanel.scss';
-
-// 节点类型 → 图标 映射（从组件库读取）
-const typeIconMap: Record<string, string> = componentLibrary.reduce(
-  (acc, item) => {
-    acc[item.type] = item.icon;
-    return acc;
-  },
-  {} as Record<string, string>
-);
-
-// 默认图标兜底
-const defaultIcon = '🔹';
 
 interface LayerPanelProps {}
 
@@ -115,7 +103,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
               selectNode(node.id);
             }}
           >
-            <span className="layer-node-icon">{typeIconMap[node.type] || defaultIcon}</span>
+            <span className="layer-node-icon">{getNodeTypeIcon(node.type)}</span>
             <span className={`layer-node-name ${isHidden ? 'is-hidden' : ''}`}>{node.name}</span>
             <Tooltip title={isHidden ? '显示' : '隐藏'}>
               <span

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Dropdown, type MenuProps } from 'antd';
 import { useCanvasStore } from '../store/useCanvasStore';
-import type { PageNode } from '../types';
+import { NodeType } from '../types';
 
 interface NodeContextMenuProps {
   nodeId: string;
@@ -17,12 +17,20 @@ interface MenuState {
 /**
  * 节点右键菜单
  * 复制 / 删除 / 撤销 / 重做 / 取消选中
+ *
+ * 性能：精确订阅单个节点 + canUndo/canRedo（避免全量订阅导致每个节点重渲染）
  */
 const NodeContextMenu: React.FC<NodeContextMenuProps> = ({ nodeId, children }) => {
   const [menuState, setMenuState] = useState<MenuState>({ visible: false, x: 0, y: 0 });
-  const { nodes, duplicateNode, deleteNode, selectNode, undo, redo, canUndo, canRedo } = useCanvasStore();
-
-  const node: PageNode | undefined = nodes[nodeId];
+  // 精确订阅：仅当前节点 + 撤销/重做可用性 + 稳定 action 引用
+  const node = useCanvasStore(s => s.nodes[nodeId]);
+  const canUndo = useCanvasStore(s => s.canUndo);
+  const canRedo = useCanvasStore(s => s.canRedo);
+  const duplicateNode = useCanvasStore(s => s.duplicateNode);
+  const deleteNode = useCanvasStore(s => s.deleteNode);
+  const selectNode = useCanvasStore(s => s.selectNode);
+  const undo = useCanvasStore(s => s.undo);
+  const redo = useCanvasStore(s => s.redo);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -44,7 +52,7 @@ const NodeContextMenu: React.FC<NodeContextMenuProps> = ({ nodeId, children }) =
     };
   }, [menuState.visible]);
 
-  const canDelete = node?.constraints.canDelete && node?.type !== 'page';
+  const canDelete = node?.constraints.canDelete && node?.type !== NodeType.PAGE;
   const canDuplicate = node?.constraints.canDuplicate;
 
   const menuItems: MenuProps['items'] = [

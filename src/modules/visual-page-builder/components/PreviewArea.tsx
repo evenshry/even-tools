@@ -9,18 +9,14 @@ import './PreviewArea.scss';
 const { Option } = Select;
 
 const PreviewArea: React.FC = () => {
-  const { 
-    previewMode, 
-    previewDevice, 
-    previewScale,
-    nodes,
-    setPreviewMode,
-    setPreviewDevice,
-    setPreviewScale
-  } = useCanvasStore();
-
-  // O(n) 过滤根节点（通过 parentId 字段）
-  const rootNodes = Object.values(nodes).filter(node => !node.parentId);
+  // 精确订阅：仅订阅预览相关状态，避免 nodes 变化时重渲染工具栏
+  const previewMode = useCanvasStore(s => s.previewMode);
+  const previewDevice = useCanvasStore(s => s.previewDevice);
+  const previewScale = useCanvasStore(s => s.previewScale);
+  const rootNodes = useCanvasStore(s => Object.values(s.nodes).filter(node => !node.parentId));
+  const setPreviewMode = useCanvasStore(s => s.setPreviewMode);
+  const setPreviewDevice = useCanvasStore(s => s.setPreviewDevice);
+  const setPreviewScale = useCanvasStore(s => s.setPreviewScale);
 
   // 渲染预览内容
   const renderPreviewContent = () => {

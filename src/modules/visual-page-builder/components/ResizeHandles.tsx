@@ -1,15 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
 import type { PageNode } from '../types';
+import { parsePx } from '../utils/styleUtils';
 import './ResizeHandles.scss';
 
-/** 解析像素值 */
-const parsePx = (value: unknown): number => {
-  if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return value;
-  const num = parseFloat(String(value));
-  return Number.isFinite(num) ? num : 0;
-};
+/** 默认节点尺寸（parsePx 失败时回退） */
+const DEFAULT_NODE_SIZE = 100;
+/** 默认最小尺寸 */
+const DEFAULT_MIN_SIZE = 10;
 
 /** 8 个手柄方向 */
 type HandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -35,23 +33,25 @@ interface ResizeState {
  * - 仅绝对/固定定位节点支持全部 8 个方向
  * - 流布局节点（static/relative）只支持 'e'（右边）宽度调整
  * - mouseup 时通过 updateNode 提交一次变更，依赖 T1.2 的历史合并机制
+ *
+ * 性能：useEffect 仅依赖 resizing（仅在 mousedown/mouseup 时变化），
+ * 通过 nodeRef 读取最新节点，避免 resize 时每帧重绑 document 事件
  */
 const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
   const node = useCanvasStore((s) => s.nodes[nodeId]);
   const updateNode = useCanvasStore((s) => s.updateNode);
   const [resizing, setResizing] = useState<ResizeState | null>(null);
   const resizingRef = useRef<ResizeState | null>(null);
+  // 缓存最新的 node 和配置，供全局事件读取，避免每帧重绑
+  const nodeRef = useRef(node);
+  nodeRef.current = node;
+  const configRef = useRef({ nodeId, zoom, updateNode });
+  configRef.current = { nodeId, zoom, updateNode };
 
   // 同步 ref（供全局事件读取最新值）
   useEffect(() => {
     resizingRef.current = resizing;
   }, [resizing]);
-
-  // 节点约束
-  const minWidth = node?.constraints?.minWidth ?? 10;
-  const minHeight = node?.constraints?.minHeight ?? 10;
-  const maxWidth = node?.constraints?.maxWidth;
-  const maxHeight = node?.constraints?.maxHeight;
 
   // 是否流布局（只能改宽度）
   const isFlow = !node || (node.layout.position !== 'absolute' && node.layout.position !== 'fixed');
@@ -68,8 +68,8 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
         startClientY: e.clientY,
         startLeft: parsePx(node.style.left),
         startTop: parsePx(node.style.top),
-        startWidth: parsePx(node.style.width) || 100,
-        startHeight: parsePx(node.style.height) || 100,
+        startWidth: parsePx(node.style.width) || DEFAULT_NODE_SIZE,
+        startHeight: parsePx(node.style.height) || DEFAULT_NODE_SIZE,
       };
       setResizing(start);
     },
@@ -77,15 +77,18 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
   );
 
   // 全局 mousemove / mouseup
+  // 仅依赖 resizing（mousedown/mouseup 时变化），通过 nodeRef 读取最新 node
   useEffect(() => {
     if (!resizing) return;
 
     const onMouseMove = (e: MouseEvent) => {
       const state = resizingRef.current;
-      if (!state || !node) return;
+      const currentNode = nodeRef.current;
+      const { nodeId: curNodeId, zoom: curZoom, updateNode: curUpdateNode } = configRef.current;
+      if (!state || !currentNode) return;
 
-      const deltaX = (e.clientX - state.startClientX) / zoom;
-      const deltaY = (e.clientY - state.startClientY) / zoom;
+      const deltaX = (e.clientX - state.startClientX) / curZoom;
+      const deltaY = (e.clientY - state.startClientY) / curZoom;
 
       let { startLeft, startTop, startWidth, startHeight } = state;
       let newLeft = startLeft;
@@ -93,6 +96,13 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
       let newWidth = startWidth;
       let newHeight = startHeight;
       const dir = state.dir;
+
+      // 当前节点的实时约束（可能因节点切换而变化）
+      const curMinWidth = currentNode.constraints?.minWidth ?? DEFAULT_MIN_SIZE;
+      const curMinHeight = currentNode.constraints?.minHeight ?? DEFAULT_MIN_SIZE;
+      const curMaxWidth = currentNode.constraints?.maxWidth;
+      const curMaxHeight = currentNode.constraints?.maxHeight;
+      const curIsFlow = currentNode.layout.position !== 'absolute' && currentNode.layout.position !== 'fixed';
 
       // 水平方向
       if (dir.includes('e')) {
@@ -103,7 +113,7 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
       }
 
       // 垂直方向（流布局节点跳过）
-      if (!isFlow) {
+      if (!curIsFlow) {
         if (dir.includes('s')) {
           newHeight = startHeight + deltaY;
         } else if (dir.includes('n')) {
@@ -113,37 +123,37 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
       }
 
       // 应用约束
-      if (newWidth < minWidth) {
-        if (dir.includes('w')) newLeft -= (minWidth - newWidth);
-        newWidth = minWidth;
+      if (newWidth < curMinWidth) {
+        if (dir.includes('w')) newLeft -= (curMinWidth - newWidth);
+        newWidth = curMinWidth;
       }
-      if (maxWidth !== undefined && newWidth > maxWidth) {
-        if (dir.includes('w')) newLeft += (newWidth - maxWidth);
-        newWidth = maxWidth;
+      if (curMaxWidth !== undefined && newWidth > curMaxWidth) {
+        if (dir.includes('w')) newLeft += (newWidth - curMaxWidth);
+        newWidth = curMaxWidth;
       }
-      if (!isFlow) {
-        if (newHeight < minHeight) {
-          if (dir.includes('n')) newTop -= (minHeight - newHeight);
-          newHeight = minHeight;
+      if (!curIsFlow) {
+        if (newHeight < curMinHeight) {
+          if (dir.includes('n')) newTop -= (curMinHeight - newHeight);
+          newHeight = curMinHeight;
         }
-        if (maxHeight !== undefined && newHeight > maxHeight) {
-          if (dir.includes('n')) newTop += (newHeight - maxHeight);
-          newHeight = maxHeight;
+        if (curMaxHeight !== undefined && newHeight > curMaxHeight) {
+          if (dir.includes('n')) newTop += (newHeight - curMaxHeight);
+          newHeight = curMaxHeight;
         }
       }
 
       // 流布局节点不写 left/top/height
       const styleUpdate: Partial<PageNode['style']> = {
-        ...node.style,
+        ...currentNode.style,
         width: `${newWidth}px`,
       };
-      if (!isFlow) {
+      if (!curIsFlow) {
         styleUpdate.left = `${newLeft}px`;
         styleUpdate.top = `${newTop}px`;
         styleUpdate.height = `${newHeight}px`;
       }
 
-      updateNode(nodeId, { style: styleUpdate });
+      curUpdateNode(curNodeId, { style: styleUpdate });
     };
 
     const onMouseUp = () => {
@@ -156,7 +166,7 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
-  }, [resizing, node, nodeId, zoom, isFlow, minWidth, minHeight, maxWidth, maxHeight, updateNode]);
+  }, [resizing]);
 
   if (!node) return null;
 

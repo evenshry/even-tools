@@ -69,8 +69,8 @@ const buildEventHandlers = (events: EventsConfig | undefined) => {
 };
 
 const PreviewRenderer: React.FC<PreviewRendererProps> = ({ nodeId }) => {
-  const nodes = useCanvasStore((s) => s.nodes);
-  const node = nodes[nodeId];
+  // 精确订阅单个节点：避免任一节点变化导致所有 PreviewRenderer 重渲染（O(n²) → O(1)）
+  const node = useCanvasStore((s) => s.nodes[nodeId]);
 
   if (!node) {
     return <div>节点不存在</div>;
@@ -105,10 +105,7 @@ const PreviewRenderer: React.FC<PreviewRendererProps> = ({ nodeId }) => {
     };
 
     const renderChildren = () =>
-      childIds
-        .map((cid) => (nodes[cid] ? cid : null))
-        .filter((cid): cid is string => cid !== null)
-        .map((cid) => <PreviewRenderer key={cid} nodeId={cid} />);
+      childIds.map((cid) => <PreviewRenderer key={cid} nodeId={cid} />);
 
     // 根据节点类型渲染不同的内容
     switch (node.type) {

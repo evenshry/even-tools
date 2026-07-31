@@ -24,21 +24,20 @@ const AUTO_SAVE_INTERVAL = 30_000;
 const AUTO_SAVE_DEBOUNCE = 5_000;
 
 const VisualPageBuilder: React.FC = () => {
-  const {
-    selectedNodeId,
-    nodes,
-    previewMode,
-    togglePreview,
-    resetCanvas,
-    isDirty,
-    isSaving,
-    canUndo,
-    canRedo,
-    undo,
-    redo,
-    loadPage,
-    saveCurrentPage
-  } = useCanvasStore();
+  // 精确订阅：拆分为多个选择器，避免全量订阅导致 hover/drag 时整体重渲染
+  const selectedNodeId = useCanvasStore(s => s.selectedNodeId);
+  const nodes = useCanvasStore(s => s.nodes);
+  const previewMode = useCanvasStore(s => s.previewMode);
+  const isDirty = useCanvasStore(s => s.isDirty);
+  const isSaving = useCanvasStore(s => s.isSaving);
+  const canUndo = useCanvasStore(s => s.canUndo);
+  const canRedo = useCanvasStore(s => s.canRedo);
+  const togglePreview = useCanvasStore(s => s.togglePreview);
+  const resetCanvas = useCanvasStore(s => s.resetCanvas);
+  const undo = useCanvasStore(s => s.undo);
+  const redo = useCanvasStore(s => s.redo);
+  const loadPage = useCanvasStore(s => s.loadPage);
+  const saveCurrentPage = useCanvasStore(s => s.saveCurrentPage);
 
   const [leftPanelTab, setLeftPanelTab] = useState<'components' | 'layers' | 'templates'>('components');
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -51,43 +50,46 @@ const VisualPageBuilder: React.FC = () => {
     });
   }, [loadPage]);
 
-  // 定时自动保存
+  // 定时自动保存（依赖数组移除 nodes，定时器内读取最新状态，避免持续编辑时定时器不断重置）
   useEffect(() => {
     const timer = setInterval(() => {
-      if (isDirty && !isSaving && Object.keys(nodes).length > 0) {
-        saveCurrentPage().catch(() => {
+      const state = useCanvasStore.getState();
+      if (state.isDirty && !state.isSaving && Object.keys(state.nodes).length > 0) {
+        state.saveCurrentPage().catch(() => {
           // 静默失败
         });
       }
     }, AUTO_SAVE_INTERVAL);
     return () => clearInterval(timer);
-  }, [isDirty, isSaving, nodes, saveCurrentPage]);
+  }, []);
 
   // 节点变更后 debounce 自动保存
   useEffect(() => {
     if (!isDirty) return;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      if (Object.keys(nodes).length > 0 && !isSaving) {
-        saveCurrentPage().catch(() => {});
+      const state = useCanvasStore.getState();
+      if (Object.keys(state.nodes).length > 0 && !state.isSaving) {
+        state.saveCurrentPage().catch(() => {});
       }
     }, AUTO_SAVE_DEBOUNCE);
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [nodes, isDirty, isSaving, saveCurrentPage]);
+  }, [nodes, isDirty, isSaving]);
 
   // 页面卸载前保存
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (isDirty && Object.keys(nodes).length > 0) {
+      const state = useCanvasStore.getState();
+      if (state.isDirty && Object.keys(state.nodes).length > 0) {
         // beforeunload 中无法可靠执行 async，用 sendBeacon 不适用 IndexedDB
         // 仅作提示，实际保存依赖定时/debounce
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty, nodes]);
+  }, []);
 
   // 保存画布
   const handleSave = useCallback(async () => {
@@ -113,7 +115,7 @@ const VisualPageBuilder: React.FC = () => {
     }
     Modal.confirm({
       title: "确认重置画布？",
-      content: "当前所有节点将被清空。撤销功能在 T1.2 实现后可用。",
+      content: "当前所有节点将被清空。可使用撤销恢复。",
       okText: "重置",
       okType: "danger",
       cancelText: "取消",

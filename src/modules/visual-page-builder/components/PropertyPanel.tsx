@@ -32,6 +32,7 @@ import {
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { NodeType, type PageNode } from '../types';
+import { getNodeTypeIcon } from '../utils/nodeIcons';
 import './PropertyPanel.scss';
 
 const { TextArea } = Input;
@@ -563,19 +564,7 @@ const MultiSelectToolbar: React.FC = () => {
           {selectedNodeIds.map((id) => {
             const n = nodes[id];
             if (!n) return null;
-            const icon = ({
-              [NodeType.TEXT]: '📝',
-              [NodeType.HEADING]: '📋',
-              [NodeType.BUTTON]: '🔘',
-              [NodeType.IMAGE]: '🖼️',
-              [NodeType.DIV]: '🧱',
-              [NodeType.SECTION]: '📦',
-              [NodeType.CONTAINER]: '📁',
-              [NodeType.FLEX]: '📐',
-              [NodeType.GRID]: '🔲',
-              [NodeType.INPUT]: '⌨️',
-              [NodeType.FORM]: '📝',
-            } as Record<string, string>)[n.type] || '📄';
+            const icon = getNodeTypeIcon(n.type);
             return (
               <div key={id} className="selected-node-item">
                 <span style={{ marginRight: '6px' }}>{icon}</span>
@@ -596,9 +585,12 @@ const MultiSelectToolbar: React.FC = () => {
 
 // 主属性面板组件
 const PropertyPanel: React.FC = () => {
-  const { nodes, selectedNodeId, selectedNodeIds, updateNode, deleteNode } = useCanvasStore();
-
-  const selectedNode = selectedNodeId ? nodes[selectedNodeId] : null;
+  // 精确订阅：避免全量订阅导致 hover/drag 等无关变化触发重渲染
+  const selectedNodeId = useCanvasStore(s => s.selectedNodeId);
+  const selectedNodeIds = useCanvasStore(s => s.selectedNodeIds);
+  const selectedNode = useCanvasStore(s => (s.selectedNodeId ? s.nodes[s.selectedNodeId] : null));
+  const updateNode = useCanvasStore(s => s.updateNode);
+  const deleteNode = useCanvasStore(s => s.deleteNode);
 
   // 多选模式：选中多于 1 个节点时显示批量操作工具栏
   if (selectedNodeIds.length > 1) {
@@ -682,26 +674,7 @@ const PropertyPanel: React.FC = () => {
     }
   ];
 
-  const nodeIcon = ({
-    [NodeType.TEXT]: '📝',
-    [NodeType.HEADING]: '📋',
-    [NodeType.BUTTON]: '🔘',
-    [NodeType.IMAGE]: '🖼️',
-    [NodeType.DIV]: '🧱',
-    [NodeType.SECTION]: '📦',
-    [NodeType.CONTAINER]: '📁',
-    [NodeType.FLEX]: '📐',
-    [NodeType.GRID]: '🔲',
-    [NodeType.STACK]: '📚',
-    [NodeType.SPAN]: '🔗',
-    [NodeType.FORM]: '📝',
-    [NodeType.INPUT]: '⌨️',
-    [NodeType.SELECT]: '🔽',
-    [NodeType.CHECKBOX]: '☑️',
-    [NodeType.VIDEO]: '🎥',
-    [NodeType.ICON]: '🔣',
-    [NodeType.CUSTOM]: '🔧'
-  } as Record<string, string>)[selectedNode.type] || '📄';
+  const nodeIcon = getNodeTypeIcon(selectedNode.type);
 
   return (
     <div className="property-panel">

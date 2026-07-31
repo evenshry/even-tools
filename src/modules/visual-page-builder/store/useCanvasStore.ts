@@ -4,16 +4,7 @@ import { NodeType, PreviewMode, LayoutType } from '../types';
 import { componentLibrary } from '../data/componentLibrary';
 import { cloneTemplateNodes } from '../data/templates';
 import { pageDB, DEFAULT_PAGE_ID, DEFAULT_PAGE_NAME, type SavedPage, type SavedTemplate } from './usePagePersistence';
-
-/**
- * 解析像素值（支持 "100px" / 100 / undefined）
- */
-const parsePx = (value: string | number | undefined): number => {
-  if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return value;
-  const num = parseFloat(value);
-  return Number.isFinite(num) ? num : 0;
-};
+import { parsePx, parsePxStrict } from '../utils/styleUtils';
 
 /**
  * 生成唯一节点 ID
@@ -45,11 +36,18 @@ const HISTORY_LIMIT = 50;
 const HISTORY_MERGE_WINDOW = 500;
 
 /**
+ * 复制/粘贴节点时绝对定位节点的偏移量（px）
+ * 流布局节点不偏移（清除 left/top）
+ */
+const DUPLICATE_OFFSET_PX = 20;
+
+/**
  * 创建历史快照（深拷贝当前 nodes + selectedNodeId）
+ * 使用 structuredClone 保留 Date 对象类型（JSON.parse/stringify 会把 Date 转为 string）
  */
 const createSnapshot = (nodes: Record<string, PageNode>, selectedNodeId: string | null): Snapshot => {
   return {
-    nodes: JSON.parse(JSON.stringify(nodes)),
+    nodes: structuredClone(nodes),
     selectedNodeId,
     timestamp: Date.now()
   };
@@ -96,6 +94,8 @@ interface CanvasStore extends CanvasState {
   // 持久化操作
   pageId: string;
   pageName: string;
+  /** 页面首次创建时间（保存时保留，不被覆盖） */
+  pageCreatedAt: number;
   isDirty: boolean;
   isSaving: boolean;
   loadPage: (id?: string) => Promise<void>;
@@ -242,6 +242,7 @@ const multiSelectInitialState = {
 const persistenceInitialState = {
   pageId: DEFAULT_PAGE_ID,
   pageName: DEFAULT_PAGE_NAME,
+  pageCreatedAt: Date.now(),
   isDirty: false,
   isSaving: false,
   past: [] as Snapshot[],
@@ -356,6 +357,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       };
 
       // 历史合并：若上次快照在合并窗口内且同为 updateNode，则不新增快照
+      // 注意：合并时仍需清空 future，因为当前状态已被修改，redo 回旧 future 会丢失合并的修改
       const now = Date.now();
       const lastSnapshot = state.past[state.past.length - 1];
       const shouldMerge = lastSnapshot && (now - lastSnapshot.timestamp) < HISTORY_MERGE_WINDOW;
@@ -367,9 +369,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         nodes: updatedNodes,
         isDirty: true,
         past,
-        future: shouldMerge ? state.future : [],
+        future: [],
         canUndo: true,
-        canRedo: shouldMerge ? state.canRedo : false
+        canRedo: false
       };
     });
   },
@@ -440,11 +442,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         const newId = generateNodeId();
         const isAbsolute = source.layout.position === 'absolute' || source.layout.position === 'fixed';
 
-        // 计算偏移：绝对定位节点偏移 20px，流布局节点不设置 left/top
+        // 计算偏移：绝对定位节点偏移 DUPLICATE_OFFSET_PX，流布局节点不设置 left/top
         const style = { ...source.style };
         if (isAbsolute) {
-          style.left = `${parsePx(source.style.left) + 20}px`;
-          style.top = `${parsePx(source.style.top) + 20}px`;
+          style.left = `${parsePx(source.style.left) + DUPLICATE_OFFSET_PX}px`;
+          style.top = `${parsePx(source.style.top) + DUPLICATE_OFFSET_PX}px`;
         } else {
           delete style.left;
           delete style.top;
@@ -728,6 +730,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         set({
           pageId: page.id,
           pageName: page.name,
+          pageCreatedAt: page.createdAt,
           nodes: page.nodes,
           selectedNodeId: null,
           selectedNodeIds: [],
@@ -753,7 +756,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         id: state.pageId,
         name: state.pageName,
         nodes: serializeNodes(state.nodes),
-        createdAt: now,
+        // 保留首次创建时间，仅更新 updatedAt
+        createdAt: state.pageCreatedAt || now,
         updatedAt: now
       };
       await pageDB.savePage(page);
@@ -1058,13 +1062,24 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const past = [...state.past, createSnapshot(state.nodes, state.selectedNodeId)].slice(-HISTORY_LIMIT);
 
     // 计算对齐基准值
-    const rects = alignableNodes.map((n) => ({
-      id: n.id,
-      left: parsePx(n.style.left),
-      top: parsePx(n.style.top),
-      width: parsePx(n.style.width) || 0,
-      height: parsePx(n.style.height) || 0,
-    }));
+    // parsePxStrict 仅解析像素值（跳过 %/auto/em 等非像素单位），返回 null 表示不可对齐
+    const rects = alignableNodes
+      .map((n) => {
+        const left = parsePxStrict(n.style.left);
+        const top = parsePxStrict(n.style.top);
+        // left/top 必须为有效像素值才能对齐
+        if (left === null || top === null) return null;
+        return {
+          id: n.id,
+          left,
+          top,
+          // width/height 用于 right/bottom/center 对齐，若非像素值则按 0 处理（仅影响该节点的偏移计算）
+          width: parsePxStrict(n.style.width) ?? 0,
+          height: parsePxStrict(n.style.height) ?? 0,
+        };
+      })
+      .filter((r): r is { id: string; left: number; top: number; width: number; height: number } => r !== null);
+    if (rects.length < 2) return;
 
     const updatedNodes = { ...state.nodes };
 

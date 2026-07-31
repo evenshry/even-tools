@@ -2,7 +2,8 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Modal, Tabs, Button, Space, message, Typography } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import type { PageNode } from '../types';
-import { generateHTML, generateReact, generateSchema, downloadTextFile } from '../utils/codeGenerator';
+import { generateHTML, generateReact, generateSchema, downloadTextFile, parseSchema } from '../utils/codeGenerator';
+import { useCanvasStore } from '../store/useCanvasStore';
 import './CodeExportModal.scss';
 
 const { Text } = Typography;
@@ -17,6 +18,8 @@ interface CodeExportModalProps {
 
 const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose }) => {
   const [activeFormat, setActiveFormat] = useState<ExportFormat>('html');
+  // 精确订阅 loadNodes，避免无关 store 变化触发 Modal 重渲染
+  const loadNodes = useCanvasStore((s) => s.loadNodes);
 
   /** 根据当前格式生成代码（仅在 nodes 或格式变化时计算） */
   const code = useMemo(() => {
@@ -79,11 +82,38 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
     message.success(`已下载：${filename}`);
   }, [code, activeFormat]);
 
-  /** 加载 Schema 回画布（仅 schema 格式可用） */
+  /**
+   * 加载 Schema 回画布（仅 schema 格式可用）
+   *
+   * 流程：
+   * 1. 解析当前 code（schema JSON 文本）
+   * 2. 失败 → message.error 提示，不关闭 Modal
+   * 3. 成功 → Modal.confirm 二次确认（导入会覆盖当前画布）
+   * 4. 用户确认 → loadNodes + 关闭 Modal + message.success
+   *
+   * 注意：parseSchema 会把 meta.createdAt/updatedAt 从 ISO 字符串还原为 Date
+   */
   const handleImportSchema = useCallback(() => {
-    // 留待 T4.2 模板系统统一处理 import 逻辑（需调用 store.loadNodes）
-    message.info('Schema 导入功能将在 T4.2 模板系统中实现');
-  }, []);
+    const result = parseSchema(code);
+    if (!result.ok || !result.nodes) {
+      message.error(`Schema 解析失败：${result.error || '未知错误'}`);
+      return;
+    }
+
+    const nodeCount = Object.keys(result.nodes).length;
+    Modal.confirm({
+      title: '导入 Schema 到画布',
+      content: `将导入 ${nodeCount} 个节点，当前画布内容会被覆盖，且无法通过撤销恢复。是否继续？`,
+      okText: '导入',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => {
+        loadNodes(result.nodes!);
+        message.success(`已导入 ${nodeCount} 个节点`);
+        onClose();
+      },
+    });
+  }, [code, loadNodes, onClose]);
 
   const tabItems = useMemo(
     () => [
