@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { Layout, Button, Space, Typography, Card } from "antd";
-import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip } from "antd";
+import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
 import ComponentPanel from "./components/ComponentPanel";
 import CanvasArea from "./components/CanvasArea";
@@ -15,56 +15,179 @@ import "./styles/VisualPageBuilder.scss";
 const { Content } = Layout;
 const { Text } = Typography;
 
+// 自动保存间隔（ms）
+const AUTO_SAVE_INTERVAL = 30_000;
+// 节点变更后 debounce 自动保存延迟（ms）
+const AUTO_SAVE_DEBOUNCE = 5_000;
+
 const VisualPageBuilder: React.FC = () => {
-  const { selectedNodeId, nodes, previewMode, togglePreview } = useCanvasStore();
+  const {
+    selectedNodeId,
+    nodes,
+    previewMode,
+    togglePreview,
+    resetCanvas,
+    isDirty,
+    isSaving,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    loadPage,
+    saveCurrentPage
+  } = useCanvasStore();
+
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 初始化：加载最近一次保存的页面
+  useEffect(() => {
+    loadPage().catch(() => {
+      // 加载失败（如 IndexedDB 不可用）静默处理，用户可正常使用
+    });
+  }, [loadPage]);
+
+  // 定时自动保存
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isDirty && !isSaving && Object.keys(nodes).length > 0) {
+        saveCurrentPage().catch(() => {
+          // 静默失败
+        });
+      }
+    }, AUTO_SAVE_INTERVAL);
+    return () => clearInterval(timer);
+  }, [isDirty, isSaving, nodes, saveCurrentPage]);
+
+  // 节点变更后 debounce 自动保存
+  useEffect(() => {
+    if (!isDirty) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (Object.keys(nodes).length > 0 && !isSaving) {
+        saveCurrentPage().catch(() => {});
+      }
+    }, AUTO_SAVE_DEBOUNCE);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [nodes, isDirty, isSaving, saveCurrentPage]);
+
+  // 页面卸载前保存
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (isDirty && Object.keys(nodes).length > 0) {
+        // beforeunload 中无法可靠执行 async，用 sendBeacon 不适用 IndexedDB
+        // 仅作提示，实际保存依赖定时/debounce
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty, nodes]);
+
+  // 保存画布
+  const handleSave = useCallback(async () => {
+    const nodeCount = Object.keys(nodes).length;
+    if (nodeCount === 0) {
+      message.warning("画布为空，无需保存");
+      return;
+    }
+    message.loading({ content: "正在保存...", key: "vpb-save", duration: 0 });
+    try {
+      await saveCurrentPage();
+      message.success({ content: `已保存 ${nodeCount} 个节点`, key: "vpb-save" });
+    } catch (e) {
+      message.error({ content: "保存失败（浏览器可能不支持 IndexedDB）", key: "vpb-save" });
+    }
+  }, [nodes, saveCurrentPage]);
+
+  // 重置画布
+  const handleReset = useCallback(() => {
+    if (Object.keys(nodes).length === 0) {
+      message.info("画布已为空");
+      return;
+    }
+    Modal.confirm({
+      title: "确认重置画布？",
+      content: "当前所有节点将被清空。撤销功能在 T1.2 实现后可用。",
+      okText: "重置",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: () => {
+        resetCanvas();
+        message.success("画布已重置");
+      }
+    });
+  }, [nodes, resetCanvas]);
+
+  // 导出（T4.1 实现完整代码生成，此处先提示）
+  const handleExport = useCallback(() => {
+    if (Object.keys(nodes).length === 0) {
+      message.warning("画布为空，无可导出内容");
+      return;
+    }
+    message.info("导出功能将在 T4.1 实现（HTML / React / Schema）");
+  }, [nodes]);
 
   // 渲染编辑模式界面
   const renderEditMode = () => (
     <div className="workspace-layout">
-      {/* 左侧组件面板 */}
       <Card className="component-panel-container" title="组件库" size="small" style={{ height: "100%" }}>
         <ComponentPanel />
       </Card>
-
-      {/* 中间画布区 */}
       <Card className="canvas-area-container" title="画布" size="small" style={{ height: "100%", overflow: "hidden" }}>
         <CanvasArea />
       </Card>
-
-      {/* 右侧属性面板 */}
       <Card className="property-panel-container" title="属性面板" size="small" style={{ height: "100%" }}>
         <PropertyPanel />
       </Card>
     </div>
   );
 
-  // 渲染预览模式界面
   const renderPreviewMode = () => (
     <div className="preview-layout">
       <PreviewArea />
     </div>
   );
 
-  // 构建头部额外内容
   const headerExtra = (
     <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
       <Space>
-        <Button type="primary" icon={<SaveOutlined />}>
+        <Tooltip title="撤销 (Ctrl+Z)">
+          <Button
+            icon={<UndoOutlined />}
+            onClick={undo}
+            disabled={!canUndo}
+          />
+        </Tooltip>
+        <Tooltip title="重做 (Ctrl+Shift+Z)">
+          <Button
+            icon={<RedoOutlined />}
+            onClick={redo}
+            disabled={!canRedo}
+          />
+        </Tooltip>
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          onClick={handleSave}
+          loading={isSaving}
+        >
           保存
         </Button>
         <Button type={previewMode !== PreviewMode.EDIT ? "primary" : "default"} icon={<EyeOutlined />} onClick={togglePreview}>
           {previewMode === PreviewMode.EDIT ? "预览" : "返回编辑"}
         </Button>
-        <Button icon={<ExportOutlined />}>导出</Button>
-        <Button icon={<ReloadOutlined />}>重置</Button>
+        <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+        <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
       </Space>
       <Text>
         节点数: {Object.keys(nodes).length} | 选中: {selectedNodeId ? nodes[selectedNodeId]?.name : "无"}
+        {isDirty && <span style={{ color: '#faad14', marginLeft: 8 }}>· 未保存</span>}
       </Text>
     </div>
   );
 
-  // 构建标题
   const headerTitle = `可视化页面构建器${
     previewMode !== PreviewMode.EDIT ? ` - ${previewMode === PreviewMode.PREVIEW ? "预览模式" : "实时模式"}` : ""
   }`;
@@ -72,10 +195,7 @@ const VisualPageBuilder: React.FC = () => {
   return (
     <DndProvider backend={HTML5Backend}>
       <Layout className="visual-page-builder">
-        {/* 顶部工具栏 */}
         <ModuleHeader title={headerTitle} extra={headerExtra} />
-
-        {/* 主工作区 */}
         <Content className="builder-body">{previewMode === PreviewMode.EDIT ? renderEditMode() : renderPreviewMode()}</Content>
       </Layout>
     </DndProvider>

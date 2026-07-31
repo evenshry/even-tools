@@ -62,8 +62,8 @@
   transition: all 0.2s;
   height: calc(100% - 58px); // 减去工具栏高度
   padding: 16px;
-  z-index: 1; // 确保画布容器在正确层级
-  pointer-events: auto; // 确保可以接收鼠标事件
+  z-index: 1;
+  pointer-events: auto;
 
   // 拖拽状态样式
   &.drag-over-valid {
@@ -84,11 +84,11 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: 
+  background-image:
     linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
   pointer-events: none;
-  z-index: 0; // 降低层级，确保不会阻挡鼠标事件
+  z-index: 0;
 }
 
 // 拖拽提示
@@ -173,71 +173,63 @@
       background-color: rgba(40, 167, 69, 0.05);
     }
   }
-  
+
   // 拖拽目标状态（可以接受当前拖拽的组件）
-&.drag-target {
-  border-color: #007bff !important;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5) !important;
-  background-color: rgba(0, 123, 255, 0.05) !important;
-  
-  // 添加放置提示文字
-  &::after {
-    content: '可以放置到这里';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #007bff;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-    z-index: 1000;
-    pointer-events: none;
-    opacity: 0.9;
-    animation: fadeInOut 2s infinite;
+  &.drag-target {
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5) !important;
+    background-color: rgba(0, 123, 255, 0.05) !important;
+
+    // 添加放置提示文字
+    &::after {
+      content: '可以放置到这里';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #007bff;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0.9;
+      animation: fadeInOut 2s infinite;
+    }
   }
-}
 
-// 拖拽目标但不可放置状态
-&.drag-target-invalid {
-  border-color: #dc3545 !important;
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3) !important;
-  background-color: rgba(220, 53, 69, 0.05) !important;
-  
-  &::after {
-    content: '不能放置到这里';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #dc3545;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-    z-index: 1000;
-    pointer-events: none;
-    opacity: 0.9;
+  // 拖拽目标但不可放置状态
+  &.drag-target-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3) !important;
+    background-color: rgba(220, 53, 69, 0.05) !important;
+
+    &::after {
+      content: '不能放置到这里';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #dc3545;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0.9;
+    }
   }
-}
-  
-  // 脉冲动画
-@keyframes pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 0.3; }
-  100% { opacity: 0.7; }
-}
 
-// 淡入淡出动画
-@keyframes fadeInOut {
-  0% { opacity: 0.7; }
-  50% { opacity: 0.9; }
-  100% { opacity: 0.7; }
-}
+  // 拖拽中状态
+  &.dragging {
+    opacity: 0.6;
+  }
 
+  // 节点内容
   .node-content {
     padding: 8px;
     min-height: 40px;
@@ -250,7 +242,7 @@
     border-radius: 4px;
   }
 
-  // 不同类型节点的样式
+  // 不同类型节点的占位样式
   .image-placeholder,
   .div-placeholder,
   .page-placeholder,
@@ -266,7 +258,7 @@
     font-size: 12px;
   }
 
-  // 选择框
+  // 选择框（含缩放手柄）
   .selection-box {
     position: absolute;
     top: -4px;
@@ -303,7 +295,9 @@
         right: -4px;
       }
     }
-  // 子节点容器 - 子节点应该直接渲染在画布上，而不是在父节点内部
+  }
+
+  // 子节点容器（绝对定位场景，覆盖在父节点上）
   .node-children {
     position: absolute;
     top: 0;
@@ -311,13 +305,13 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    
+
     // 子节点本身需要能够接收鼠标事件
     .canvas-node {
       pointer-events: auto;
     }
   }
-  
+
   // 流布局的子节点容器
   .flow-children {
     width: 100%;
@@ -327,19 +321,30 @@
     border: 1px dashed #007bff;
     border-radius: 4px;
     margin-top: 8px;
-    
+
     .canvas-node {
       margin-bottom: 8px;
-      
+      pointer-events: auto;
+
       &:last-child {
         margin-bottom: 0;
       }
     }
-  } 
-    .canvas-node {
-      pointer-events: auto;
-    }
   }
+}
+
+// 脉冲动画
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.7; }
+}
+
+// 淡入淡出动画
+@keyframes fadeInOut {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.7; }
 }
 
 // 空状态

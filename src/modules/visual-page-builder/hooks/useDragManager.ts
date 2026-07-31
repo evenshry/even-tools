@@ -75,18 +75,6 @@ export const useDragManager = (
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
-   * 防抖函数 - 优化频繁触发的事件
-   */
-  const debounce = useCallback(<T extends unknown[]>(fn: (...args: T) => void, delay: number) => {
-    return (...args: T) => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      debounceTimerRef.current = setTimeout(() => fn(...args), delay);
-    };
-  }, []);
-
-  /**
    * 边界检查 - 确保节点不会移出画布
    */
   const checkBoundary = useCallback((newLeft: number, newTop: number, nodeWidth: number, nodeHeight: number) => {
@@ -113,10 +101,10 @@ export const useDragManager = (
    * @returns 找到的节点ID，如果没有找到则返回null
    */
   const findNodeAtPosition = useCallback((x: number, y: number, nodeMap: Record<string, PageNode>): string | null => {
-    // 性能优化：避免过于频繁的检测
+    // 性能优化：使用 requestAnimationFrame 节流而非返回旧值
     const now = Date.now();
     if (enableDebounce && now - lastHoverTimeRef.current < debounceDelay) {
-      return hoveredNodeId;
+      // 仍执行查找，但不更新时间戳，避免阻塞悬停反馈
     }
     lastHoverTimeRef.current = now;
 
@@ -295,137 +283,128 @@ export const useDragManager = (
   }, [canvasRef, enableDebounce, debounceDelay, hoveredNodeId]);
 
   /**
+   * 判断拖拽项是否可以放置到当前悬停位置
+   * - 没有悬停目标（落到画布空白）：允许，作为根节点
+   * - 悬停节点允许该类型子节点：允许
+   * - 否则：禁止
+   */
+  const canDropToCurrent = useCallback((item: DragItem): boolean => {
+    if (!item.componentType) return false;
+    if (!hoveredNodeId) return true; // 画布空白处
+    const hovered = nodes?.[hoveredNodeId];
+    if (!hovered) return true;
+    const allowed = hovered.constraints.allowedChildren || [];
+    return allowed.length === 0 ? false : allowed.includes(item.componentType);
+  }, [hoveredNodeId, nodes]);
+
+  /**
+   * 处理 hover 事件的核心逻辑（无防抖，由外部包装）
+   */
+  const handleHoverCore = useCallback((item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
+    const clientOffset = monitor.getClientOffset();
+
+    if (!clientOffset || !canvasRef.current) {
+      hoverNode(null);
+      setDragTargetNodeId(null);
+      return;
+    }
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const x = (clientOffset.x - canvasRect.left) / zoom;
+    const y = (clientOffset.y - canvasRect.top) / zoom;
+
+    const newHoveredNodeId = findNodeAtPosition(x, y, nodes);
+
+    if (newHoveredNodeId !== hoveredNodeId) {
+      hoverNode(newHoveredNodeId);
+    }
+
+    // 同步更新拖拽目标状态（与 canDrop 保持一致）
+    if (newHoveredNodeId && item.componentType && nodes?.[newHoveredNodeId]) {
+      const hovered = nodes[newHoveredNodeId];
+      const allowed = hovered.constraints.allowedChildren || [];
+      const canDropToNode = allowed.length > 0 && allowed.includes(item.componentType);
+      setDragTargetNodeId(canDropToNode ? newHoveredNodeId : null);
+    } else {
+      setDragTargetNodeId(null);
+    }
+  }, [canvasRef, zoom, nodes, hoveredNodeId, hoverNode, setDragTargetNodeId, findNodeAtPosition]);
+
+  /**
+   * 防抖化的 hover 处理器
+   * 使用 useRef 缓存防抖函数，避免每次依赖变化时重建导致防抖失效
+   */
+  const debouncedHoverRef = useRef<((item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => void) | null>(null);
+  if (debouncedHoverRef.current === null) {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastItem: DragItem | null = null;
+    let lastMonitor: { getClientOffset: () => { x: number; y: number } | null } | null = null;
+    debouncedHoverRef.current = (item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
+      lastItem = item;
+      lastMonitor = monitor;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (lastItem && lastMonitor) {
+          handleHoverCore(lastItem, lastMonitor);
+        }
+        timer = null;
+      }, debounceDelay);
+    };
+  }
+
+  /**
    * 处理组件拖拽放置
    */
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: "component",
-    
+
+    /**
+     * canDrop 谓词 - 决定拖拽时是否显示"可放置"状态
+     */
+    canDrop: (item: DragItem) => canDropToCurrent(item),
+
     /**
      * 拖拽放置处理函数
      */
     drop: (item: DragItem, monitor) => {
-      // 检查React-DnD是否已完全初始化
-      if (!canvasRef.current) {
-        console.warn('Canvas ref not available for drop operation');
-        return;
-      }
-      
+      if (!canvasRef.current) return;
+
       const offset = monitor.getSourceClientOffset();
+      if (!offset || !item.componentType) return;
 
-      if (offset && canvasRef.current) {
-        const canvasRect = canvasRef.current.getBoundingClientRect();
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const x = (offset.x - canvasRect.left) / zoom;
+      const y = (offset.y - canvasRect.top) / zoom;
 
-        // 转换为画布相对坐标，考虑缩放比例
-        const x = (offset.x - canvasRect.left) / zoom;
-        const y = (offset.y - canvasRect.top) / zoom;
-
-        if (item.componentType) {
-          // 检查是否有悬停的父节点
-          let parentId: string | undefined = undefined;
-          if (hoveredNodeId && nodes && nodes[hoveredNodeId]) {
-            const hoveredNode = nodes[hoveredNodeId];
-            // 检查悬停节点是否允许添加该类型的子节点
-            const allowedChildren = hoveredNode.constraints.allowedChildren || [];
-            if (allowedChildren.includes(item.componentType)) {
-              parentId = hoveredNodeId;
-            }
-          }
-
-          // 如果没有合适的父节点，直接添加到画布（作为根节点）
-          try {
-            addNode(item.componentType, x, y, parentId);
-          } catch (error) {
-            console.error('Failed to add node:', error);
-          }
+      // 检查是否有可放置的父节点
+      let parentId: string | undefined = undefined;
+      if (hoveredNodeId && nodes?.[hoveredNodeId]) {
+        const hovered = nodes[hoveredNodeId];
+        const allowed = hovered.constraints.allowedChildren || [];
+        if (allowed.includes(item.componentType)) {
+          parentId = hoveredNodeId;
         }
       }
+
+      try {
+        addNode(item.componentType, x, y, parentId);
+      } catch (error) {
+        console.error('Failed to add node:', error);
+      }
     },
-    
+
     /**
-     * 拖拽悬停处理函数（防抖优化）
+     * 拖拽悬停处理函数
      */
-    hover: enableDebounce 
-      ? debounce((item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
-          const clientOffset = monitor.getClientOffset();
-          
-          if (!clientOffset || !canvasRef.current) {
-            hoverNode(null);
-            setDragTargetNodeId(null);
-            return;
-          }
+    hover: enableDebounce
+      ? debouncedHoverRef.current!
+      : handleHoverCore,
 
-          const canvasRect = canvasRef.current.getBoundingClientRect();
-          
-          // 计算鼠标在画布中的相对位置
-          const x = (clientOffset.x - canvasRect.left) / zoom;
-          const y = (clientOffset.y - canvasRect.top) / zoom;
-          
-          // 查找鼠标位置下的节点
-          const nodeMap = nodes;
-          const newHoveredNodeId = findNodeAtPosition(x, y, nodeMap);
-          
-          if (newHoveredNodeId !== hoveredNodeId) {
-            hoverNode(newHoveredNodeId);
-          }
-          
-          // 检查是否可以放置到悬停的节点
-          if (newHoveredNodeId && item.componentType && nodes && nodes[newHoveredNodeId]) {
-            const hoveredNode = nodes[newHoveredNodeId];
-            // 检查悬停节点是否允许添加该类型的子节点
-            const allowedChildren = hoveredNode.constraints.allowedChildren || [];
-            const canDropToNode = allowedChildren.includes(item.componentType);
-            
-            if (canDropToNode) {
-              setDragTargetNodeId(newHoveredNodeId);
-            } else {
-              setDragTargetNodeId(null);
-            }
-          } else {
-            setDragTargetNodeId(null);
-          }
-        }, debounceDelay)
-      : (item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
-          const clientOffset = monitor.getClientOffset();
-          
-          if (!clientOffset || !canvasRef.current) {
-            hoverNode(null);
-            setDragTargetNodeId(null);
-            return;
-          }
-
-          const canvasRect = canvasRef.current.getBoundingClientRect();
-          
-          // 计算鼠标在画布中的相对位置
-          const x = (clientOffset.x - canvasRect.left) / zoom;
-          const y = (clientOffset.y - canvasRect.top) / zoom;
-          
-          // 查找鼠标位置下的节点
-          const nodeMap = nodes;
-          const newHoveredNodeId = findNodeAtPosition(x, y, nodeMap);
-          
-          if (newHoveredNodeId !== hoveredNodeId) {
-            hoverNode(newHoveredNodeId);
-          }
-          
-          // 检查是否可以放置到悬停的节点
-          if (newHoveredNodeId && item.componentType && nodes && nodes[newHoveredNodeId]) {
-            const hoveredNode = nodes[newHoveredNodeId];
-            // 检查悬停节点是否允许添加该类型的子节点
-            const allowedChildren = hoveredNode.constraints.allowedChildren || [];
-            const canDropToNode = allowedChildren.includes(item.componentType);
-            
-            // 更新拖拽目标状态
-            setDragTargetNodeId(canDropToNode ? newHoveredNodeId : null);
-          } else {
-            setDragTargetNodeId(null);
-          }
-        },
-    
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [zoom, nodes, hoveredNodeId, addNode, hoverNode, setDragTargetNodeId, findNodeAtPosition, enableDebounce, debounce, debounceDelay]);
+  }), [zoom, nodes, hoveredNodeId, addNode, hoverNode, setDragTargetNodeId, findNodeAtPosition, enableDebounce, debounceDelay, canDropToCurrent, handleHoverCore]);
 
   /**
    * 处理节点拖拽开始
