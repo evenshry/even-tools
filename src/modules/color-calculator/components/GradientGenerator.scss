@@ -40,7 +40,7 @@
         border: 2px solid transparent;
 
         &:hover {
-          background: #f5f5f5;
+          background: var(--et-bg-subtle);
           border-color: #1890ff;
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -50,7 +50,7 @@
           width: 60px;
           height: 60px;
           border-radius: 8px;
-          border: 2px solid #d9d9d9;
+          border: 2px solid var(--et-border-strong);
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
           transition: all 0.3s ease;
         }
@@ -89,14 +89,14 @@
   }
 
   .color-stop-card {
-    background: #fafafa;
-    border: 1px solid #e8e8e8;
+    background: var(--et-bg-subtle);
+    border: 1px solid var(--et-border);
     border-radius: 8px;
     padding: 0px 10px;
     transition: all 0.3s ease;
 
     &:hover {
-      border-color: #d9d9d9;
+      border-color: var(--et-border-strong);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
 
@@ -118,7 +118,7 @@
         gap: 8px;
 
         .color-input {
-          border: 2px solid #d9d9d9;
+          border: 2px solid var(--et-border-strong);
           border-radius: 4px;
           cursor: pointer;
           transition: all 0.3s ease;
@@ -147,7 +147,7 @@
     width: 100%;
     height: 200px;
     border-radius: 8px;
-    border: 2px solid #d9d9d9;
+    border: 2px solid var(--et-border-strong);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
 
@@ -165,15 +165,16 @@
       font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
       font-size: 13px;
       line-height: 1.5;
-      background: #fafafa;
-      border: 1px solid #e8e8e8;
+      background: var(--et-bg-subtle);
+      border: 1px solid var(--et-border);
+      color: var(--et-ink);
       border-radius: 4px;
       padding: 12px;
       resize: none;
 
       &:focus {
-        border-color: #1890ff;
-        box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        border-color: var(--et-info);
+        box-shadow: 0 0 0 2px var(--et-info-soft);
       }
     }
   }
@@ -193,5 +194,46 @@
         }
       }
     }
+  }
+}
+
+:root[data-theme="dark"] {
+  .gradient-generator-card {
+    .preset-name {
+      color: var(--et-ink-2);
+    }
+
+    .preset-preview {
+      border-color: var(--et-border);
+    }
+
+    .preset-item:hover {
+      border-color: var(--et-info);
+    }
+  }
+
+  // —— box-shadow ——
+  .gradient-presets .presets-grid .preset-item:hover {
+    box-shadow: var(--et-shadow-lg);
+  }
+
+  .gradient-presets .presets-grid .preset-item .preset-preview {
+    box-shadow: var(--et-shadow-sm);
+  }
+
+  .color-stop-card:hover {
+    box-shadow: var(--et-shadow-md);
+  }
+
+  .gradient-preview {
+    box-shadow: var(--et-shadow-md);
+
+    &:hover {
+      box-shadow: var(--et-shadow-lg);
+    }
+  }
+
+  .code-output .code-textarea:focus {
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
   }
 }

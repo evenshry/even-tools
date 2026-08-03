@@ -66,3 +66,29 @@
     }
   }
 }
+
+:root[data-theme="dark"] {
+  .unit-list {
+    &__card {
+      &--from-selected {
+        border-color: var(--et-success) !important;
+      }
+
+      &--to-selected {
+        border-color: var(--et-info) !important;
+      }
+    }
+
+    &__button {
+      &--from-selected {
+        border-color: var(--et-success) !important;
+        background-color: var(--et-success) !important;
+      }
+
+      &--to-selected {
+        border-color: var(--et-info) !important;
+        background-color: var(--et-info) !important;
+      }
+    }
+  }
+}

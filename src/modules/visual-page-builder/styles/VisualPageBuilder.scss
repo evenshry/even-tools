@@ -2,34 +2,9 @@
 .visual-page-builder {
   height: 100vh;
 
-  // ModuleHeader组件样式适配
-  .module-header {
-    background: #fff;
-
-    .module-header__title {
-      color: #000;
-    }
-
-    .ant-btn {
-      &:hover {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(255, 255, 255, 0.5) !important;
-      }
-
-      &.ant-btn-primary {
-        background: #1890ff !important;
-        border-color: #1890ff !important;
-      }
-    }
-
-    .ant-typography {
-      color: #333;
-    }
-  }
-
   .ant-layout-content {
     padding: 16px;
-    background: #f0f2f5;
+    background: var(--et-bg-page);
     height: calc(100vh - 64px); // 减去头部高度
   }
 
@@ -98,5 +73,13 @@
     height: 100%;
     background: #f8f9fa;
     overflow-y: auto;
+  }
+}
+
+:root[data-theme="dark"] {
+  .visual-page-builder {
+    .preview-layout {
+      background: var(--et-bg-subtle);
+    }
   }
 }

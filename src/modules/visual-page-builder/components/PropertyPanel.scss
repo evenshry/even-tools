@@ -180,7 +180,7 @@
         display: flex;
         align-items: center;
         padding: 6px 4px;
-        border-bottom: 1px solid #f5f5f5;
+        border-bottom: 1px solid var(--et-border);
         font-size: 12px;
 
         &:last-child {
@@ -210,6 +210,22 @@
     
     .property-group {
       margin-bottom: 8px;
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  .property-panel {
+    .ant-empty-description {
+      color: var(--et-ink-3);
+    }
+
+    .multi-select-panel {
+      .multi-select-header {
+        .multi-select-badge {
+          background: var(--et-info);
+        }
+      }
     }
   }
 }

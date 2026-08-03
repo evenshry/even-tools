@@ -1,10 +1,23 @@
 import { create } from 'zustand';
 
+// ID 生成器：放在非组件文件中，避免 react-hooks/purity 规则误报
+export const genId = (prefix: string): string => `${prefix}-${Date.now()}`;
+
+// 当前选中元素，仅记录身份信息，具体数据从 houseConfig 实时查找
+export interface Selection {
+  originalType: 'room' | 'furniture' | 'door' | 'window';
+  roomId: string;
+  furnitureId?: string;
+  doorId?: string;
+  windowId?: string;
+}
+
 interface FloorPlanStore {
   // 状态
   houseConfig: FloorPlan.HouseConfig;
   previewMode: boolean;
-  
+  selectedElement: Selection | null;
+
   // 操作
   setHouseConfig: (config: FloorPlan.HouseConfig) => void;
   updateHouseConfig: (config: Partial<FloorPlan.HouseConfig>) => void;
@@ -23,6 +36,7 @@ interface FloorPlanStore {
   deleteRoom: (roomId: string) => void;
   togglePreview: () => void;
   resetConfig: () => void;
+  setSelectedElement: (sel: Selection | null) => void;
 }
 
 const normalizeDoorOrWindow = (
@@ -80,18 +94,25 @@ const normalizeRoom = (room: FloorPlan.Room): FloorPlan.Room => {
   };
 };
 
-const normalizeHouseConfig = (config: FloorPlan.HouseConfig): FloorPlan.HouseConfig => ({
-  ...config,
-  id: config.id || `house-${Date.now()}`,
-  name: config.name || '我的房屋',
-  totalArea: config.totalArea ?? 0,
-  rooms: (config.rooms ?? []).map(normalizeRoom),
-  scale: config.scale ?? 1,
-  gridSize: config.gridSize ?? 50,
-  showGrid: config.showGrid ?? true,
-  showDimensions: config.showDimensions ?? true,
-  showFurniture: config.showFurniture ?? true
-});
+// 按 1px = 1cm 约定，将房间总像素面积换算为 ㎡
+const computeTotalArea = (rooms: FloorPlan.Room[]): number =>
+  Math.round((rooms.reduce((sum, r) => sum + r.width * r.height, 0) / 10000) * 100) / 100;
+
+const normalizeHouseConfig = (config: FloorPlan.HouseConfig): FloorPlan.HouseConfig => {
+  const rooms = (config.rooms ?? []).map(normalizeRoom);
+  return {
+    ...config,
+    id: config.id || `house-${Date.now()}`,
+    name: config.name || '我的房屋',
+    totalArea: computeTotalArea(rooms),
+    rooms,
+    scale: config.scale ?? 1,
+    gridSize: config.gridSize ?? 50,
+    showGrid: config.showGrid ?? true,
+    showDimensions: config.showDimensions ?? true,
+    showFurniture: config.showFurniture ?? true
+  };
+};
 
 const createDefaultHouseConfig = (): FloorPlan.HouseConfig =>
   normalizeHouseConfig({
@@ -116,13 +137,33 @@ const cloneConfig = (config: FloorPlan.HouseConfig): FloorPlan.HouseConfig => {
   }
 };
 
+// 删除元素时，若当前选中元素与之匹配则清空选中状态
+const clearSelectionIfMatch = (
+  current: Selection | null,
+  target: { originalType: Selection['originalType']; roomId: string; furnitureId?: string; doorId?: string; windowId?: string }
+): Selection | null => {
+  if (!current) return null;
+  if (current.originalType !== target.originalType) {
+    // 删除房间时，房间内的家具/门/窗选中也要清空
+    if (target.originalType === 'room' && current.roomId === target.roomId) return null;
+    return current;
+  }
+  if (current.roomId !== target.roomId) return current;
+  if (target.originalType === 'furniture' && current.furnitureId === target.furnitureId) return null;
+  if (target.originalType === 'door' && current.doorId === target.doorId) return null;
+  if (target.originalType === 'window' && current.windowId === target.windowId) return null;
+  if (target.originalType === 'room') return null;
+  return current;
+};
+
 export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
   // 初始状态
   houseConfig: defaultHouseConfig,
   previewMode: false,
+  selectedElement: null,
 
   setHouseConfig: (config) => {
-    set(() => ({ houseConfig: normalizeHouseConfig(config) }));
+    set(() => ({ houseConfig: normalizeHouseConfig(config), selectedElement: null }));
   },
 
   // 更新房屋配置
@@ -134,24 +175,32 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
 
   // 添加房间
   addRoom: (room) => {
-    set((state) => ({
-      houseConfig: {
-        ...state.houseConfig,
-        rooms: [...state.houseConfig.rooms, normalizeRoom(room)]
-      }
-    }));
+    set((state) => {
+      const rooms = [...state.houseConfig.rooms, normalizeRoom(room)];
+      return {
+        houseConfig: {
+          ...state.houseConfig,
+          rooms,
+          totalArea: computeTotalArea(rooms)
+        }
+      };
+    });
   },
 
   // 更新房间
   updateRoom: (roomId, updates) => {
-    set((state) => ({
-      houseConfig: {
-        ...state.houseConfig,
-        rooms: state.houseConfig.rooms.map(room =>
-          room.id === roomId ? normalizeRoom({ ...room, ...updates }) : room
-        )
-      }
-    }));
+    set((state) => {
+      const rooms = state.houseConfig.rooms.map(room =>
+        room.id === roomId ? normalizeRoom({ ...room, ...updates }) : room
+      );
+      return {
+        houseConfig: {
+          ...state.houseConfig,
+          rooms,
+          totalArea: computeTotalArea(rooms)
+        }
+      };
+    });
   },
 
   addFurniture: (roomId, furniture) => {
@@ -200,7 +249,8 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
             furniture: room.furniture.filter((f) => f.id !== furnitureId)
           };
         })
-      }
+      },
+      selectedElement: clearSelectionIfMatch(state.selectedElement, { originalType: 'furniture', roomId, furnitureId })
     }));
   },
 
@@ -245,7 +295,8 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
             doors: room.doors.filter((d) => d.id !== doorId)
           };
         })
-      }
+      },
+      selectedElement: clearSelectionIfMatch(state.selectedElement, { originalType: 'door', roomId, doorId })
     }));
   },
 
@@ -290,7 +341,8 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
             windows: room.windows.filter((w) => w.id !== windowId)
           };
         })
-      }
+      },
+      selectedElement: clearSelectionIfMatch(state.selectedElement, { originalType: 'window', roomId, windowId })
     }));
   },
 
@@ -308,17 +360,22 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
         furniture: r.furniture.map((f, jdx) => ({ ...f, id: `furniture-${timestamp}-${idx}-${jdx}` }))
       }))
     };
-    set(() => ({ houseConfig: normalizeHouseConfig(withNewIds) }));
+    set(() => ({ houseConfig: normalizeHouseConfig(withNewIds), selectedElement: null }));
   },
 
   // 删除房间
   deleteRoom: (roomId) => {
-    set((state) => ({
-      houseConfig: {
-        ...state.houseConfig,
-        rooms: state.houseConfig.rooms.filter(room => room.id !== roomId)
-      }
-    }));
+    set((state) => {
+      const rooms = state.houseConfig.rooms.filter(room => room.id !== roomId);
+      return {
+        houseConfig: {
+          ...state.houseConfig,
+          rooms,
+          totalArea: computeTotalArea(rooms)
+        },
+        selectedElement: clearSelectionIfMatch(state.selectedElement, { originalType: 'room', roomId })
+      };
+    });
   },
 
   // 切换预览模式
@@ -330,7 +387,12 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
   resetConfig: () => {
     set({
       houseConfig: createDefaultHouseConfig(),
-      previewMode: false
+      previewMode: false,
+      selectedElement: null
     });
+  },
+
+  setSelectedElement: (sel) => {
+    set(() => ({ selectedElement: sel }));
   }
 }));

@@ -1,6 +1,6 @@
 .color-calculator {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: var(--et-bg-page);
 
   &__content {
     padding: 24px;
@@ -34,7 +34,7 @@
     width: 60px;
     height: 60px;
     border-radius: 8px;
-    border: 2px solid #d9d9d9;
+    border: 2px solid var(--et-border-strong);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
@@ -43,7 +43,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--et-border);
 
     &:last-child {
       border-bottom: none;
@@ -70,7 +70,7 @@
     gap: 12px;
     justify-content: center;
     padding: 16px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 8px;
   }
 
@@ -80,7 +80,7 @@
       justify-content: space-between;
       align-items: center;
       padding: 12px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--et-border);
 
       &:last-child {
         border-bottom: none;
@@ -117,7 +117,7 @@
       width: 48px;
       height: 48px;
       border-radius: 8px;
-      border: 2px solid #d9d9d9;
+      border: 2px solid var(--et-border-strong);
       cursor: pointer;
       transition: all 0.3s ease;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -152,6 +152,21 @@
     .contrast-ratio {
       flex-direction: column;
       gap: 8px;
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  // —— box-shadow ——
+  .color-info-card .color-preview {
+    box-shadow: var(--et-shadow-md);
+  }
+
+  .harmonies-card .color-swatch {
+    box-shadow: var(--et-shadow-sm);
+
+    &:hover {
+      box-shadow: var(--et-shadow-lg);
     }
   }
 }

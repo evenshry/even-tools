@@ -9,7 +9,7 @@
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #fff;
+  background: var(--et-bg-card);
   border: 1px solid #1890ff;
   border-radius: 2px;
   pointer-events: auto;
@@ -97,5 +97,24 @@
   // 流布局 'e' 手柄 hover
   &--flow:hover {
     transform: translateY(-50%) scale(1.2);
+  }
+}
+
+:root[data-theme="dark"] {
+  .resize-handle {
+    border-color: var(--et-info);
+
+    &--flow {
+      background: var(--et-info);
+    }
+
+    &:hover {
+      background: var(--et-info);
+    }
+  }
+
+  // —— box-shadow ——
+  .resize-handle {
+    box-shadow: 0 0 2px rgba(96, 165, 250, 0.6);
   }
 }

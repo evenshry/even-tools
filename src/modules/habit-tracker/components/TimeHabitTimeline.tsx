@@ -4,6 +4,8 @@ import { CheckOutlined, CloseOutlined, ClockCircleOutlined } from "@ant-design/i
 import dayjs from "dayjs";
 import { dbManager } from "@/modules/habit-tracker/utils/indexedDB";
 import { generateId, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 import "@/modules/habit-tracker/components/TimeHabitTimeline.scss";
 
 const { Title, Text } = Typography;
@@ -14,6 +16,7 @@ interface TimeHabitTimelineProps {
 }
 
 const TimeHabitTimeline: React.FC<TimeHabitTimelineProps> = ({ habit, onRecordChange }) => {
+  const mode = useThemeStore((s) => s.mode);
   const [todayRecords, setTodayRecords] = useState<HabitTracker.TimeHabitRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -275,7 +278,7 @@ const TimeHabitTimeline: React.FC<TimeHabitTimelineProps> = ({ habit, onRecordCh
             {record && (
               <div className="time-habit-timeline__info-item">
                 <Text type="secondary">完成时间：</Text>
-                <Text strong style={{ color: "#52c41a" }}>
+                <Text strong style={{ color: semanticColors.success[mode] }}>
                   {dayjs(record.completedAt).format("YYYY-MM-DD HH:mm")}
                 </Text>
               </div>

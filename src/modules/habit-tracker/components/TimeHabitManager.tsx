@@ -5,6 +5,8 @@ import dayjs from "dayjs";
 import { dbManager } from "@/modules/habit-tracker/utils/indexedDB";
 import { generateId, getRandomColor } from "@/modules/habit-tracker/utils/dateUtils";
 import { habitTemplates, type HabitTemplate } from "@/modules/habit-tracker/data/habitTemplates";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 import "@/modules/habit-tracker/components/TimeHabitManager.scss";
 
 const { Title, Text } = Typography;
@@ -18,6 +20,7 @@ interface TimeHabitManagerProps {
 }
 
 const TimeHabitManager: React.FC<TimeHabitManagerProps> = ({ timeHabits, selectedTimeHabitId, onTimeHabitsChange, onTimeHabitSelect }) => {
+  const mode = useThemeStore((s) => s.mode);
   const [form] = Form.useForm();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false);
@@ -270,7 +273,7 @@ const TimeHabitManager: React.FC<TimeHabitManagerProps> = ({ timeHabits, selecte
 
       {timeHabits.length === 0 && (
         <div className="time-habit-manager__empty">
-          <ClockCircleOutlined style={{ fontSize: 48, color: "#d9d9d9", marginBottom: 16 }} />
+          <ClockCircleOutlined style={{ fontSize: 48, color: semanticColors.grayd9[mode], marginBottom: 16 }} />
           <Text type="secondary" style={{ fontSize: 16 }}>
             还没有时段习惯，点击上方按钮添加一个吧！
           </Text>

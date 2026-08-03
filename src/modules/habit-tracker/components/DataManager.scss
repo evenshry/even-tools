@@ -2,7 +2,7 @@
   &__header {
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--et-border);
   }
 
   &__actions {
@@ -11,6 +11,6 @@
 
   &__info {
     padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--et-border);
   }
 }

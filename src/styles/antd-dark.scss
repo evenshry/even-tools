@@ -1,0 +1,263 @@
+// ============================================================
+// AntD 暗色模式补全
+// ConfigProvider 走了 darkAlgorithm，但部分自定义组件 / 亮色遗留属性
+// 仍需手动覆盖；本文件只作用于 :root[data-theme="dark"]
+// ============================================================
+:root[data-theme="dark"] {
+
+  // —— 通用组件基调补全 ——
+  .ant-card {
+    background: var(--et-bg-card);
+    border-color: var(--et-border);
+
+    .ant-card-head {
+      border-bottom-color: var(--et-border);
+      color: var(--et-ink);
+    }
+    .ant-card-head-title { color: var(--et-ink); }
+    .ant-card-body { color: var(--et-ink-2); }
+  }
+
+  .ant-input,
+  .ant-input-number,
+  .ant-select-selector,
+  .ant-picker {
+    background: var(--et-bg-card);
+    color: var(--et-ink);
+    border-color: var(--et-border);
+
+    input, textarea {
+      background: transparent;
+      color: var(--et-ink);
+    }
+
+    .ant-select-selection-item,
+    .ant-select-selection-placeholder {
+      color: var(--et-ink);
+    }
+  }
+
+  // TextArea 单独覆盖：Input.TextArea 渲染为 <textarea class="ant-input">
+  // dark algorithm 有时不能完全覆盖 textarea 的默认背景
+  textarea.ant-input,
+  .ant-input-outlined > textarea,
+  .ant-input-affix-wrapper > textarea {
+    background: var(--et-bg-card);
+    color: var(--et-ink);
+    border-color: var(--et-border);
+
+    &:hover { border-color: var(--et-brand); }
+    &:focus { border-color: var(--et-brand); box-shadow: 0 0 0 2px var(--et-brand-soft); }
+    &::placeholder { color: var(--et-ink-3); }
+  }
+
+  .ant-input-affix-wrapper {
+    background: var(--et-bg-card);
+    border-color: var(--et-border);
+    color: var(--et-ink);
+
+    &:hover, &:focus, &-focused { border-color: var(--et-brand); }
+  }
+
+  .ant-input::placeholder,
+  .ant-input textarea::placeholder,
+  textarea.ant-input::placeholder,
+  .ant-select-selection-placeholder {
+    color: var(--et-ink-3) !important;
+  }
+
+  .ant-tabs {
+    .ant-tabs-nav {
+      &::before { border-bottom-color: var(--et-border); }
+    }
+    .ant-tabs-tab {
+      color: var(--et-ink-2);
+      &-active { color: var(--et-brand); }
+      &-btn { color: var(--et-ink-3); }
+    }
+    .ant-tabs-ink-bar { background: var(--et-brand); }
+  }
+
+  .ant-tag {
+    color: var(--et-ink);
+    background: var(--et-bg-subtle);
+    border-color: var(--et-border);
+
+    &-success {
+      color: var(--et-success);
+      background: var(--et-success-soft);
+      border-color: var(--et-success);
+    }
+    &-warning {
+      color: var(--et-warning);
+      background: var(--et-warning-soft);
+      border-color: var(--et-warning);
+    }
+    &-error {
+      color: var(--et-error);
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
+    }
+    &-processing {
+      color: var(--et-info);
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
+    }
+    &-blue {
+      color: var(--et-info);
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
+    }
+    &-green {
+      color: var(--et-success);
+      background: var(--et-success-soft);
+      border-color: var(--et-success);
+    }
+    &-red {
+      color: var(--et-error);
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
+    }
+    &-orange {
+      color: var(--et-warning);
+      background: var(--et-warning-soft);
+      border-color: var(--et-warning);
+    }
+  }
+
+  .ant-btn {
+    &.ant-btn-default {
+      background: var(--et-bg-card);
+      border-color: var(--et-border-strong);
+      color: var(--et-ink);
+      &:hover {
+        color: var(--et-brand);
+        border-color: var(--et-brand);
+      }
+    }
+    &.ant-btn-dashed {
+      background: transparent;
+      border-color: var(--et-border-strong);
+      color: var(--et-ink-2);
+    }
+    &.ant-btn-link { color: var(--et-brand); }
+  }
+
+  .ant-divider {
+    border-color: var(--et-border);
+    color: var(--et-ink-2);
+  }
+
+  .ant-dropdown-menu,
+  .ant-select-dropdown,
+  .ant-picker-dropdown,
+  .ant-popover-inner,
+  .ant-dropdown-menu-submenu,
+  .ant-cascader-menu,
+  .ant-menu {
+    background: var(--et-bg-elevated);
+  }
+
+  .ant-popover {
+    .ant-popover-inner-content { color: var(--et-ink); }
+    .ant-popover-arrow::before { background: var(--et-bg-elevated); }
+  }
+
+  .ant-modal {
+    .ant-modal-content,
+    .ant-modal-header,
+    .ant-modal-body {
+      background: var(--et-bg-card);
+      color: var(--et-ink);
+    }
+    .ant-modal-header { border-bottom-color: var(--et-border); }
+    .ant-modal-footer { border-top-color: var(--et-border); }
+    .ant-modal-title,
+    .ant-modal-close { color: var(--et-ink); }
+  }
+
+  .ant-drawer {
+    .ant-drawer-content,
+    .ant-drawer-header,
+    .ant-drawer-body {
+      background: var(--et-bg-card);
+      color: var(--et-ink);
+    }
+    .ant-drawer-header { border-bottom-color: var(--et-border); }
+    .ant-drawer-title,
+    .ant-drawer-close { color: var(--et-ink); }
+  }
+
+  .ant-table {
+    background: var(--et-bg-card);
+    color: var(--et-ink);
+    th, td { border-color: var(--et-border) !important; }
+    th { background: var(--et-bg-subtle) !important; color: var(--et-ink) !important; }
+    tr:hover > td { background: var(--et-bg-subtle) !important; }
+  }
+
+  .ant-list {
+    .ant-list-item { border-block-end-color: var(--et-border); }
+  }
+
+  .ant-collapse {
+    background: var(--et-bg-card);
+    border-color: var(--et-border);
+    .ant-collapse-item { border-color: var(--et-border); }
+    .ant-collapse-header { color: var(--et-ink); }
+    .ant-collapse-content {
+      background: var(--et-bg-card);
+      border-top-color: var(--et-border);
+      color: var(--et-ink-2);
+    }
+  }
+
+  .ant-statistic-content { color: var(--et-ink); }
+
+  .ant-breadcrumb-link,
+  .ant-breadcrumb-separator { color: var(--et-ink-3); }
+
+  .ant-result { color: var(--et-ink-2); }
+  .ant-empty-description { color: var(--et-ink-3); }
+
+  .ant-segmented {
+    background: var(--et-bg-subtle);
+    &-item {
+      color: var(--et-ink-2);
+      &-selected {
+        background: var(--et-bg-card);
+        color: var(--et-brand);
+      }
+    }
+  }
+
+  .ant-tree {
+    background: transparent;
+    color: var(--et-ink-2);
+    .ant-tree-switcher { color: var(--et-ink-3); }
+    .ant-tree-treenode-selected > .ant-tree-node-content-wrapper {
+      background: var(--et-info-soft);
+    }
+    .ant-tree-node-content-wrapper:hover {
+      background: var(--et-bg-subtle);
+    }
+  }
+
+  // —— 代码展示 / 预格式化 ——
+  code, pre, samp, kbd {
+    color: var(--et-ink);
+  }
+
+  pre {
+    background: var(--et-bg-subtle);
+    border: 1px solid var(--et-border);
+  }
+
+  // —— 滚动条（可选，暗化）——
+  ::-webkit-scrollbar-thumb {
+    background-color: #3a3f47;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: #20242a;
+  }
+}

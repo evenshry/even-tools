@@ -49,11 +49,11 @@
     align-items: center;
     justify-content: center;
     padding: 12px 8px;
-    border: 2px solid #d9d9d9;
+    border: 2px solid var(--et-border-strong);
     border-radius: 8px;
     cursor: default;
     transition: all 0.2s;
-    background: #fff;
+    background: var(--et-bg-card);
     min-height: 120px;
 
     &--completed {
@@ -73,14 +73,14 @@
     }
 
     &--future {
-      background: #fafafa;
-      border-color: #d9d9d9;
+      background: var(--et-bg-subtle);
+      border-color: var(--et-border-strong);
       opacity: 0.6;
     }
 
     &--past {
-      background: #fafafa;
-      border-color: #d9d9d9;
+      background: var(--et-bg-subtle);
+      border-color: var(--et-border-strong);
     }
   }
 
@@ -146,14 +146,14 @@
     }
 
     &--disabled {
-      background: #f5f5f5;
-      border-color: #d9d9d9;
+      background: var(--et-bg-page);
+      border-color: var(--et-border-strong);
       color: #bfbfbf;
       cursor: not-allowed;
 
       &:hover {
-        background: #f5f5f5;
-        border-color: #d9d9d9;
+        background: var(--et-bg-page);
+        border-color: var(--et-border-strong);
         color: #bfbfbf;
         transform: none;
         box-shadow: none;
@@ -165,7 +165,7 @@
     display: flex;
     gap: 24px;
     padding-top: 16px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--et-border);
   }
 
   &__legend-item {
@@ -192,9 +192,9 @@
     &--future {
       width: 16px;
       height: 16px;
-      border: 2px solid #d9d9d9;
+      border: 2px solid var(--et-border-strong);
       border-radius: 50%;
-      background: #fafafa;
+      background: var(--et-bg-subtle);
     }
   }
 
@@ -204,5 +204,93 @@
     align-items: center;
     padding: 40px 20px;
     text-align: center;
+  }
+}
+
+:root[data-theme="dark"] {
+  .habit-calendar__day {
+    border-color: var(--et-border);
+
+    &--completed {
+      background: var(--et-success-soft);
+      border-color: var(--et-success);
+    }
+
+    &--missed {
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
+    }
+
+    &--today {
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
+    }
+
+    &--future {
+      border-color: var(--et-border);
+    }
+
+    &--past {
+      border-color: var(--et-border);
+    }
+  }
+
+  .habit-calendar__day-date {
+    color: var(--et-ink-3);
+  }
+
+  .habit-calendar__action-btn {
+    &--check {
+      background: var(--et-success);
+      border-color: var(--et-success);
+
+      &:hover {
+        background: var(--et-success);
+        border-color: var(--et-success);
+      }
+    }
+
+    &--cancel {
+      background: var(--et-error);
+      border-color: var(--et-error);
+
+      &:hover {
+        background: var(--et-error);
+        border-color: var(--et-error);
+      }
+    }
+
+    &--disabled {
+      border-color: var(--et-border);
+      color: var(--et-ink-3);
+
+      &:hover {
+        border-color: var(--et-border);
+        color: var(--et-ink-3);
+      }
+    }
+  }
+
+  .habit-calendar__legend-icon {
+    &--completed {
+      color: var(--et-success);
+    }
+
+    &--missed {
+      color: var(--et-error);
+    }
+
+    &--today {
+      color: var(--et-info);
+    }
+
+    &--future {
+      border-color: var(--et-border);
+    }
+  }
+
+  // —— box-shadow ——
+  .habit-calendar__action-btn:not(.habit-calendar__action-btn--disabled):hover {
+    box-shadow: var(--et-shadow-md);
   }
 }

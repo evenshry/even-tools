@@ -1,5 +1,7 @@
 import { Card, Typography, Tag, Space, Collapse, Steps, Button, message } from "antd";
 import { BulbOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -21,6 +23,7 @@ interface UseCase {
 }
 
 const RegexGuideExamples = () => {
+  const mode = useThemeStore((s) => s.mode);
   const useCases: UseCase[] = [
     {
       id: "email",
@@ -241,7 +244,7 @@ const RegexGuideExamples = () => {
                   <Text type="secondary" style={{ fontSize: 11 }}>
                     输出：
                   </Text>
-                  <Text style={{ fontSize: 11, marginLeft: 8, color: "#52c41a" }}>
+                  <Text style={{ fontSize: 11, marginLeft: 8, color: semanticColors.success[mode] }}>
                     {useCase.exampleOutput}
                   </Text>
                 </div>

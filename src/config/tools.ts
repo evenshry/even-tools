@@ -12,7 +12,7 @@ export interface Tool {
 export const tools: Tool[] = [
   {
     id: "regex-sandbox",
-    name: "正则表达式沙盒",
+    name: "正则表达式",
     description: "强大的正则表达式编辑器、测试器和库，支持实时匹配测试、测试用例管理、常用正则表达式库，帮助您快速编写和调试正则表达式",
     icon: "🔍",
     category: "开发工具",
@@ -28,7 +28,7 @@ export const tools: Tool[] = [
   },
   {
     id: "barcode-generator",
-    name: "条形码/二维码生成器",
+    name: "条形码/二维码",
     description: "支持多种条形码类型（CODE 128、EAN-13、UPC、CODE 39等）和二维码生成，支持自定义颜色、尺寸、容错级别，支持批量生成和多格式图片下载",
     icon: "🏷️",
     category: "开发工具",
@@ -36,7 +36,7 @@ export const tools: Tool[] = [
   },
   {
     id: "json-toolkit",
-    name: "JSON 工具箱",
+    name: "JSON工具箱",
     description: "JSON 格式化、压缩、校验、可视化树、统计分析、JSONPath 路径查询，以及与 YAML、CSV、TSV、XML、Properties 之间的相互转换，支持字符串转义/反转义",
     icon: "🧬",
     category: "开发工具",
@@ -52,7 +52,7 @@ export const tools: Tool[] = [
   },
   {
     id: "visual-page-builder",
-    name: "视觉页面构建器",
+    name: "视觉页面构建",
     description: "通过拖拽和配置生成页面的可视化编程工具，支持所见即所得的实时预览，提供丰富的组件库和样式编辑功能",
     icon: "🎨",
     category: "设计工具",
@@ -60,7 +60,7 @@ export const tools: Tool[] = [
   },
   {
     id: "floor-plan-generator",
-    name: "房屋平面设计图生成器",
+    name: "房屋平面设计",
     description: "根据配置参数生成专业的房屋平面设计图，支持房间布局、门窗设置、家具摆放等功能",
     icon: "🏠",
     category: "设计工具",
@@ -76,7 +76,7 @@ export const tools: Tool[] = [
   },
   {
     id: "habit-tracker",
-    name: "习惯追踪器",
+    name: "习惯追踪",
     description: "帮助您建立和坚持好习惯，追踪每日进度，可视化展示完成情况",
     icon: "📅",
     category: "生活工具",

@@ -26,3 +26,14 @@
     width: 1px;
   }
 }
+
+:root[data-theme="dark"] {
+  .alignment-guide {
+    background-color: var(--et-brand);
+  }
+
+  // —— box-shadow ——
+  .alignment-guide {
+    box-shadow: 0 0 1px rgba(242, 89, 98, 0.7);
+  }
+}

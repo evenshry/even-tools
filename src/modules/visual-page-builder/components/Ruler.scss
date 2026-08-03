@@ -1,0 +1,47 @@
+// 标尺样式
+.ruler-corner {
+  grid-column: 1;
+  grid-row: 1;
+  width: 18px;
+  height: 18px;
+  background: var(--et-bg-subtle);
+  border-right: 1px solid var(--et-border-strong);
+  border-bottom: 1px solid var(--et-border-strong);
+  z-index: 6;
+}
+
+.ruler-top-wrapper {
+  grid-column: 2;
+  grid-row: 1;
+  height: 18px;
+  overflow: hidden;
+  background: var(--et-bg-subtle);
+  border-bottom: 1px solid var(--et-border-strong);
+  z-index: 6;
+
+  .ruler-svg-top {
+    display: block;
+    pointer-events: none;
+  }
+}
+
+.ruler-left-wrapper {
+  grid-column: 1;
+  grid-row: 2;
+  width: 18px;
+  overflow: hidden;
+  background: var(--et-bg-subtle);
+  border-right: 1px solid var(--et-border-strong);
+  z-index: 6;
+
+  .ruler-svg-left {
+    display: block;
+    pointer-events: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  .ruler-corner {
+    background: var(--et-bg-subtle);
+  }
+}

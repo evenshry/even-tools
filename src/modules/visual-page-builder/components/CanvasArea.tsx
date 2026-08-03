@@ -4,6 +4,7 @@ import { useDragManager } from '../hooks/useDragManager';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import CanvasNode from './CanvasNode';
 import AlignmentGuides from './AlignmentGuides';
+import Ruler from './Ruler';
 import './CanvasArea.scss';
 
 const CanvasArea: React.FC = () => {
@@ -62,7 +63,7 @@ const CanvasArea: React.FC = () => {
           <button
             className={`toolbar-btn ${alignmentGuidesVisible ? "active" : ""}`}
             onClick={toggleAlignmentGuides}
-            title="切换对齐参考线"
+            title="切换标尺与对齐参考线"
           >
             📏
           </button>
@@ -83,45 +84,50 @@ const CanvasArea: React.FC = () => {
         </div>
       </div>
 
-      {/* 画布容器 */}
-      <div
-        ref={setCanvasRef}
-        className={`canvas-container ${dragManager.isOver ? (dragManager.canDrop ? "drag-over-valid" : "drag-over-invalid") : ""}`}
-        onClick={() => {
-          useCanvasStore.getState().selectNode(null);
-        }}
-      >
-        {/* 网格背景 */}
-        {gridVisible && (
-          <div
-            className="grid-background"
-            style={{
-              backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-            }}
-          />
-        )}
+      {/* 标尺 + 画布 grid 布局（标尺开关时切换布局） */}
+      <div className={`canvas-body ${alignmentGuidesVisible ? 'with-ruler' : ''}`}>
+        {/* 标尺组件返回 corner + top + left 三个 grid 子元素 */}
+        <Ruler zoom={zoom} />
+        {/* 画布容器（grid 2,2 位置，由 CSS 自动定位） */}
+        <div
+          ref={setCanvasRef}
+          className={`canvas-container ${dragManager.isOver ? (dragManager.canDrop ? "drag-over-valid" : "drag-over-invalid") : ""}`}
+          onClick={() => {
+            useCanvasStore.getState().selectNode(null);
+          }}
+        >
+          {/* 网格背景 */}
+          {gridVisible && (
+            <div
+              className="grid-background"
+              style={{
+                backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+              }}
+            />
+          )}
 
-        {/* 节点树（缩放放在容器上，子节点不再单独 transform） */}
-        {rootNodes.length > 0 ? (
-          <div className="node-tree" style={nodeTreeStyle}>
-            {rootNodes.map((node) => (
-              <CanvasNode key={node.id} nodeId={node.id} zoom={zoom} dragManager={dragManager} />
-            ))}
-            {/* 对齐参考线 overlay（画布坐标系，跟随 .node-tree 的 scale） */}
-            <AlignmentGuides />
-          </div>
-        ) : (
-          <div className="empty-canvas">
-            <div className="empty-content">
-              <div className="empty-icon">🎨</div>
-              <h3>拖拽组件开始设计</h3>
-              <p>从左侧面板拖拽组件到画布</p>
+          {/* 节点树（缩放放在容器上，子节点不再单独 transform） */}
+          {rootNodes.length > 0 ? (
+            <div className="node-tree" style={nodeTreeStyle}>
+              {rootNodes.map((node) => (
+                <CanvasNode key={node.id} nodeId={node.id} zoom={zoom} dragManager={dragManager} />
+              ))}
+              {/* 对齐参考线 overlay（画布坐标系，跟随 .node-tree 的 scale） */}
+              <AlignmentGuides />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="empty-canvas">
+              <div className="empty-content">
+                <div className="empty-icon">🎨</div>
+                <h3>拖拽组件开始设计</h3>
+                <p>从左侧面板拖拽组件到画布</p>
+              </div>
+            </div>
+          )}
 
-        {/* 拖拽提示 */}
-        {dragManager.isOver && <div className={`drag-hint ${dragManager.canDrop ? "valid" : "invalid"}`}>{dragManager.canDrop ? "释放以添加组件" : "无法在此处放置"}</div>}
+          {/* 拖拽提示 */}
+          {dragManager.isOver && <div className={`drag-hint ${dragManager.canDrop ? "valid" : "invalid"}`}>{dragManager.canDrop ? "释放以添加组件" : "无法在此处放置"}</div>}
+        </div>
       </div>
     </div>
   );

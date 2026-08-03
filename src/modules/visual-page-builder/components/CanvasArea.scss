@@ -14,10 +14,11 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #fff;
+  background: var(--et-bg-card);
   border-bottom: 1px solid #e9ecef;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   z-index: 10;
+  flex-shrink: 0;
 
   .toolbar-group {
     display: flex;
@@ -28,7 +29,7 @@
   .toolbar-btn {
     padding: 6px 12px;
     border: 1px solid #dee2e6;
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
@@ -53,14 +54,42 @@
   }
 }
 
+// 画布主体（标尺 + 画布容器）
+.canvas-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+
+  // 无标尺时：canvas-container 直接填满
+  &:not(.with-ruler) {
+    .canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+  }
+
+  // 有标尺时：grid 布局，标尺占第 1 行/列，canvas-container 占第 2 行/列
+  &.with-ruler {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    grid-template-rows: 18px 1fr;
+
+    .canvas-container {
+      grid-column: 2;
+      grid-row: 2;
+    }
+  }
+}
+
 // 画布容器
 .canvas-container {
-  flex: 1;
   position: relative;
-  overflow-y: auto;
-  background: #fff;
+  overflow: auto;
+  background: var(--et-bg-card);
   transition: all 0.2s;
-  height: calc(100% - 58px); // 减去工具栏高度
   padding: 16px;
   z-index: 1;
   pointer-events: auto;
@@ -127,67 +156,68 @@
 // 画布节点
 .canvas-node {
   border: 2px solid transparent;
-  transition: all 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 
   // 可拖动节点（绝对定位和固定定位）
   &.draggable {
-    position: absolute;
     cursor: move;
 
     &:hover {
-      border-color: #007bff;
+      border-color: #40a9ff;
+      box-shadow: 0 0 0 1px rgba(24, 144, 255, 0.3);
     }
 
     &.selected {
-      border-color: #007bff;
-      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      border-color: #1890ff !important;
+      border-width: 2px;
+      box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.35), 0 2px 8px rgba(24, 144, 255, 0.2);
+      background-color: rgba(24, 144, 255, 0.04);
     }
 
-    // 悬停状态（可以接受子节点）
     &.hovered {
-      border-color: #28a745;
-      box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
-      background-color: rgba(40, 167, 69, 0.05);
+      border-color: #52c41a;
+      box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.35);
+      background-color: rgba(82, 196, 26, 0.06);
     }
   }
 
   // 流布局节点（静态定位和相对定位）
   &.flow-layout {
-    position: static;
     cursor: default;
     margin-bottom: 10px;
 
     &:hover {
-      border-color: #6c757d;
+      border-color: #40a9ff;
+      box-shadow: 0 0 0 1px rgba(24, 144, 255, 0.3);
     }
 
     &.selected {
-      border-color: #6c757d;
-      box-shadow: 0 0 0 2px rgba(108, 117, 125, 0.25);
+      border-color: #1890ff !important;
+      border-width: 2px;
+      box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.35), 0 2px 8px rgba(24, 144, 255, 0.2);
+      background-color: rgba(24, 144, 255, 0.04);
     }
 
-    // 悬停状态（可以接受子节点）
     &.hovered {
-      border-color: #28a745;
-      box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
-      background-color: rgba(40, 167, 69, 0.05);
+      border-color: #52c41a;
+      box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.35);
+      background-color: rgba(82, 196, 26, 0.06);
     }
   }
 
-  // 拖拽目标状态（可以接受当前拖拽的组件）
+  // 拖拽目标状态
   &.drag-target {
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5) !important;
-    background-color: rgba(0, 123, 255, 0.05) !important;
+    border-color: #1890ff !important;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.5) !important;
+    background-color: rgba(24, 144, 255, 0.08) !important;
 
-    // 添加放置提示文字
     &::after {
       content: '可以放置到这里';
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: #007bff;
+      background: #1890ff;
       color: white;
       padding: 6px 12px;
       border-radius: 4px;
@@ -195,141 +225,41 @@
       font-weight: 500;
       z-index: 1000;
       pointer-events: none;
-      opacity: 0.9;
+      opacity: 0.95;
       animation: fadeInOut 2s infinite;
-    }
-  }
-
-  // 拖拽目标但不可放置状态
-  &.drag-target-invalid {
-    border-color: #dc3545 !important;
-    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3) !important;
-    background-color: rgba(220, 53, 69, 0.05) !important;
-
-    &::after {
-      content: '不能放置到这里';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #dc3545;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      z-index: 1000;
-      pointer-events: none;
-      opacity: 0.9;
     }
   }
 
   // 拖拽中状态
   &.dragging {
-    opacity: 0.6;
+    opacity: 0.5;
   }
 
-  // 节点内容
-  .node-content {
-    padding: 8px;
-    min-height: 40px;
-    min-width: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
+  // 空容器提示文字
+  .empty-hint {
+    display: block;
+    text-align: center;
+    color: #adb5bd;
+    font-size: 12px;
+    padding: 12px 8px;
+    font-style: italic;
+    pointer-events: none;
   }
 
-  // 不同类型节点的占位样式
-  .image-placeholder,
-  .div-placeholder,
-  .page-placeholder,
-  .section-placeholder,
-  .container-placeholder,
-  .flex-placeholder,
-  .grid-placeholder {
+  // 空图片/视频/图标提示
+  .image-empty-hint {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 4px;
     color: #6c757d;
     font-size: 12px;
-  }
-
-  // 选择框（含缩放手柄）
-  .selection-box {
-    position: absolute;
-    top: -4px;
-    left: -4px;
-    right: -4px;
-    bottom: -4px;
-    border: 2px solid #007bff;
-    pointer-events: none;
-
-    .resize-handle {
-      position: absolute;
-      width: 8px;
-      height: 8px;
-      background: #007bff;
-      border-radius: 50%;
-
-      &.top-left {
-        top: -4px;
-        left: -4px;
-      }
-
-      &.top-right {
-        top: -4px;
-        right: -4px;
-      }
-
-      &.bottom-left {
-        bottom: -4px;
-        left: -4px;
-      }
-
-      &.bottom-right {
-        bottom: -4px;
-        right: -4px;
-      }
-    }
-  }
-
-  // 子节点容器（绝对定位场景，覆盖在父节点上）
-  .node-children {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-
-    // 子节点本身需要能够接收鼠标事件
-    .canvas-node {
-      pointer-events: auto;
-    }
-  }
-
-  // 流布局的子节点容器
-  .flow-children {
-    width: 100%;
-    min-height: 40px;
-    padding: 8px;
-    background: rgba(0, 123, 255, 0.05);
-    border: 1px dashed #007bff;
+    padding: 16px;
+    background: #f8f9fa;
+    border: 1px dashed #dee2e6;
     border-radius: 4px;
-    margin-top: 8px;
-
-    .canvas-node {
-      margin-bottom: 8px;
-      pointer-events: auto;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
+    pointer-events: none;
   }
 }
 
@@ -372,6 +302,131 @@
     p {
       margin: 0;
       font-size: 14px;
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  .canvas-area {
+    background: var(--et-bg-subtle);
+  }
+
+  .canvas-toolbar {
+    .toolbar-btn {
+      &:hover {
+        background: var(--et-bg-subtle);
+        border-color: var(--et-border);
+      }
+
+      &.active {
+        background: var(--et-info);
+        border-color: var(--et-info);
+      }
+    }
+
+    .zoom-info {
+      color: var(--et-ink-3);
+    }
+  }
+
+  .canvas-container {
+    &.drag-over-valid {
+      background: rgba(22, 163, 74, 0.1);
+      border: 2px dashed var(--et-success);
+    }
+
+    &.drag-over-invalid {
+      background: rgba(220, 38, 62, 0.1);
+      border: 2px dashed var(--et-error);
+    }
+  }
+
+  .drag-hint {
+    &.valid {
+      background: var(--et-success);
+    }
+
+    &.invalid {
+      background: var(--et-error);
+    }
+  }
+
+  .canvas-node {
+    .empty-hint {
+      color: var(--et-ink-3);
+    }
+
+    .image-empty-hint {
+      color: var(--et-ink-3);
+      background: var(--et-bg-subtle);
+      border-color: var(--et-border);
+    }
+
+    &.draggable,
+    &.flow-layout {
+      &:hover {
+        border-color: var(--et-info);
+      }
+
+      &.selected {
+        border-color: var(--et-info) !important;
+      }
+
+      &.hovered {
+        border-color: var(--et-success);
+      }
+    }
+
+    &.drag-target {
+      border-color: var(--et-info) !important;
+
+      &::after {
+        background: var(--et-info);
+      }
+    }
+  }
+
+  .empty-canvas {
+    color: var(--et-ink-3);
+
+    .empty-content h3 {
+      color: var(--et-ink-2);
+    }
+  }
+
+  // —— box-shadow ——
+  .canvas-toolbar {
+    box-shadow: var(--et-shadow-md);
+  }
+
+  .drag-hint {
+    &.valid {
+      box-shadow: 0 4px 12px rgba(52, 211, 153, 0.45);
+    }
+
+    &.invalid {
+      box-shadow: 0 4px 12px rgba(248, 113, 113, 0.5);
+    }
+  }
+
+  .canvas-node {
+    &.draggable:hover,
+    &.flow-layout:hover {
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.5);
+    }
+
+    &.draggable.selected,
+    &.flow-layout.selected {
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.55), 0 2px 8px rgba(96, 165, 250, 0.35);
+    }
+
+    &.draggable.hovered,
+    &.flow-layout.hovered {
+      box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.55);
+    }
+
+    &.drag-target {
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.7) !important;
     }
   }
 }

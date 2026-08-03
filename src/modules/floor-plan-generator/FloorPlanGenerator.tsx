@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Layout, Button, Tooltip, Modal, message, Dropdown } from "antd";
 import { EyeOutlined, ExportOutlined, ImportOutlined, ReloadOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
@@ -7,20 +7,19 @@ import CanvasArea from "./components/CanvasArea";
 import PropertyPanel from "./components/PropertyPanel";
 import { useFloorPlanStore } from "./store/useFloorPlanStore";
 import { ExportUtils } from "./utils/exportUtils";
+import { validateHouseConfig } from "./utils/validateConfig";
 import "./FloorPlanGenerator.scss";
 
 const { Content } = Layout;
 
 const FloorPlanGenerator: React.FC = () => {
-  const { 
-    previewMode, 
-    togglePreview, 
-    houseConfig, 
+  const {
+    previewMode,
+    togglePreview,
+    houseConfig,
     resetConfig,
     setHouseConfig
   } = useFloorPlanStore();
-  
-  const [selectedElement, setSelectedElement] = useState<Record<string, any> | null>(null);
 
   // 渲染编辑模式
   const renderEditMode = () => (
@@ -29,13 +28,10 @@ const FloorPlanGenerator: React.FC = () => {
         <ComponentPanel />
       </div>
       <div className="canvas-area-container">
-        <CanvasArea 
-          previewMode={false} 
-          onElementSelect={setSelectedElement}
-        />
+        <CanvasArea previewMode={false} />
       </div>
       <div className="property-panel-container">
-        <PropertyPanel selectedElement={selectedElement} />
+        <PropertyPanel />
       </div>
     </div>
   );
@@ -98,10 +94,15 @@ const FloorPlanGenerator: React.FC = () => {
         reader.onload = (event) => {
           try {
             const content = event.target?.result as string;
-            const config = JSON.parse(content) as FloorPlan.HouseConfig;
-            setHouseConfig(config);
+            const parsed = JSON.parse(content);
+            const result = validateHouseConfig(parsed);
+            if (!result.valid) {
+              message.error(`导入失败：${result.error}`);
+              return;
+            }
+            setHouseConfig(parsed as FloorPlan.HouseConfig);
             message.success('配置导入成功');
-          } catch (error) {
+          } catch {
             message.error('导入失败：文件格式错误');
           }
         };

@@ -1,10 +1,10 @@
 .habit-tracker {
   min-height: 100vh;
-  background: #f0f2f5;
+  background: var(--et-bg-page);
 }
 
 .habit-tracker__sider {
-  background-color: #fff;
+  background-color: var(--et-bg-card);
   padding: 0 20px;
   overflow: auto;
   height: calc(100vh - 64px);
@@ -13,7 +13,7 @@
 .habit-tracker__main {
   display: flex;
   flex-direction: column;
-  background: #f0f2f5;
+  background: var(--et-bg-page);
 }
 
 .habit-tracker__content {
@@ -39,8 +39,8 @@
 }
 
 .habit-tracker__data-manager {
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: var(--et-bg-card);
+  border-top: 1px solid var(--et-border);
   padding: 16px 24px;
   border-radius: 8px;
 }
@@ -52,4 +52,10 @@
   height: 100%;
   color: #8c8c8c;
   font-size: 16px;
+}
+
+:root[data-theme="dark"] {
+  .habit-tracker__empty {
+    color: var(--et-ink-3);
+  }
 }

@@ -1,130 +1,169 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, InputNumber, Button, ColorPicker, Divider, Space, Empty } from 'antd';
+import React, { useEffect, useRef } from 'react';
+import { Card, Form, Input, Select, InputNumber, Button, ColorPicker, Divider, Space, Empty, Switch } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useFloorPlanStore } from '../store/useFloorPlanStore';
 
 const { Option } = Select;
 
-interface PropertyPanelProps {
-  selectedElement?: any;
-}
+// 模块级常量选项（组件内不变化，避免每次渲染重建新数组/对象引用）
+const ROOM_TYPE_OPTIONS: { value: FloorPlan.RoomType; label: string }[] = [
+  { value: 'living', label: '客厅' },
+  { value: 'bedroom', label: '卧室' },
+  { value: 'kitchen', label: '厨房' },
+  { value: 'bathroom', label: '卫生间' },
+  { value: 'dining', label: '餐厅' },
+  { value: 'study', label: '书房' },
+  { value: 'storage', label: '储藏室' },
+  { value: 'balcony', label: '阳台' },
+  { value: 'corridor', label: '走廊' },
+];
 
-const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
-  const { houseConfig, updateHouseConfig, updateRoom, updateFurniture, updateDoor, updateWindow, deleteRoom } = useFloorPlanStore();
+const FURNITURE_TYPE_OPTIONS: { value: FloorPlan.FurnitureType; label: string }[] = [
+  { value: 'bed', label: '床' },
+  { value: 'sofa', label: '沙发' },
+  { value: 'table', label: '桌子' },
+  { value: 'chair', label: '椅子' },
+  { value: 'cabinet', label: '柜子' },
+  { value: 'desk', label: '书桌' },
+  { value: 'wardrobe', label: '衣柜' },
+  { value: 'tv', label: '电视' },
+  { value: 'refrigerator', label: '冰箱' },
+  { value: 'stove', label: '灶台' },
+  { value: 'sink', label: '水槽' },
+];
+
+const DOOR_TYPE_OPTIONS: { value: FloorPlan.Door['type']; label: string }[] = [
+  { value: 'single', label: '单开门' },
+  { value: 'double', label: '双开门' },
+  { value: 'sliding', label: '推拉门' },
+];
+
+const WINDOW_TYPE_OPTIONS: { value: FloorPlan.Window['type']; label: string }[] = [
+  { value: 'regular', label: '普通窗' },
+  { value: 'bay', label: '飘窗' },
+  { value: 'sliding', label: '推拉窗' },
+];
+
+const EDGE_POSITION_OPTIONS: { value: FloorPlan.Door['position']; label: string }[] = [
+  { value: 'top', label: '顶部' },
+  { value: 'bottom', label: '底部' },
+  { value: 'left', label: '左侧' },
+  { value: 'right', label: '右侧' },
+];
+
+const PropertyPanel: React.FC = () => {
+  const { houseConfig, updateHouseConfig, updateRoom, updateFurniture, updateDoor, updateWindow, deleteRoom, deleteFurniture, deleteDoor, deleteWindow, selectedElement } = useFloorPlanStore();
   const [form] = Form.useForm();
-  const [editingRoom, setEditingRoom] = useState<FloorPlan.Room | null>(null);
 
-  // 房间类型选项
-  const roomTypeOptions = [
-    { value: 'living', label: '客厅' },
-    { value: 'bedroom', label: '卧室' },
-    { value: 'kitchen', label: '厨房' },
-    { value: 'bathroom', label: '卫生间' },
-    { value: 'dining', label: '餐厅' },
-    { value: 'study', label: '书房' },
-    { value: 'storage', label: '储藏室' },
-    { value: 'balcony', label: '阳台' },
-    { value: 'corridor', label: '走廊' },
-  ];
+  // 选中元素身份 key：仅在身份变化时同步表单，避免拖拽过程覆盖用户输入
+  const selectionKey = selectedElement
+    ? `${selectedElement.originalType}:${selectedElement.roomId}:${selectedElement.furnitureId ?? ''}:${selectedElement.doorId ?? ''}:${selectedElement.windowId ?? ''}`
+    : '';
+  const lastKeyRef = useRef('');
 
-  // 家具类型选项
-  const furnitureTypeOptions = [
-    { value: 'bed', label: '床' },
-    { value: 'sofa', label: '沙发' },
-    { value: 'table', label: '桌子' },
-    { value: 'chair', label: '椅子' },
-    { value: 'cabinet', label: '柜子' },
-    { value: 'desk', label: '书桌' },
-    { value: 'wardrobe', label: '衣柜' },
-    { value: 'tv', label: '电视' },
-  ];
-
-  // 当选择元素变化时更新表单
   useEffect(() => {
-    if (selectedElement) {
-      const { metadata } = selectedElement;
-      
-      if (metadata.originalType === 'room') {
-        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
-        if (room) {
-          setEditingRoom(room);
-          form.setFieldsValue({
-            name: room.name,
-            type: room.type,
-            width: room.width,
-            height: room.height,
-            x: room.x,
-            y: room.y,
-            color: room.color
-          });
-        }
-      } else if (metadata.originalType === 'furniture') {
-        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
-        const furniture = room?.furniture.find(f => f.id === metadata.furnitureId);
-        if (furniture) {
-          form.setFieldsValue({
-            name: furniture.name,
-            type: furniture.type,
-            width: furniture.width,
-            height: furniture.height,
-            x: furniture.x,
-            y: furniture.y,
-            rotation: furniture.rotation
-          });
-        }
-      } else if (metadata.originalType === 'door') {
-        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
-        const door = room?.doors.find(d => d.id === metadata.doorId);
-        if (door) {
-          form.setFieldsValue({
-            name: door.type === 'double' ? '双开门' : '单开门',
-            type: door.type,
-            width: door.width,
-            position: door.position,
-            offset: door.offset
-          });
-        }
-      } else if (metadata.originalType === 'window') {
-        const room = houseConfig.rooms.find(r => r.id === metadata.roomId);
-        const window = room?.windows.find(w => w.id === metadata.windowId);
-        if (window) {
-          form.setFieldsValue({
-            name: window.type === 'bay' ? '飘窗' : '普通窗',
-            type: window.type,
-            width: window.width,
-            position: window.position,
-            offset: window.offset
-          });
-        }
-      }
-    } else {
-      setEditingRoom(null);
+    if (!selectedElement) {
       form.resetFields();
+      lastKeyRef.current = '';
+      return;
     }
-  }, [selectedElement, houseConfig, form]);
+    if (lastKeyRef.current === selectionKey) return;
+    lastKeyRef.current = selectionKey;
+
+    if (selectedElement.originalType === 'room') {
+      const room = houseConfig.rooms.find((r) => r.id === selectedElement.roomId);
+      if (room) {
+        form.setFieldsValue({
+          name: room.name,
+          type: room.type,
+          width: room.width,
+          height: room.height,
+          x: room.x,
+          y: room.y,
+          color: room.color
+        });
+      }
+    } else if (selectedElement.originalType === 'furniture') {
+      const room = houseConfig.rooms.find((r) => r.id === selectedElement.roomId);
+      const furniture = room?.furniture.find((f) => f.id === selectedElement.furnitureId);
+      if (furniture) {
+        form.setFieldsValue({
+          name: furniture.name,
+          type: furniture.type,
+          width: furniture.width,
+          height: furniture.height,
+          x: furniture.x,
+          y: furniture.y,
+          rotation: furniture.rotation
+        });
+      }
+    } else if (selectedElement.originalType === 'door') {
+      const room = houseConfig.rooms.find((r) => r.id === selectedElement.roomId);
+      const door = room?.doors.find((d) => d.id === selectedElement.doorId);
+      if (door) {
+        form.setFieldsValue({
+          type: door.type,
+          width: door.width,
+          position: door.position,
+          offset: door.offset
+        });
+      }
+    } else if (selectedElement.originalType === 'window') {
+      const room = houseConfig.rooms.find((r) => r.id === selectedElement.roomId);
+      const window = room?.windows.find((w) => w.id === selectedElement.windowId);
+      if (window) {
+        form.setFieldsValue({
+          type: window.type,
+          width: window.width,
+          position: window.position,
+          offset: window.offset
+        });
+      }
+    }
+  }, [selectedElement, selectionKey, houseConfig, form]);
 
   // 处理属性更新
   const handlePropertiesUpdate = (values: any) => {
-    if (selectedElement) {
-      const { metadata } = selectedElement;
-      
-      if (metadata.originalType === 'room' && editingRoom) {
-        updateRoom(editingRoom.id, values);
-      } else if (metadata.originalType === 'furniture') {
-        updateFurniture(metadata.roomId, metadata.furnitureId, values);
-      } else if (metadata.originalType === 'door') {
-        updateDoor(metadata.roomId, metadata.doorId, values);
-      } else if (metadata.originalType === 'window') {
-        updateWindow(metadata.roomId, metadata.windowId, values);
-      }
+    if (!selectedElement) return;
+    if (selectedElement.originalType === 'room') {
+      updateRoom(selectedElement.roomId, values);
+    } else if (selectedElement.originalType === 'furniture') {
+      updateFurniture(selectedElement.roomId, selectedElement.furnitureId!, values);
+    } else if (selectedElement.originalType === 'door') {
+      updateDoor(selectedElement.roomId, selectedElement.doorId!, values);
+    } else if (selectedElement.originalType === 'window') {
+      updateWindow(selectedElement.roomId, selectedElement.windowId!, values);
     }
   };
 
   // 删除房间
   const handleDeleteRoom = () => {
-    if (editingRoom) {
-      deleteRoom(editingRoom.id);
-      setEditingRoom(null);
+    if (selectedElement?.originalType === 'room') {
+      deleteRoom(selectedElement.roomId);
+      form.resetFields();
+    }
+  };
+
+  // 删除家具
+  const handleDeleteFurniture = () => {
+    if (selectedElement?.originalType === 'furniture') {
+      deleteFurniture(selectedElement.roomId, selectedElement.furnitureId!);
+      form.resetFields();
+    }
+  };
+
+  // 删除门
+  const handleDeleteDoor = () => {
+    if (selectedElement?.originalType === 'door') {
+      deleteDoor(selectedElement.roomId, selectedElement.doorId!);
+      form.resetFields();
+    }
+  };
+
+  // 删除窗
+  const handleDeleteWindow = () => {
+    if (selectedElement?.originalType === 'window') {
+      deleteWindow(selectedElement.roomId, selectedElement.windowId!);
       form.resetFields();
     }
   };
@@ -142,11 +181,10 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
                 onChange={(e) => updateHouseConfig({ name: e.target.value })}
               />
             </Form.Item>
-            <Form.Item label="总面积 (㎡)">
+            <Form.Item label="总面积 (㎡)" extra="根据房间尺寸自动计算">
               <InputNumber
-                min={0}
                 value={houseConfig.totalArea}
-                onChange={(value) => updateHouseConfig({ totalArea: value || 0 })}
+                disabled
                 style={{ width: '100%' }}
               />
             </Form.Item>
@@ -175,6 +213,25 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
                 style={{ width: '100%' }}
               />
             </Form.Item>
+            <Divider style={{ margin: '8px 0' }} />
+            <Form.Item label="显示网格">
+              <Switch
+                checked={houseConfig.showGrid}
+                onChange={(checked) => updateHouseConfig({ showGrid: checked })}
+              />
+            </Form.Item>
+            <Form.Item label="显示尺寸标注">
+              <Switch
+                checked={houseConfig.showDimensions}
+                onChange={(checked) => updateHouseConfig({ showDimensions: checked })}
+              />
+            </Form.Item>
+            <Form.Item label="显示家具">
+              <Switch
+                checked={houseConfig.showFurniture}
+                onChange={(checked) => updateHouseConfig({ showFurniture: checked })}
+              />
+            </Form.Item>
           </Form>
         </Card>
 
@@ -200,9 +257,7 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
   }
 
   // 根据选择元素类型显示不同的属性面板
-  const { metadata } = selectedElement;
-  
-  if (metadata.originalType === 'room') {
+  if (selectedElement.originalType === 'room') {
     return (
       <div className="property-panel">
         <Card 
@@ -243,7 +298,7 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             
             <Form.Item label="房间类型" name="type">
               <Select>
-                {roomTypeOptions.map(option => (
+                {ROOM_TYPE_OPTIONS.map(option => (
                   <Option key={option.value} value={option.value}>
                     {option.label}
                   </Option>
@@ -278,10 +333,25 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
     );
   }
 
-  if (metadata.originalType === 'furniture') {
+  if (selectedElement.originalType === 'furniture') {
     return (
       <div className="property-panel">
-        <Card title="家具属性" size="small">
+        <Card
+          title={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>家具属性</span>
+              <Space>
+                <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => form.submit()}>
+                  保存
+                </Button>
+                <Button danger size="small" icon={<DeleteOutlined />} onClick={handleDeleteFurniture}>
+                  删除
+                </Button>
+              </Space>
+            </div>
+          }
+          size="small"
+        >
           <Form
             layout="vertical"
             size="small"
@@ -294,7 +364,7 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             
             <Form.Item label="家具类型" name="type">
               <Select>
-                {furnitureTypeOptions.map(option => (
+                {FURNITURE_TYPE_OPTIONS.map(option => (
                   <Option key={option.value} value={option.value}>
                     {option.label}
                   </Option>
@@ -329,25 +399,36 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
     );
   }
 
-  if (metadata.originalType === 'door') {
+  if (selectedElement.originalType === 'door') {
     return (
       <div className="property-panel">
-        <Card title="门属性" size="small">
+        <Card
+          title={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>门属性</span>
+              <Space>
+                <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => form.submit()}>
+                  保存
+                </Button>
+                <Button danger size="small" icon={<DeleteOutlined />} onClick={handleDeleteDoor}>
+                  删除
+                </Button>
+              </Space>
+            </div>
+          }
+          size="small"
+        >
           <Form
             layout="vertical"
             size="small"
             form={form}
             onFinish={handlePropertiesUpdate}
           >
-            <Form.Item label="门名称" name="name">
-              <Input />
-            </Form.Item>
-            
             <Form.Item label="门类型" name="type">
               <Select>
-                <Option value="single">单开门</Option>
-                <Option value="double">双开门</Option>
-                <Option value="sliding">推拉门</Option>
+                {DOOR_TYPE_OPTIONS.map(option => (
+                  <Option key={option.value} value={option.value}>{option.label}</Option>
+                ))}
               </Select>
             </Form.Item>
             
@@ -359,10 +440,9 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             
             <Form.Item label="位置" name="position">
               <Select>
-                <Option value="top">顶部</Option>
-                <Option value="bottom">底部</Option>
-                <Option value="left">左侧</Option>
-                <Option value="right">右侧</Option>
+                {EDGE_POSITION_OPTIONS.map(option => (
+                  <Option key={option.value} value={option.value}>{option.label}</Option>
+                ))}
               </Select>
             </Form.Item>
             
@@ -375,24 +455,36 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
     );
   }
 
-  if (metadata.originalType === 'window') {
+  if (selectedElement.originalType === 'window') {
     return (
       <div className="property-panel">
-        <Card title="窗属性" size="small">
+        <Card
+          title={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>窗属性</span>
+              <Space>
+                <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => form.submit()}>
+                  保存
+                </Button>
+                <Button danger size="small" icon={<DeleteOutlined />} onClick={handleDeleteWindow}>
+                  删除
+                </Button>
+              </Space>
+            </div>
+          }
+          size="small"
+        >
           <Form
             layout="vertical"
             size="small"
             form={form}
             onFinish={handlePropertiesUpdate}
           >
-            <Form.Item label="窗名称" name="name">
-              <Input />
-            </Form.Item>
-            
             <Form.Item label="窗类型" name="type">
               <Select>
-                <Option value="regular">普通窗</Option>
-                <Option value="bay">飘窗</Option>
+                {WINDOW_TYPE_OPTIONS.map(option => (
+                  <Option key={option.value} value={option.value}>{option.label}</Option>
+                ))}
               </Select>
             </Form.Item>
             
@@ -404,10 +496,9 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement }) => {
             
             <Form.Item label="位置" name="position">
               <Select>
-                <Option value="top">顶部</Option>
-                <Option value="bottom">底部</Option>
-                <Option value="left">左侧</Option>
-                <Option value="right">右侧</Option>
+                {EDGE_POSITION_OPTIONS.map(option => (
+                  <Option key={option.value} value={option.value}>{option.label}</Option>
+                ))}
               </Select>
             </Form.Item>
             

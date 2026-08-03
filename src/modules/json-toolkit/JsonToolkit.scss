@@ -1,6 +1,6 @@
 .json-toolkit {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: var(--et-bg-page);
 
   &__header-center {
     display: flex;
@@ -67,9 +67,9 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 8px;
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--et-border);
     overflow: hidden;
   }
 
@@ -82,7 +82,7 @@
     .ant-tabs-nav {
       margin-bottom: 0;
       padding: 0 12px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--et-border);
     }
 
     .ant-tabs-tab {
@@ -135,7 +135,7 @@
   }
 
   &__tree-wrap {
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 6px;
     padding: 16px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -164,8 +164,8 @@
   &__status-bar {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px dashed #e8e8e8;
-    background: #fafafa;
+    border-top: 1px dashed var(--et-border);
+    background: var(--et-bg-subtle);
     margin-inline: -12px;
     padding-inline: 12px;
     margin-bottom: -12px;
@@ -199,9 +199,9 @@
 
   &__query-item {
     padding: 8px 12px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 4px;
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--et-border);
   }
 
   &__query-path {
@@ -244,7 +244,7 @@
     display: inline-block;
     width: 1px;
     height: 18px;
-    background: #e8e8e8;
+    background: var(--et-border);
     margin: 0 4px;
     vertical-align: middle;
   }
@@ -261,7 +261,7 @@
       font-size: 13px;
       margin-bottom: 10px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--et-border);
     }
   }
 
@@ -295,7 +295,7 @@
   }
 
   &__tree {
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     padding: 4px 8px;
     border-radius: 4px;
 
@@ -322,15 +322,15 @@
 
     // 加深层级连接线颜色，使其更明显
     .ant-tree-show-line .ant-tree-indent-unit::before {
-      border-right: 1px solid #d9d9d9;
+      border-right: 1px solid var(--et-border-strong);
     }
 
     .ant-tree-show-line .ant-tree-switcher-leaf-line::before {
-      border-bottom: 1px solid #d9d9d9;
+      border-bottom: 1px solid var(--et-border-strong);
     }
 
     .ant-tree-show-line .ant-tree-switcher-leaf-line::after {
-      border-right: 1px solid #d9d9d9;
+      border-right: 1px solid var(--et-border-strong);
     }
   }
 
@@ -439,8 +439,8 @@
     display: inline-flex;
     align-items: center;
     padding: 1px 6px;
-    background: #f5f5f5;
-    border: 1px solid #d9d9d9;
+    background: var(--et-bg-page);
+    border: 1px solid var(--et-border-strong);
     border-radius: 3px;
     color: #595959;
     font-family: "Monaco", "Menlo", "Consolas", monospace;
@@ -470,7 +470,7 @@
   .ant-descriptions {
     .ant-descriptions-item-label {
       width: 130px;
-      background: #fafafa;
+      background: var(--et-bg-subtle);
     }
   }
 }
@@ -548,5 +548,194 @@
       flex-wrap: wrap;
       gap: 4px !important;
     }
+  }
+}
+
+// —— 暗色模式覆盖 ——
+:root[data-theme="dark"] {
+  .json-toolkit {
+    &__preview-tabs-wrapper {
+      border-color: var(--et-border);
+    }
+
+    &__preview-tabs {
+      .ant-tabs-nav {
+        border-bottom-color: var(--et-border);
+      }
+    }
+
+    &__tree-wrap {
+      border-color: var(--et-border);
+    }
+  }
+
+  .json-editor {
+    &__status-bar {
+      border-top-color: var(--et-border);
+    }
+
+    // TextArea 暗色适配
+    &__textarea {
+      .ant-input,
+      textarea.ant-input {
+        background: var(--et-bg-card);
+        color: var(--et-ink);
+        border-color: var(--et-border);
+
+        &:hover { border-color: var(--et-brand); }
+        &:focus,
+        &-focused {
+          border-color: var(--et-brand);
+          box-shadow: 0 0 0 2px var(--et-brand-soft);
+        }
+        &::placeholder { color: var(--et-ink-3); }
+      }
+    }
+  }
+
+  .json-output {
+    &__query-item {
+      border-color: var(--et-border);
+    }
+
+    // TextArea 暗色适配
+    &__textarea,
+    textarea.ant-input {
+      background: var(--et-bg-card);
+      color: var(--et-ink);
+      border-color: var(--et-border);
+
+      &:hover { border-color: var(--et-brand); }
+      &:focus {
+        border-color: var(--et-brand);
+        box-shadow: 0 0 0 2px var(--et-brand-soft);
+      }
+      &::placeholder { color: var(--et-ink-3); }
+    }
+  }
+
+  .json-escape-tool {
+    .ant-input,
+    textarea.ant-input {
+      background: var(--et-bg-card);
+      color: var(--et-ink);
+      border-color: var(--et-border);
+
+      &:hover { border-color: var(--et-brand); }
+      &:focus {
+        border-color: var(--et-brand);
+        box-shadow: 0 0 0 2px var(--et-brand-soft);
+      }
+      &::placeholder { color: var(--et-ink-3); }
+    }
+  }
+
+  .json-converter {
+    .ant-input,
+    textarea.ant-input {
+      background: var(--et-bg-card);
+      color: var(--et-ink);
+      border-color: var(--et-border);
+
+      &:hover { border-color: var(--et-brand); }
+      &:focus {
+        border-color: var(--et-brand);
+        box-shadow: 0 0 0 2px var(--et-brand-soft);
+      }
+      &::placeholder { color: var(--et-ink-3); }
+    }
+  }
+
+  .json-tree-viewer {
+    &__divider {
+      background: var(--et-border);
+    }
+
+    &__level-popover {
+      &-title {
+        border-bottom-color: var(--et-border);
+      }
+    }
+
+    &__level-row {
+      &:hover {
+        .json-tree-viewer__level-label {
+          color: var(--et-info);
+        }
+      }
+    }
+
+    &__level-label {
+      color: var(--et-ink-2);
+
+      &.is-disabled {
+        color: var(--et-ink-3);
+      }
+    }
+
+    &__tree {
+      .ant-tree-show-line .ant-tree-indent-unit::before,
+      .ant-tree-show-line .ant-tree-switcher-leaf-line::before,
+      .ant-tree-show-line .ant-tree-switcher-leaf-line::after {
+        border-right-color: var(--et-border);
+        border-bottom-color: var(--et-border);
+      }
+    }
+
+    &__node {
+      &.is-current-match {
+        background: rgba(245, 158, 11, 0.18);
+        outline-color: var(--et-warning);
+      }
+    }
+
+    &__key {
+      color: var(--et-info);
+    }
+
+    &__colon {
+      color: var(--et-ink-3);
+    }
+
+    &__node--error {
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
+    }
+
+    &__error-box {
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
+    }
+
+    &__error-msg {
+      color: var(--et-error);
+    }
+
+    &__error-suggest-tag {
+      background: var(--et-warning-soft);
+      border-color: var(--et-warning);
+      color: var(--et-warning);
+
+      &:hover {
+        background: rgba(245, 158, 11, 0.25);
+      }
+    }
+
+    &__error-original-value {
+      background: var(--et-bg-subtle);
+      border-color: var(--et-border);
+      color: var(--et-ink-2);
+    }
+
+    &__path-tag {
+      color: var(--et-info);
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
+    }
+  }
+
+  // —— box-shadow ——
+  .json-toolkit__tree-wrap {
+    box-shadow: var(--et-shadow-sm);
   }
 }

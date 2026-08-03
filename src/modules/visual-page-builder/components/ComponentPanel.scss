@@ -36,7 +36,7 @@
     align-items: center;
     padding: 8px 0;
     gap: 8px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--et-border);
     margin-top: auto;
   }
 }
@@ -47,9 +47,9 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--et-border-strong);
   border-radius: 6px;
-  background: #fff;
+  background: var(--et-bg-card);
   cursor: grab;
   transition: all 0.2s;
   margin-bottom: 4px;
@@ -113,5 +113,33 @@
         }
       }
     }
+  }
+}
+
+:root[data-theme="dark"] {
+  .draggable-component {
+    .component-name {
+      color: var(--et-ink);
+    }
+
+    &:hover {
+      border-color: var(--et-info);
+    }
+
+    &.dragging {
+      border-color: var(--et-info);
+      background: var(--et-info-soft);
+    }
+  }
+
+  .component-list-content {
+    .ant-empty-description {
+      color: var(--et-ink-3);
+    }
+  }
+
+  // —— box-shadow ——
+  .draggable-component:hover {
+    box-shadow: 0 2px 8px rgba(96, 165, 250, 0.18);
   }
 }

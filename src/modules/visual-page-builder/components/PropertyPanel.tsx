@@ -34,6 +34,8 @@ import { useCanvasStore } from '../store/useCanvasStore';
 import { NodeType, type PageNode } from '../types';
 import { getNodeTypeIcon } from '../utils/nodeIcons';
 import './PropertyPanel.scss';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -428,6 +430,7 @@ const InteractionEditor: React.FC<InteractionEditorProps> = ({ node, onUpdate })
 
 // 多选批量操作工具栏组件（T4.3e）
 const MultiSelectToolbar: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   const selectedNodeIds = useCanvasStore((s) => s.selectedNodeIds);
   const nodes = useCanvasStore((s) => s.nodes);
   const alignSelected = useCanvasStore((s) => s.alignSelected);
@@ -495,7 +498,7 @@ const MultiSelectToolbar: React.FC = () => {
             </div>
             <Tooltip title="取消多选">
               <CloseOutlined
-                style={{ cursor: 'pointer', color: '#8c8c8c' }}
+                style={{ cursor: 'pointer', color: semanticColors.gray8c[mode] }}
                 onClick={clearSelection}
               />
             </Tooltip>
@@ -585,6 +588,7 @@ const MultiSelectToolbar: React.FC = () => {
 
 // 主属性面板组件
 const PropertyPanel: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   // 精确订阅：避免全量订阅导致 hover/drag 等无关变化触发重渲染
   const selectedNodeId = useCanvasStore(s => s.selectedNodeId);
   const selectedNodeIds = useCanvasStore(s => s.selectedNodeIds);
@@ -696,7 +700,7 @@ const PropertyPanel: React.FC = () => {
               </Text>
             </div>
             <DeleteOutlined 
-              style={{ color: '#ff4d4f', cursor: 'pointer' }}
+              style={{ color: semanticColors.error[mode], cursor: 'pointer' }}
               onClick={handleDelete}
               title="删除节点"
             />

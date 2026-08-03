@@ -17,6 +17,8 @@ import {
 } from "@ant-design/icons";
 import type { JsonToolkitTypes } from "../data/interface";
 import { buildTree } from "../utils/jsonUtils";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { Text } = Typography;
 
@@ -106,6 +108,7 @@ const convertNode = (
   opts: DisplayOptions,
   handleCopyPath: (e: React.MouseEvent, path: string) => void,
   pathErrors: Record<string, JsonToolkitTypes.JsonDiagnosticError[]>,
+  mode: 'light' | 'dark',
   isRoot = false,
 ): AntdTreeNode => {
   const lowerKeyword = keyword.toLowerCase();
@@ -146,7 +149,7 @@ const convertNode = (
       keyPart = (
         <span
           className="json-tree-viewer__key"
-          style={{ color: "#1890ff", fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 12, fontWeight: 500 }}
+          style={{ color: semanticColors.info[mode], fontFamily: '"Monaco","Menlo","Consolas",monospace', fontSize: 12, fontWeight: 500 }}
         >
           {node.keyName}
         </span>
@@ -164,7 +167,7 @@ const convertNode = (
     const detailContent = (
       <div style={{ maxWidth: 360 }}>
         {hasMultiple && (
-          <div style={{ color: "#ff4d4f", fontWeight: 500, marginBottom: 6 }}>
+          <div style={{ color: semanticColors.error[mode], fontWeight: 500, marginBottom: 6 }}>
             <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />共 {count} 处问题
           </div>
         )}
@@ -177,27 +180,27 @@ const convertNode = (
                 borderBottom: i < individualErrors.length - 1 ? "1px solid #303030" : "none",
               }}
             >
-              <div style={{ color: "#ff7875", fontSize: 12, fontWeight: 500 }}>
+              <div style={{ color: semanticColors.error2[mode], fontSize: 12, fontWeight: 500 }}>
                 <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
                 {e.message}
               </div>
-              <div style={{ color: "#faad14", fontSize: 12, marginTop: 2 }}>
+              <div style={{ color: semanticColors.warning[mode], fontSize: 12, marginTop: 2 }}>
                 <BulbOutlined style={{ marginInlineEnd: 4 }} />
                 {e.suggestion}
               </div>
-              <div style={{ color: "#8c8c8c", fontSize: 11, marginTop: 2 }}>
+              <div style={{ color: semanticColors.gray8c[mode], fontSize: 11, marginTop: 2 }}>
                 第 {e.line} 行，第 {e.column} 列
               </div>
             </div>
           ))
         ) : (
           <>
-            <div style={{ color: "#ff7875", fontSize: 12, fontWeight: 500 }}>
+            <div style={{ color: semanticColors.error2[mode], fontSize: 12, fontWeight: 500 }}>
               <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
               {node.errorMessage}
             </div>
             {node.errorSuggestion && (
-              <div style={{ color: "#faad14", fontSize: 12, marginTop: 2 }}>
+              <div style={{ color: semanticColors.warning[mode], fontSize: 12, marginTop: 2 }}>
                 <BulbOutlined style={{ marginInlineEnd: 4 }} />
                 {node.errorSuggestion}
               </div>
@@ -218,7 +221,7 @@ const convertNode = (
     const suggestionContent =
       allSuggestions.length > 0 ? (
         <div style={{ maxWidth: 320 }}>
-          <div style={{ color: "#faad14", fontWeight: 500, marginBottom: 4 }}>
+          <div style={{ color: semanticColors.warning[mode], fontWeight: 500, marginBottom: 4 }}>
             <BulbOutlined style={{ marginInlineEnd: 4 }} />
             修复建议
           </div>
@@ -238,7 +241,7 @@ const convertNode = (
             {!isRoot && keyPart !== null && (
               <>
                 {keyPart}
-                <span className="json-tree-viewer__colon" style={{ marginInlineEnd: 6, color: "#8c8c8c" }}>
+                <span className="json-tree-viewer__colon" style={{ marginInlineEnd: 6, color: semanticColors.gray8c[mode] }}>
                   :
                 </span>
               </>
@@ -284,7 +287,7 @@ const convertNode = (
           const detailContent = (
             <div style={{ maxWidth: 360 }}>
               {hasMultiple && (
-                <div style={{ color: "#ff4d4f", fontWeight: 500, marginBottom: 6 }}>
+                <div style={{ color: semanticColors.error[mode], fontWeight: 500, marginBottom: 6 }}>
                   <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />共 {count} 处问题
                 </div>
               )}
@@ -296,15 +299,15 @@ const convertNode = (
                     borderBottom: i < nodeErrors.length - 1 ? "1px solid #303030" : "none",
                   }}
                 >
-                  <div style={{ color: "#ff7875", fontSize: 12, fontWeight: 500 }}>
+                  <div style={{ color: semanticColors.error2[mode], fontSize: 12, fontWeight: 500 }}>
                     <CloseCircleOutlined style={{ marginInlineEnd: 4 }} />
                     {e.message}
                   </div>
-                  <div style={{ color: "#faad14", fontSize: 12, marginTop: 2 }}>
+                  <div style={{ color: semanticColors.warning[mode], fontSize: 12, marginTop: 2 }}>
                     <BulbOutlined style={{ marginInlineEnd: 4 }} />
                     {e.suggestion}
                   </div>
-                  <div style={{ color: "#8c8c8c", fontSize: 11, marginTop: 2 }}>
+                  <div style={{ color: semanticColors.gray8c[mode], fontSize: 11, marginTop: 2 }}>
                     第 {e.line} 行，第 {e.column} 列
                   </div>
                 </div>
@@ -316,7 +319,7 @@ const convertNode = (
           const allSuggestions = nodeErrors.map((e) => e.suggestion).filter(Boolean);
           const suggestionContent = (
             <div style={{ maxWidth: 320 }}>
-              <div style={{ color: "#faad14", fontWeight: 500, marginBottom: 4 }}>
+              <div style={{ color: semanticColors.warning[mode], fontWeight: 500, marginBottom: 4 }}>
                 <BulbOutlined style={{ marginInlineEnd: 4 }} />
                 修复建议
               </div>
@@ -356,7 +359,7 @@ const convertNode = (
         {indexTag}
         {keyPart}
         {!isRoot && keyPart !== null && (
-          <span className="json-tree-viewer__colon" style={{ marginInlineEnd: 6, color: "#8c8c8c" }}>
+          <span className="json-tree-viewer__colon" style={{ marginInlineEnd: 6, color: semanticColors.gray8c[mode] }}>
             :
           </span>
         )}
@@ -374,7 +377,7 @@ const convertNode = (
     key: node.path,
     title,
     path: node.path,
-    children: node.children?.map((c) => convertNode(c, keyword, opts, handleCopyPath, pathErrors)),
+    children: node.children?.map((c) => convertNode(c, keyword, opts, handleCopyPath, pathErrors, mode)),
   };
 };
 
@@ -464,6 +467,7 @@ const stripCountFromValueText = (valueText: string): string => {
 };
 
 const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOffsets }: JsonTreeViewerProps) => {
+  const mode = useThemeStore((s) => s.mode);
   const [search, setSearch] = useState("");
   const [showType, setShowType] = useState(true);
   const [showIndex, setShowIndex] = useState(true);
@@ -527,9 +531,9 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
 
   const treeData = useMemo(() => {
     if (!root) return [];
-    return [convertNode(root, search, { showType, showIndex, showPath, showCount, currentMatchKey }, handleCopyPath, pathErrors, true)];
+    return [convertNode(root, search, { showType, showIndex, showPath, showCount, currentMatchKey }, handleCopyPath, pathErrors, mode, true)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [root, search, showType, showIndex, showPath, showCount, currentMatchKey, pathErrors]);
+  }, [root, search, showType, showIndex, showPath, showCount, currentMatchKey, pathErrors, mode]);
 
   // data 变化时默认全展开
   useEffect(() => {

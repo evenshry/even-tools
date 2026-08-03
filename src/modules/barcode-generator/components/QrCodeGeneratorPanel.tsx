@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, Input, Select, Slider, Button, Space, message, Empty } from "antd";
 import QRCode from "qrcode";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const ERROR_LEVELS = [
   { value: "L", label: "L (低) - 7% 容错" },
@@ -32,6 +34,7 @@ interface GeneratedItem {
 }
 
 const QrCodeGeneratorPanel = () => {
+  const mode = useThemeStore((s) => s.mode);
   const [inputText, setInputText] = useState("https://example.com");
   const [size, setSize] = useState(250);
   const [errorLevel, setErrorLevel] = useState("M");
@@ -162,7 +165,7 @@ const QrCodeGeneratorPanel = () => {
                 rows={5}
                 maxLength={5000}
               />
-              <div style={{ marginTop: 8, fontSize: 12, color: "#999" }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: semanticColors.gray999[mode] }}>
                 共 {inputText.split("\n").filter((v) => v.trim()).length} 条记录
               </div>
             </div>

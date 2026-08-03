@@ -7,6 +7,8 @@ import type {
   DividerElement, TableElement, ImageElement, Alignment,
 } from '../../data/interface';
 import { generateQrMatrix } from '../../utils/escPos/qrEncoder';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 interface RendererProps {
   element: PrintElement;
@@ -52,6 +54,7 @@ const DividerRenderer: React.FC<{ el: DividerElement; paperWidth: number }> = ({
 
 // ===== 二维码元素 =====
 const QrCodeRenderer: React.FC<{ el: QrCodeElement }> = ({ el }) => {
+  const mode = useThemeStore((s) => s.mode);
   const matrix = useMemo(() => {
     try {
       return generateQrMatrix(el.content || ' ', el.errorLevel);
@@ -61,7 +64,7 @@ const QrCodeRenderer: React.FC<{ el: QrCodeElement }> = ({ el }) => {
   }, [el.content, el.errorLevel]);
 
   if (!matrix || matrix.length === 0) {
-    return <div style={{ ...ALIGN_STYLE[el.alignment], color: '#999', fontSize: 12 }}>(二维码生成失败)</div>;
+    return <div style={{ ...ALIGN_STYLE[el.alignment], color: semanticColors.gray999[mode], fontSize: 12 }}>(二维码生成失败)</div>;
   }
 
   const size = matrix.length;
@@ -130,6 +133,7 @@ const BarcodeRenderer: React.FC<{ el: BarcodeElement }> = ({ el }) => {
 
 // ===== 表格元素 =====
 const TableRenderer: React.FC<{ el: TableElement; paperWidth: number }> = ({ el, paperWidth }) => {
+  const mode = useThemeStore((s) => s.mode);
   return (
     <div style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
       <div style={{ display: 'flex', borderBottom: '1px solid #000' }}>
@@ -163,7 +167,7 @@ const TableRenderer: React.FC<{ el: TableElement; paperWidth: number }> = ({ el,
           ))}
         </div>
       ))}
-      <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>
+      <div style={{ fontSize: 10, color: semanticColors.gray999[mode], marginTop: 2 }}>
         (表格 {el.columns.length} 列 × {el.rows.length} 行，纸宽 {paperWidth} 字符)
       </div>
     </div>
@@ -172,8 +176,9 @@ const TableRenderer: React.FC<{ el: TableElement; paperWidth: number }> = ({ el,
 
 // ===== 图片元素 =====
 const ImageRenderer: React.FC<{ el: ImageElement }> = ({ el }) => {
+  const mode = useThemeStore((s) => s.mode);
   if (!el.src) {
-    return <div style={{ ...ALIGN_STYLE[el.alignment], color: '#999', fontSize: 12 }}>(无图片)</div>;
+    return <div style={{ ...ALIGN_STYLE[el.alignment], color: semanticColors.gray999[mode], fontSize: 12 }}>(无图片)</div>;
   }
   return (
     <div style={{ ...ALIGN_STYLE[el.alignment] }}>
@@ -188,6 +193,7 @@ const ImageRenderer: React.FC<{ el: ImageElement }> = ({ el }) => {
 
 // ===== 主渲染器 =====
 const PrintElementRenderer: React.FC<RendererProps> = ({ element, paperWidth = 32 }) => {
+  const mode = useThemeStore((s) => s.mode);
   switch (element.type) {
     case 'text': return <TextRenderer el={element} />;
     case 'divider': return <DividerRenderer el={element} paperWidth={paperWidth} />;
@@ -195,7 +201,7 @@ const PrintElementRenderer: React.FC<RendererProps> = ({ element, paperWidth = 3
     case 'barcode': return <BarcodeRenderer el={element} />;
     case 'table': return <TableRenderer el={element} paperWidth={paperWidth} />;
     case 'image': return <ImageRenderer el={element} />;
-    default: return <div style={{ color: '#999' }}>(未知元素)</div>;
+    default: return <div style={{ color: semanticColors.gray999[mode] }}>(未知元素)</div>;
   }
 };
 

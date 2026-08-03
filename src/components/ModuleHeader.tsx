@@ -1,9 +1,9 @@
-import React from 'react';
-import { Layout, Typography } from 'antd';
-import BackButton from '@/components/BackButton';
-import '@/components/ModuleHeader.scss';
+import React from "react";
+import { Typography } from "antd";
+import BackButton from "@/components/BackButton";
+import ThemeToggle from "@/components/ThemeToggle";
+import "@/components/ModuleHeader.scss";
 
-const { Header } = Layout;
 const { Title } = Typography;
 
 interface ModuleHeaderProps {
@@ -12,9 +12,10 @@ interface ModuleHeaderProps {
   center?: React.ReactNode;
 }
 
+// 模块页通用 Header：返回 + 标题 + 中部 tabs + 右侧操作 + 主题切换
 const ModuleHeader: React.FC<ModuleHeaderProps> = ({ title, extra, center }) => {
   return (
-    <Header className="module-header">
+    <header className="module-header">
       <div className="module-header__left">
         <BackButton />
         {title && (
@@ -24,8 +25,11 @@ const ModuleHeader: React.FC<ModuleHeaderProps> = ({ title, extra, center }) => 
         )}
       </div>
       {center && <div className="module-header__center">{center}</div>}
-      {extra && <div className="module-header__extra">{extra}</div>}
-    </Header>
+      <div className="module-header__right">
+        {extra && <div className="module-header__extra">{extra}</div>}
+        <ThemeToggle />
+      </div>
+    </header>
   );
 };
 

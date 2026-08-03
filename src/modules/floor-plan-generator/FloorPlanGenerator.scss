@@ -7,7 +7,7 @@
   .content-area {
     flex: 1;
     padding: 16px;
-    background: #f5f5f5;
+    background: var(--et-bg-page);
     overflow: hidden;
   }
 
@@ -40,42 +40,9 @@
   // 预览布局
   .preview-layout {
     height: 100%;
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 8px;
     overflow: hidden;
-  }
-
-  // 配置面板样式
-  .config-panel {
-    .room-list {
-      .room-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px;
-        margin-bottom: 8px;
-        background: #f9f9f9;
-        border-radius: 4px;
-        border: 1px solid #e8e8e8;
-
-        .room-info {
-          .room-name {
-            font-weight: 500;
-            margin-bottom: 2px;
-          }
-          
-          .room-size {
-            font-size: 12px;
-            color: #666;
-          }
-        }
-
-        &:hover {
-          background: #f0f0f0;
-          border-color: #d9d9d9;
-        }
-      }
-    }
   }
 
   // 画布区域样式
@@ -85,7 +52,7 @@
     overflow: hidden;
     
     svg {
-      border: 1px solid #d9d9d9;
+      border: 1px solid var(--et-border-strong);
       border-radius: 4px;
       transition: cursor 0.1s ease;
     }
@@ -113,7 +80,7 @@
     padding: 8px 12px;
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--et-border);
 
     .zoom-level {
       font-size: 12px;
@@ -121,51 +88,6 @@
       font-weight: 500;
       min-width: 60px;
       text-align: center;
-    }
-  }
-
-  // 批量操作工具栏
-  .batch-toolbar-container {
-    position: absolute;
-    top: 60px;
-    left: 10px;
-    right: 10px;
-    z-index: 9;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 8px 12px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border: 1px solid #f0f0f0;
-    backdrop-filter: blur(4px);
-    
-    .batch-operations-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      
-      .ant-space {
-        width: 100%;
-        justify-content: flex-start;
-      }
-      
-      .ant-btn-group {
-        display: flex;
-        gap: 0;
-        
-        .ant-btn {
-          border-radius: 0;
-          
-          &:first-child {
-            border-top-left-radius: 4px;
-            border-bottom-left-radius: 4px;
-          }
-          
-          &:last-child {
-            border-top-right-radius: 4px;
-            border-bottom-right-radius: 4px;
-          }
-        }
-      }
     }
   }
 
@@ -186,7 +108,7 @@
       padding: 8px 12px;
       border-radius: 6px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      border: 1px solid #f0f0f0;
+      border: 1px solid var(--et-border);
 
       .zoom-level {
         font-size: 12px;
@@ -248,6 +170,49 @@
       .property-panel-container {
         grid-row: 3;
       }
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  .floor-plan-generator {
+    .canvas-controls {
+      .zoom-level {
+        color: var(--et-ink-2);
+      }
+    }
+
+    .preview-layout {
+      .preview-controls {
+        .zoom-level {
+          color: var(--et-ink-2);
+        }
+      }
+    }
+
+    .property-panel {
+      .door-item,
+      .window-item,
+      .furniture-item {
+        &:hover {
+          background-color: var(--et-info-soft) !important;
+        }
+      }
+    }
+  }
+
+  // —— box-shadow ——
+  .floor-plan-generator {
+    .canvas-area.dragging svg {
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+    }
+
+    .canvas-controls {
+      box-shadow: var(--et-shadow-md);
+    }
+
+    .preview-layout .preview-controls {
+      box-shadow: var(--et-shadow-md);
     }
   }
 }

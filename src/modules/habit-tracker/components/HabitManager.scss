@@ -67,3 +67,9 @@
     text-align: center;
   }
 }
+
+:root[data-theme="dark"] {
+  .habit-manager__card--selected {
+    background-color: var(--et-info-soft);
+  }
+}

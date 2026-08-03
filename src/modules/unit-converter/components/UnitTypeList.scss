@@ -39,3 +39,9 @@
     font-size: 20px;
   }
 }
+
+:root[data-theme="dark"] {
+  .unit-type-list__card--selected {
+    border-color: var(--et-info) !important;
+  }
+}

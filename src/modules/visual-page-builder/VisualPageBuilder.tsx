@@ -13,6 +13,8 @@ import PreviewArea from "./components/PreviewArea";
 import CodeExportModal from "./components/CodeExportModal";
 import { useCanvasStore } from "./store/useCanvasStore";
 import { PreviewMode } from "./types";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 import "./styles/VisualPageBuilder.scss";
 
 const { Content } = Layout;
@@ -24,6 +26,7 @@ const AUTO_SAVE_INTERVAL = 30_000;
 const AUTO_SAVE_DEBOUNCE = 5_000;
 
 const VisualPageBuilder: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   // 精确订阅：拆分为多个选择器，避免全量订阅导致 hover/drag 时整体重渲染
   const selectedNodeId = useCanvasStore(s => s.selectedNodeId);
   const nodes = useCanvasStore(s => s.nodes);
@@ -228,7 +231,7 @@ const VisualPageBuilder: React.FC = () => {
       </Space>
       <Text>
         节点数: {Object.keys(nodes).length} | 选中: {selectedNodeId ? nodes[selectedNodeId]?.name : "无"}
-        {isDirty && <span style={{ color: '#faad14', marginLeft: 8 }}>· 未保存</span>}
+        {isDirty && <span style={{ color: semanticColors.warning[mode], marginLeft: 8 }}>· 未保存</span>}
       </Text>
     </div>
   );

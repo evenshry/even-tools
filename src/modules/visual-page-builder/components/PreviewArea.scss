@@ -137,3 +137,14 @@
     }
   }
 }
+
+:root[data-theme="dark"] {
+  // —— box-shadow ——
+  .preview-toolbar {
+    box-shadow: var(--et-shadow-md);
+  }
+
+  .device-frame {
+    box-shadow: var(--et-shadow-lg);
+  }
+}

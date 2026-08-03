@@ -5,6 +5,8 @@ import { Card, List, Tag, Typography, Input, Space } from 'antd';
 import { BookOutlined, SearchOutlined } from '@ant-design/icons';
 import { usePrinterStore } from '../../store/usePrinterStore';
 import type { CommandSnippet, CommandSyntax } from '../../data/interface';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { Text } = Typography;
 
@@ -19,6 +21,7 @@ const SYNTAX_LABELS: Record<CommandSyntax, string> = {
 };
 
 const SnippetLibrary: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   const snippets = usePrinterStore(s => s.snippets);
   const commandInput = usePrinterStore(s => s.commandInput);
   const setCommandInput = usePrinterStore(s => s.setCommandInput);
@@ -56,7 +59,7 @@ const SnippetLibrary: React.FC = () => {
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
       styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
     >
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${semanticColors.grayf0[mode]}` }}>
         <Input
           size="small"
           allowClear

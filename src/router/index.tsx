@@ -1,4 +1,5 @@
-import { createHashRouter } from "react-router-dom";
+import { useEffect } from "react";
+import { createHashRouter, Outlet, useLocation } from "react-router-dom";
 import UnitConverter from "@/modules/unit-converter";
 import HabitTracker from "@/modules/habit-tracker";
 import ColorCalculator from "@/modules/color-calculator";
@@ -11,47 +12,62 @@ import JsonToolkit from "@/modules/json-toolkit";
 import ToolNavigation from "@/components/ToolNavigation";
 import { tools } from "@/config/tools";
 
+// 根据当前路由动态更新网站标题（格式：etools-工具名称）
+// eslint-disable-next-line react-refresh/only-export-components
+function RouteLayout() {
+  const location = useLocation();
+  useEffect(() => {
+    const tool = tools.find((t) => t.path === location.pathname);
+    document.title = tool ? `etools-${tool.name}` : "etools";
+  }, [location.pathname]);
+  return <Outlet />;
+}
+
 // 创建应用路由配置
 export const router = createHashRouter([
   {
-    path: "/", // 首页：工具导航页面
-    element: <ToolNavigation tools={tools} />,
+    element: <RouteLayout />,
+    children: [
+      {
+        path: "/", // 首页：工具导航页面
+        element: <ToolNavigation tools={tools} />,
+      },
+      {
+        path: "/unit-converter", // 单位换算工具页面
+        element: <UnitConverter />,
+      },
+      {
+        path: "/habit-tracker", // 习惯追踪器页面
+        element: <HabitTracker />,
+      },
+      {
+        path: "/color-calculator", // 颜色计算器页面
+        element: <ColorCalculator />,
+      },
+      {
+        path: "/regex-sandbox", // 正则表达式沙盒页面
+        element: <RegexSandbox />,
+      },
+      {
+        path: "/visual-page-builder", // 视觉页面构建器页面
+        element: <VisualPageBuilder />,
+      },
+      {
+        path: "/floor-plan-generator", // 房屋平面设计图生成器页面
+        element: <FloorPlanGenerator />,
+      },
+      {
+        path: "/bluetooth-printer", // 蓝牙打印机工具页面
+        element: <BluetoothPrinter />,
+      },
+      {
+        path: "/barcode-generator", // 条形码/二维码生成器页面
+        element: <BarcodeGenerator />,
+      },
+      {
+        path: "/json-toolkit", // JSON 工具箱页面
+        element: <JsonToolkit />,
+      },
+    ],
   },
-  {
-    path: "/unit-converter", // 单位换算工具页面
-    element: <UnitConverter />,
-  },
-  {
-    path: "/habit-tracker", // 习惯追踪器页面
-    element: <HabitTracker />,
-  },
-  {
-    path: "/color-calculator", // 颜色计算器页面
-    element: <ColorCalculator />,
-  },
-  {
-    path: "/regex-sandbox", // 正则表达式沙盒页面
-    element: <RegexSandbox />,
-  },
-  {
-    path: "/visual-page-builder", // 视觉页面构建器页面
-    element: <VisualPageBuilder />,
-  },
-  {
-    path: "/floor-plan-generator", // 房屋平面设计图生成器页面
-    element: <FloorPlanGenerator />,
-  },
-  {
-    path: "/bluetooth-printer", // 蓝牙打印机工具页面
-    element: <BluetoothPrinter />,
-  },
-  {
-    path: "/barcode-generator", // 条形码/二维码生成器页面
-    element: <BarcodeGenerator />,
-  },
-  {
-    path: "/json-toolkit", // JSON 工具箱页面
-    element: <JsonToolkit />,
-  },
-
 ]);

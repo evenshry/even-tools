@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, Input, Select, Slider, Button, Space, message, Empty } from "antd";
 import JsBarcode from "jsbarcode";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const BARCODE_TYPES = [
   { value: "CODE128", label: "CODE 128 (通用)" },
@@ -43,6 +45,7 @@ interface GeneratedItem {
 }
 
 const BarcodeGeneratorPanel = () => {
+  const mode = useThemeStore((s) => s.mode);
   const [inputText, setInputText] = useState("123456789012");
   const [barcodeType, setBarcodeType] = useState("CODE128");
   const [width, setWidth] = useState(300);
@@ -176,7 +179,7 @@ const BarcodeGeneratorPanel = () => {
                 rows={5}
                 maxLength={5000}
               />
-              <div style={{ marginTop: 8, fontSize: 12, color: "#999" }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: semanticColors.gray999[mode] }}>
                 共 {inputText.split("\n").filter((v) => v.trim()).length} 条记录
               </div>
             </div>

@@ -1,14 +1,8 @@
-.back-button__link {
-  text-decoration: none;
-  display: inline-flex;
-}
-
-.back-button__btn.ant-btn-text {
+.theme-toggle.ant-btn-text {
   color: var(--et-ink-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--et-transition);
 
   &:hover,
   &:focus {

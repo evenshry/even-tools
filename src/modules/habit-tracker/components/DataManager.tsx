@@ -2,6 +2,8 @@ import React, { useCallback } from "react";
 import { Button, Space, Typography, message, Modal } from "antd";
 import { DownloadOutlined, UploadOutlined, DeleteOutlined, FileExcelOutlined } from "@ant-design/icons";
 import { dbManager } from "@/modules/habit-tracker/utils/indexedDB";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 import "@/modules/habit-tracker/components/DataManager.scss";
 
 const { Text } = Typography;
@@ -11,6 +13,7 @@ interface DataManagerProps {
 }
 
 const DataManager: React.FC<DataManagerProps> = ({ onDataImport }) => {
+  const mode = useThemeStore((s) => s.mode);
   const handleExportCSV = useCallback(async () => {
     try {
       const habits = await dbManager.getAllHabits();
@@ -94,7 +97,7 @@ const DataManager: React.FC<DataManagerProps> = ({ onDataImport }) => {
               <p>习惯数量：{data.habits.length}</p>
               <p>记录数量：{data.records.length}</p>
               <p>导出日期：{new Date(data.exportDate).toLocaleString()}</p>
-              <p style={{ color: "#ff4d4f" }}>注意：导入将覆盖当前数据，请确认是否继续？</p>
+              <p style={{ color: semanticColors.error[mode] }}>注意：导入将覆盖当前数据，请确认是否继续？</p>
             </div>
           ),
           okText: "确认导入",

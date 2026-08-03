@@ -1,5 +1,7 @@
 import { Input, Card, Space, Typography, Tag, Empty, Alert, Statistic, Row, Col } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -24,6 +26,7 @@ interface RegexTesterProps {
 }
 
 const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTesterProps) => {
+  const mode = useThemeStore((s) => s.mode);
   const renderHighlightedText = (text: string, matches: MatchResult[]) => {
     if (matches.length === 0) {
       return <Text>{text}</Text>;
@@ -86,7 +89,7 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
       <div className="match-explanation">
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
           <div className="explanation-basic">
-            <InfoCircleOutlined style={{ color: "#1890ff", marginRight: 8 }} />
+            <InfoCircleOutlined style={{ color: semanticColors.info[mode], marginRight: 8 }} />
             <Text type="secondary">
               在位置 <Text code>{match.index}</Text> 处找到匹配，长度为 <Text code>{match.match.length}</Text> 个字符
             </Text>
@@ -123,7 +126,7 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
             <Space direction="vertical" style={{ width: "100%" }}>
               <div className="match-summary">
                 <Space>
-                  <CheckCircleOutlined style={{ color: "#52c41a", fontSize: 20 }} />
+                  <CheckCircleOutlined style={{ color: semanticColors.success[mode], fontSize: 20 }} />
                   <Text strong style={{ fontSize: 16 }}>
                     找到 {testResult.matches.length} 个匹配
                   </Text>

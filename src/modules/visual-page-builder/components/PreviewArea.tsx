@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Space, Button, Select, Tooltip } from 'antd';
 import { DesktopOutlined, TabletOutlined, MobileOutlined, EditOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
@@ -13,7 +13,13 @@ const PreviewArea: React.FC = () => {
   const previewMode = useCanvasStore(s => s.previewMode);
   const previewDevice = useCanvasStore(s => s.previewDevice);
   const previewScale = useCanvasStore(s => s.previewScale);
-  const rootNodes = useCanvasStore(s => Object.values(s.nodes).filter(node => !node.parentId));
+  // 订阅 nodes 引用（store 仅在替换 nodes 对象时变化），用 useMemo 派生根节点数组
+  // 不能直接在 selector 里 filter，否则每次返回新数组引用会触发 Zustand 无限重渲染
+  const nodes = useCanvasStore(s => s.nodes);
+  const rootNodes = useMemo(
+    () => Object.values(nodes).filter(node => !node.parentId),
+    [nodes]
+  );
   const setPreviewMode = useCanvasStore(s => s.setPreviewMode);
   const setPreviewDevice = useCanvasStore(s => s.setPreviewDevice);
   const setPreviewScale = useCanvasStore(s => s.setPreviewScale);

@@ -1,0 +1,145 @@
+// ============================================================
+// etools 设计 token —— 墨骨朱魂
+// 品牌瞬间朱红 + 墨色为骨，工具是主角，UI 是配角
+// 所有颜色走 CSS 自定义属性，便于亮/暗主题切换
+// ============================================================
+
+:root {
+  // —— 品牌色（朱红，源自 logo #d81e06）——
+  --et-brand: #e0484f;
+  --et-brand-hover: #c73d43;
+  --et-brand-active: #b03338;
+  --et-brand-soft: #fce7e8;       // 朱红浅底（徽章 / 图标底）
+  --et-brand-border: #f4b6b9;
+
+  // —— 文本 ——
+  --et-ink: #1a1d21;              // 主文本（墨色）
+  --et-ink-2: #475569;            // 次要文本（石板）
+  --et-ink-3: #94a3b8;            // 辅助 / 占位（灰）
+  --et-ink-inverse: #ffffff;      // 反色文本
+
+  // —— 背景 ——
+  --et-bg-page: #f7f8fa;          // 页面底
+  --et-bg-card: #ffffff;          // 卡片
+  --et-bg-subtle: #f1f3f5;        // 次级面板 / 悬停底
+  --et-bg-elevated: #ffffff;      // 浮层（dropdown / popover）
+
+  // —— 边框 ——
+  --et-border: #e5e7eb;
+  --et-border-strong: #d1d5db;
+  --et-border-brand: #e0484f;
+
+  // —— 分类色（用于分类徽章）——
+  --et-cat-dev: #3b82f6;          // 开发工具
+  --et-cat-dev-soft: rgba(59, 130, 246, 0.1);
+  --et-cat-design: #e0484f;       // 设计工具
+  --et-cat-design-soft: #fce7e8;
+  --et-cat-life: #10b981;         // 生活工具
+  --et-cat-life-soft: rgba(16, 185, 129, 0.1);
+
+  // —— 功能色 ——
+  --et-success: #10b981;
+  --et-success-soft: rgba(16, 185, 129, 0.1);
+  --et-warning: #f59e0b;
+  --et-warning-soft: rgba(245, 158, 11, 0.12);
+  --et-error: #ef4444;
+  --et-error-soft: rgba(239, 68, 68, 0.1);
+  --et-info: #3b82f6;
+  --et-info-soft: rgba(59, 130, 246, 0.1);
+
+  // —— 字体 ——
+  --et-font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Inter",
+    "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --et-font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  // —— 字号阶梯 ——
+  --et-fs-xs: 12px;
+  --et-fs-sm: 13px;
+  --et-fs-base: 14px;
+  --et-fs-md: 16px;
+  --et-fs-lg: 18px;
+  --et-fs-xl: 20px;
+  --et-fs-2xl: 24px;
+  --et-fs-3xl: 30px;
+  --et-fs-4xl: 36px;
+
+  // —— 字重 ——
+  --et-fw-normal: 400;
+  --et-fw-medium: 500;
+  --et-fw-strong: 600;
+
+  // —— 圆角 ——
+  --et-radius-sm: 4px;
+  --et-radius: 8px;
+  --et-radius-card: 12px;
+  --et-radius-full: 999px;
+
+  // —— 间距 ——
+  --et-sp-1: 4px;
+  --et-sp-2: 8px;
+  --et-sp-3: 12px;
+  --et-sp-4: 16px;
+  --et-sp-5: 20px;
+  --et-sp-6: 24px;
+  --et-sp-8: 32px;
+  --et-sp-10: 40px;
+  --et-sp-12: 48px;
+
+  // —— 阴影（极克制，边框优先）——
+  --et-shadow-sm: 0 1px 2px rgba(15, 17, 21, 0.04);
+  --et-shadow-md: 0 4px 12px rgba(15, 17, 21, 0.06);
+  --et-shadow-lg: 0 8px 24px rgba(15, 17, 21, 0.08);
+  --et-shadow-brand: 0 6px 16px rgba(224, 72, 79, 0.1);
+
+  // —— 过渡 ——
+  --et-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  // —— AntD 兼容映射（供未替换模块平滑过渡）——
+  --primary-color: var(--et-brand);
+}
+
+// ============================================================
+// 暗色主题
+// ============================================================
+:root[data-theme="dark"] {
+  --et-brand: #f25962;
+  --et-brand-hover: #f4737a;
+  --et-brand-active: #f25962;
+  --et-brand-soft: #3a1f22;
+  --et-brand-border: #5a2c30;
+
+  --et-ink: #f1f3f5;
+  --et-ink-2: #94a3b8;
+  --et-ink-3: #64748b;
+  --et-ink-inverse: #1a1d21;
+
+  --et-bg-page: #0f1115;
+  --et-bg-card: #1a1d21;
+  --et-bg-subtle: #252930;
+  --et-bg-elevated: #252930;
+
+  --et-border: #2a2f37;
+  --et-border-strong: #3a3f47;
+  --et-border-brand: #f25962;
+
+  --et-cat-dev: #60a5fa;
+  --et-cat-dev-soft: rgba(96, 165, 250, 0.14);
+  --et-cat-design: #f25962;
+  --et-cat-design-soft: #3a1f22;
+  --et-cat-life: #34d399;
+  --et-cat-life-soft: rgba(52, 211, 153, 0.14);
+
+  --et-success: #34d399;
+  --et-success-soft: rgba(52, 211, 153, 0.14);
+  --et-warning: #fbbf24;
+  --et-warning-soft: rgba(251, 191, 36, 0.16);
+  --et-error: #f87171;
+  --et-error-soft: rgba(248, 113, 113, 0.14);
+  --et-info: #60a5fa;
+  --et-info-soft: rgba(96, 165, 250, 0.14);
+
+  --et-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --et-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --et-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --et-shadow-brand: 0 6px 16px rgba(242, 89, 98, 0.18);
+}

@@ -14,13 +14,7 @@ interface JsonOutputProps {
   language?: "json" | "yaml" | "csv" | "xml" | "text";
 }
 
-const JsonOutput = ({
-  title,
-  content,
-  error,
-  emptyText = "暂无输出",
-  language = "text",
-}: JsonOutputProps) => {
+const JsonOutput = ({ title, content, error, emptyText = "暂无输出", language = "text" }: JsonOutputProps) => {
   const handleCopy = () => {
     if (!content) {
       message.warning("内容为空");
@@ -41,24 +35,15 @@ const JsonOutput = ({
         </Space>
       }
       extra={
-        <Button
-          size="small"
-          icon={<CopyOutlined />}
-          onClick={handleCopy}
-          disabled={!content}
-        >
+        <Button size="small" icon={<CopyOutlined />} onClick={handleCopy} disabled={!content}>
           复制
         </Button>
       }
       className="json-output"
       styles={{ body: { padding: 12 } }}
     >
-      {error && (
-        <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />
-      )}
-      {!content && !error && (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
-      )}
+      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
+      {!content && !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />}
       {content && (
         <TextArea
           value={content}
@@ -68,7 +53,6 @@ const JsonOutput = ({
           style={{
             fontFamily: '"Monaco","Menlo","Ubuntu Mono","Consolas",monospace',
             fontSize: 13,
-            background: "#fafafa",
           }}
         />
       )}
@@ -83,12 +67,7 @@ interface QueryResultListProps {
 
 export const QueryResultList = ({ results }: QueryResultListProps) => {
   if (results.length === 0) {
-    return (
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="未匹配到任何节点"
-      />
-    );
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未匹配到任何节点" />;
   }
 
   const handleCopy = (text: string) => {
@@ -110,18 +89,12 @@ export const QueryResultList = ({ results }: QueryResultListProps) => {
                 <Tag color="purple" style={{ fontSize: 11 }}>
                   {type}
                 </Tag>
-                <Text
-                  code
-                  copyable={{ onCopy: () => handleCopy(r.path) }}
-                  style={{ fontSize: 12 }}
-                >
+                <Text code copyable={{ onCopy: () => handleCopy(r.path) }} style={{ fontSize: 12 }}>
                   {r.path}
                 </Text>
               </div>
               <div className="json-output__query-value">
-                <Text style={{ fontFamily: "monospace", fontSize: 12 }}>
-                  {preview}
-                </Text>
+                <Text style={{ fontFamily: "monospace", fontSize: 12 }}>{preview}</Text>
               </div>
             </div>
           );

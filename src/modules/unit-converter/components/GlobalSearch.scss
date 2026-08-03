@@ -24,7 +24,7 @@
     padding: 12px 16px;
 
     &:hover {
-      background-color: #f5f5f5;
+      background-color: var(--et-bg-page);
     }
   }
 
@@ -68,5 +68,18 @@
   &__result-description {
     font-size: 13px;
     display: block;
+  }
+}
+
+:root[data-theme="dark"] {
+  .global-search {
+    &__result-item {
+      background-color: var(--et-bg-subtle);
+    }
+  }
+
+  // —— box-shadow ——
+  .global-search__results {
+    box-shadow: var(--et-shadow-lg);
   }
 }

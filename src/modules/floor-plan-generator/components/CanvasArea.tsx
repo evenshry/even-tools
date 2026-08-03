@@ -1,14 +1,17 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Button, Card, message, Space, Tooltip } from 'antd';
 import { MinusOutlined, PlusOutlined } from '@ant-design/icons';
-import { useFloorPlanStore } from '../store/useFloorPlanStore';
+import { useFloorPlanStore, type Selection, genId } from '../store/useFloorPlanStore';
+import { findNonOverlappingPosition } from '../utils/roomPlacement';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 interface CanvasAreaProps {
   previewMode?: boolean;
-  onElementSelect?: (element: any) => void;
 }
 
-const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementSelect }) => {
+const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false }) => {
+  const mode = useThemeStore((s) => s.mode);
   const {
     houseConfig,
     addRoom,
@@ -18,12 +21,14 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     addDoor,
     updateDoor,
     addWindow,
-    updateWindow
+    updateWindow,
+    selectedElement,
+    setSelectedElement
   } = useFloorPlanStore();
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{
-    mode: 'none' | 'pan' | 'drag' | 'resize';
+    mode: 'none' | 'pan' | 'drag' | 'resize' | 'rotate';
     originalType?: 'room' | 'furniture' | 'door' | 'window';
     handle?: 'nw' | 'ne' | 'sw' | 'se';
     roomId?: string;
@@ -38,6 +43,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     startFurniture?: FloorPlan.Furniture;
     startDoor?: FloorPlan.Door;
     startWindow?: FloorPlan.Window;
+    // 旋转手柄专用：起始指针相对家具中心的角度（度）与起始 rotation
+    startPointerAngle?: number;
+    startRotation?: number;
   }>({
     mode: 'none',
     startX: 0,
@@ -46,7 +54,6 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     startViewportY: 0
   });
 
-  const [selected, setSelected] = useState<any>(null);
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
 
   const canvasSize = useMemo(() => ({ width: 1200, height: 800 }), []);
@@ -78,39 +85,33 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
 
   const getSvgPoint = (evt: { clientX: number; clientY: number }) => {
     const svg = svgRef.current;
-    if (!svg) {
-      console.log('SVG ref is null');
-      return { x: 0, y: 0 };
-    }
-    console.log('SVG element:', svg);
-    console.log('SVG bounds:', svg.getBoundingClientRect());
+    if (!svg) return { x: 0, y: 0 };
     const ctm = svg.getScreenCTM();
-    if (!ctm) {
-      console.log('CTM is null');
-      return { x: 0, y: 0 };
-    }
+    if (!ctm) return { x: 0, y: 0 };
     const pt = new DOMPoint(evt.clientX, evt.clientY);
     const p = pt.matrixTransform(ctm.inverse());
-    console.log('Screen point:', { x: evt.clientX, y: evt.clientY });
-    console.log('SVG point:', p);
     return { x: p.x, y: p.y };
   };
 
-  const buildSelected = (payload: any) => {
-    setSelected(payload);
-    onElementSelect?.(payload);
+  const buildSelected = (sel: Selection | null) => {
+    setSelectedElement(sel);
   };
 
   const handleAddRoom = () => {
-    const ts = Date.now();
+    const width = 300;
+    const height = 300;
+    const pos = findNonOverlappingPosition(
+      { x: snap(100), y: snap(100), width, height },
+      houseConfig.rooms
+    );
     const newRoom: FloorPlan.Room = {
-      id: `room-${ts}`,
+      id: genId('room'),
       type: 'living',
       name: '新房间',
-      width: 300,
-      height: 300,
-      x: snap(100),
-      y: snap(100),
+      width,
+      height,
+      x: pos.x,
+      y: pos.y,
       color: '#f0f0f0',
       doors: [],
       windows: [],
@@ -121,19 +122,13 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   };
 
   const findRoomAtPoint = (p: { x: number; y: number }) => {
-    console.log('Finding room at point:', p);
-    console.log('Rooms:', houseConfig.rooms);
     const rooms = [...houseConfig.rooms];
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i];
-      console.log(`Checking room ${r.id}: x=${r.x}, y=${r.y}, width=${r.width}, height=${r.height}`);
-      console.log(`Point in room: ${p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height}`);
       if (p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height) {
-        console.log('Found room:', r);
         return r;
       }
     }
-    console.log('No room found at point');
     return null;
   };
 
@@ -175,15 +170,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       startViewportY: viewport.y,
       startRoom: { ...room }
     };
-    buildSelected({
-      id: `room-${room.id}`,
-      x: room.x,
-      y: room.y,
-      width: room.width,
-      height: room.height,
-      fill: room.color,
-      metadata: { originalType: 'room', roomId: room.id, type: room.type }
-    });
+    buildSelected({ originalType: 'room', roomId: room.id });
     (evt.currentTarget as Element).setPointerCapture(evt.pointerId);
   };
 
@@ -202,16 +189,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       startRoom: { ...room },
       startFurniture: { ...furniture }
     };
-    buildSelected({
-      id: `furniture-${furniture.id}`,
-      x: room.x + furniture.x,
-      y: room.y + furniture.y,
-      width: furniture.width,
-      height: furniture.height,
-      rotation: furniture.rotation,
-      fill: getFurnitureColor(furniture.type),
-      metadata: { originalType: 'furniture', roomId: room.id, furnitureId: furniture.id, type: furniture.type }
-    });
+    buildSelected({ originalType: 'furniture', roomId: room.id, furnitureId: furniture.id });
     (evt.currentTarget as Element).setPointerCapture(evt.pointerId);
   };
 
@@ -238,19 +216,10 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       startWindow: originalType === 'window' ? ({ ...item } as FloorPlan.Window) : undefined
     };
     buildSelected({
-      id: `${originalType}-${item.id}`,
-      x: room.x + (item.x ?? 0),
-      y: room.y + (item.y ?? 0),
-      width: originalType === 'door' ? (item.position === 'left' || item.position === 'right' ? 20 : item.width) : (item.position === 'left' || item.position === 'right' ? 15 : item.width),
-      height: item.height ?? (originalType === 'door' ? 20 : 15),
-      fill: originalType === 'door' ? '#8c8c8c' : '#91d5ff',
-      metadata: {
-        originalType,
-        roomId: room.id,
-        doorId: originalType === 'door' ? item.id : undefined,
-        windowId: originalType === 'window' ? item.id : undefined,
-        type: item.type
-      }
+      originalType,
+      roomId: room.id,
+      doorId: originalType === 'door' ? item.id : undefined,
+      windowId: originalType === 'window' ? item.id : undefined
     });
     (evt.currentTarget as Element).setPointerCapture(evt.pointerId);
   };
@@ -280,7 +249,37 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     (evt.currentTarget as Element).setPointerCapture(evt.pointerId);
   };
 
-  const onPointerMove = (evt: React.PointerEvent) => {
+  // 家具旋转：以家具中心为原点，计算指针极角，与起始角度差值即为旋转增量
+  const startRotateFurniture = (evt: React.PointerEvent, room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
+    const p = getSvgPoint(evt);
+    // 家具中心在 SVG 世界坐标下的位置
+    const cx = room.x + furniture.x + furniture.width / 2;
+    const cy = room.y + furniture.y + furniture.height / 2;
+    // atan2 返回弧度，转为度；以正下方为 0°（与 SVG 旋转方向一致更直观）
+    const angle = Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI;
+    dragRef.current = {
+      ...dragRef.current,
+      mode: 'rotate',
+      originalType: 'furniture',
+      roomId: room.id,
+      furnitureId: furniture.id,
+      startX: p.x,
+      startY: p.y,
+      startViewportX: viewport.x,
+      startViewportY: viewport.y,
+      startRoom: { ...room },
+      startFurniture: { ...furniture },
+      startPointerAngle: angle,
+      startRotation: furniture.rotation ?? 0
+    };
+    (evt.currentTarget as Element).setPointerCapture(evt.pointerId);
+  };
+
+  // 拖拽节流：用 rAF 合并多个 pointermove 事件为一帧一次 store 更新
+  const rafIdRef = useRef<number | null>(null);
+  const lastMoveEvtRef = useRef<React.PointerEvent | null>(null);
+
+  const processPointerMove = (evt: React.PointerEvent) => {
     const s = dragRef.current;
     if (s.mode === 'none') return;
     const p = getSvgPoint(evt);
@@ -329,6 +328,24 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       if (s.originalType === 'window' && s.windowId) {
         updateWindow(s.roomId, s.windowId, { position: edge as any, offset });
       }
+      return;
+    }
+
+    if (s.mode === 'rotate' && s.originalType === 'furniture' && s.startRoom && s.startFurniture && s.roomId && s.furnitureId) {
+      const room = s.startRoom;
+      const f = s.startFurniture;
+      const cx = room.x + f.x + f.width / 2;
+      const cy = room.y + f.y + f.height / 2;
+      const currentAngle = Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI;
+      let next = (s.startRotation ?? 0) + (currentAngle - (s.startPointerAngle ?? 0));
+      // 规范到 [0, 360)
+      next = ((next % 360) + 360) % 360;
+      // 按住 Shift 时按 15° 步进吸附（便于快速对齐到 0/90/180/270）
+      if (evt.shiftKey) {
+        next = Math.round(next / 15) * 15;
+        if (next === 360) next = 0;
+      }
+      updateFurniture(s.roomId, s.furnitureId, { rotation: next });
       return;
     }
 
@@ -399,7 +416,26 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     }
   };
 
+  const onPointerMove = (evt: React.PointerEvent) => {
+    if (dragRef.current.mode === 'none') return;
+    lastMoveEvtRef.current = evt;
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const evt2 = lastMoveEvtRef.current;
+      if (evt2) processPointerMove(evt2);
+    });
+  };
+
   const onPointerUp = () => {
+    // 取消可能挂起的帧，确保最后一次 move 被处理
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+      const evt2 = lastMoveEvtRef.current;
+      if (evt2) processPointerMove(evt2);
+    }
+    lastMoveEvtRef.current = null;
     dragRef.current.mode = 'none';
     dragRef.current.originalType = undefined;
     dragRef.current.handle = undefined;
@@ -411,79 +447,67 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     dragRef.current.startFurniture = undefined;
     dragRef.current.startDoor = undefined;
     dragRef.current.startWindow = undefined;
+    dragRef.current.startPointerAngle = undefined;
+    dragRef.current.startRotation = undefined;
   };
 
   const handleWheel = (evt: React.WheelEvent) => {
     evt.preventDefault();
     const delta = evt.deltaY;
     const factor = 1 - Math.max(-0.2, Math.min(0.2, delta * 0.0015));
-    const nextZoom = clamp(viewport.zoom * factor, 0.2, 4);
-    if (nextZoom === viewport.zoom) return;
-
     const p = getSvgPoint(evt);
-    const oldW = canvasSize.width / viewport.zoom;
-    const oldH = canvasSize.height / viewport.zoom;
-    const newW = canvasSize.width / nextZoom;
-    const newH = canvasSize.height / nextZoom;
 
-    const fx = (p.x - viewport.x) / oldW;
-    const fy = (p.y - viewport.y) / oldH;
+    setViewport((v) => {
+      const nextZoom = clamp(v.zoom * factor, 0.2, 4);
+      if (nextZoom === v.zoom) return v;
 
-    const nx = p.x - fx * newW;
-    const ny = p.y - fy * newH;
+      const oldW = canvasSize.width / v.zoom;
+      const oldH = canvasSize.height / v.zoom;
+      const newW = canvasSize.width / nextZoom;
+      const newH = canvasSize.height / nextZoom;
 
-    setViewport({ x: nx, y: ny, zoom: nextZoom });
+      const fx = (p.x - v.x) / oldW;
+      const fy = (p.y - v.y) / oldH;
+
+      const nx = p.x - fx * newW;
+      const ny = p.y - fy * newH;
+
+      return { x: nx, y: ny, zoom: nextZoom };
+    });
   };
 
   const zoomIn = () => setViewport((v) => ({ ...v, zoom: clamp(v.zoom * 1.2, 0.2, 4) }));
   const zoomOut = () => setViewport((v) => ({ ...v, zoom: clamp(v.zoom / 1.2, 0.2, 4) }));
 
   const handleDrop = (evt: React.DragEvent) => {
-    console.log('Drop event triggered');
     evt.preventDefault();
-    if (previewMode) {
-      console.log('Preview mode, returning');
-      return;
-    }
+    if (previewMode) return;
     const raw = evt.dataTransfer.getData('text/plain');
-    console.log('Drag data:', raw);
-    if (!raw) {
-      console.log('No drag data, returning');
-      return;
-    }
+    if (!raw) return;
     let component: any;
     try {
       component = JSON.parse(raw);
-      console.log('Parsed component:', component);
-    } catch (error) {
-      console.error('Failed to parse component:', error);
+    } catch {
       return;
     }
 
     const p = getSvgPoint(evt);
-    console.log('SVG point:', p);
-    const ts = Date.now();
 
     if (component.type === 'room') {
-      const inferredType: FloorPlan.RoomType =
-        component.id?.includes('bedroom') || component.name?.includes('卧室')
-          ? 'bedroom'
-          : component.id?.includes('kitchen') || component.name?.includes('厨房')
-            ? 'kitchen'
-            : component.id?.includes('bathroom') || component.name?.includes('卫生间')
-              ? 'bathroom'
-              : component.id?.includes('dining') || component.name?.includes('餐厅')
-                ? 'dining'
-                : 'living';
-
+      const w = component.width || 300;
+      const h = component.height || 300;
+      const pos = findNonOverlappingPosition(
+        { x: snap(p.x - w / 2), y: snap(p.y - h / 2), width: w, height: h },
+        houseConfig.rooms
+      );
       addRoom({
-        id: `room-${ts}`,
-        type: inferredType,
+        id: genId('room'),
+        type: component.roomType ?? 'living',
         name: component.name || '房间',
-        width: component.width || 300,
-        height: component.height || 300,
-        x: snap(p.x - (component.width || 300) / 2),
-        y: snap(p.y - (component.height || 300) / 2),
+        width: w,
+        height: h,
+        x: pos.x,
+        y: pos.y,
         color: component.color || '#f0f0f0',
         doors: [],
         windows: [],
@@ -504,29 +528,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       const fx = clamp(snap(p.x - room.x - w / 2), 0, Math.max(0, room.width - w));
       const fy = clamp(snap(p.y - room.y - h / 2), 0, Math.max(0, room.height - h));
 
+      const furnitureType = component.furnitureType ?? 'table';
+
       addFurniture(room.id, {
-        id: `furniture-${ts}`,
-        type: component.id?.includes('sofa')
-          ? 'sofa'
-          : component.id?.includes('table')
-            ? 'table'
-            : component.id?.includes('chair')
-              ? 'chair'
-              : component.id?.includes('cabinet')
-                ? 'cabinet'
-                : component.id?.includes('bed')
-                  ? 'bed'
-                  : component.id?.includes('desk')
-                    ? 'desk'
-                    : component.id?.includes('wardrobe')
-                      ? 'wardrobe'
-                      : component.id?.includes('tv')
-                        ? 'tv'
-                        : component.id?.includes('refrigerator')
-                          ? 'refrigerator'
-                          : component.id?.includes('stove')
-                            ? 'stove'
-                            : 'table',
+        id: genId('furniture'),
+        type: furnitureType,
         name: component.name || '家具',
         width: w,
         height: h,
@@ -545,9 +551,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
           ? snap(clamp(p.x - room.x - widthAlongWall / 2, 0, Math.max(0, room.width - widthAlongWall)))
           : snap(clamp(p.y - room.y - widthAlongWall / 2, 0, Math.max(0, room.height - widthAlongWall)));
 
+      const doorType = component.doorType ?? 'single';
+
       addDoor(room.id, {
-        id: `door-${ts}`,
-        type: component.id?.includes('double') ? 'double' : 'single',
+        id: genId('door'),
+        type: doorType,
         width: widthAlongWall,
         position: edge as any,
         offset
@@ -563,9 +571,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
           ? snap(clamp(p.x - room.x - widthAlongWall / 2, 0, Math.max(0, room.width - widthAlongWall)))
           : snap(clamp(p.y - room.y - widthAlongWall / 2, 0, Math.max(0, room.height - widthAlongWall)));
 
+      const windowType = component.windowType ?? 'regular';
+
       addWindow(room.id, {
-        id: `window-${ts}`,
-        type: component.id?.includes('bay') ? 'bay' : 'regular',
+        id: genId('window'),
+        type: windowType,
         width: widthAlongWall,
         position: edge as any,
         offset
@@ -574,12 +584,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   };
 
   const onDragOver = (evt: React.DragEvent) => {
-    console.log('Drag over event triggered');
-    if (previewMode) {
-      console.log('Preview mode, returning');
-      return;
-    }
-    console.log('Preventing default and setting drop effect to copy');
+    if (previewMode) return;
     evt.preventDefault();
     evt.dataTransfer.dropEffect = 'copy';
   };
@@ -594,7 +599,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
 
   const renderResizeHandlesForRoom = (room: FloorPlan.Room) => {
     if (previewMode) return null;
-    if (!selected?.metadata || selected.metadata.originalType !== 'room' || selected.metadata.roomId !== room.id) return null;
+    if (!selectedElement || selectedElement.originalType !== 'room' || selectedElement.roomId !== room.id) return null;
 
     const points = {
       nw: { x: room.x, y: room.y },
@@ -625,8 +630,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
 
   const renderResizeHandlesForFurniture = (room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
     if (previewMode) return null;
-    if (!selected?.metadata || selected.metadata.originalType !== 'furniture') return null;
-    if (selected.metadata.roomId !== room.id || selected.metadata.furnitureId !== furniture.id) return null;
+    if (!selectedElement || selectedElement.originalType !== 'furniture') return null;
+    if (selectedElement.roomId !== room.id || selectedElement.furnitureId !== furniture.id) return null;
 
     const ax = room.x + furniture.x;
     const ay = room.y + furniture.y;
@@ -637,8 +642,35 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
       se: { x: ax + furniture.width, y: ay + furniture.height }
     };
 
+    // 旋转手柄：放在家具顶部边中点上方 20px，加一条连接线指示
+    const topMidX = ax + furniture.width / 2;
+    const topMidY = ay;
+    const handleY = topMidY - 20;
+    const handleR = 6;
+
     return (
       <>
+        {/* 旋转手柄连接线 */}
+        <line
+          x1={topMidX}
+          y1={topMidY}
+          x2={topMidX}
+          y2={handleY + handleR}
+          stroke="#52c41a"
+          strokeWidth={1}
+          style={{ pointerEvents: 'none' }}
+        />
+        {/* 旋转手柄本体 */}
+        <circle
+          cx={topMidX}
+          cy={handleY}
+          r={handleR}
+          fill="#fff"
+          stroke="#52c41a"
+          strokeWidth={1.5}
+          style={{ cursor: 'grab' }}
+          onPointerDown={(e) => startRotateFurniture(e, room, furniture)}
+        />
         {resizeHandles.map((h) => (
           <rect
             key={h}
@@ -658,8 +690,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
   };
 
   // 渲染优化：使用 useMemo 缓存渲染结果
-  const renderRoom = React.useMemo(() => (room: FloorPlan.Room) => {
-    const isSelected = selected?.metadata?.originalType === 'room' && selected.metadata.roomId === room.id;
+  const renderRoom = (room: FloorPlan.Room) => {
+    const isSelected = selectedElement?.originalType === 'room' && selectedElement.roomId === room.id;
     const stroke = isSelected ? '#1890ff' : '#333';
     const strokeWidth = isSelected ? 3 : 2;
 
@@ -692,43 +724,49 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         {renderResizeHandlesForRoom(room)}
       </g>
     );
-  }, [selected, previewMode, houseConfig.showDimensions]);
+  };
 
-  const renderFurniture = React.useMemo(() => (room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
+  const renderFurniture = (room: FloorPlan.Room, furniture: FloorPlan.Furniture) => {
     if (!houseConfig.showFurniture) return null;
-    const isSelected = selected?.metadata?.originalType === 'furniture' && selected.metadata.roomId === room.id && selected.metadata.furnitureId === furniture.id;
+    const isSelected = selectedElement?.originalType === 'furniture' && selectedElement.roomId === room.id && selectedElement.furnitureId === furniture.id;
     const stroke = isSelected ? '#52c41a' : '#A0522D';
 
     const x = room.x + furniture.x;
     const y = room.y + furniture.y;
+    const rot = furniture.rotation ?? 0;
+    const cx = x + furniture.width / 2;
+    const cy = y + furniture.height / 2;
+    const transform = rot ? `rotate(${rot} ${cx} ${cy})` : undefined;
 
     return (
       <g key={furniture.id}>
-        <rect
-          x={x}
-          y={y}
-          width={furniture.width}
-          height={furniture.height}
-          fill={getFurnitureColor(furniture.type)}
-          stroke={stroke}
-          strokeWidth={isSelected ? 2 : 1}
-          onPointerDown={previewMode ? undefined : (e) => startDragFurniture(e, room, furniture)}
-        />
-        <text
-          x={x + 4}
-          y={y + 14}
-          fontSize={11}
-          fill="#333"
-          style={{ userSelect: 'none', pointerEvents: 'none' }}
-        >
-          {furniture.name}
-        </text>
+        <g transform={transform}>
+          <rect
+            x={x}
+            y={y}
+            width={furniture.width}
+            height={furniture.height}
+            fill={getFurnitureColor(furniture.type)}
+            stroke={stroke}
+            strokeWidth={isSelected ? 2 : 1}
+            onPointerDown={previewMode ? undefined : (e) => startDragFurniture(e, room, furniture)}
+          />
+          <text
+            x={x + 4}
+            y={y + 14}
+            fontSize={11}
+            fill="#333"
+            style={{ userSelect: 'none', pointerEvents: 'none' }}
+          >
+            {furniture.name}
+          </text>
+        </g>
         {renderResizeHandlesForFurniture(room, furniture)}
       </g>
     );
-  }, [selected, previewMode, houseConfig.showFurniture, getFurnitureColor]);
+  };
 
-  const renderDoor = React.useMemo(() => (room: FloorPlan.Room, door: FloorPlan.Door) => {
+  const renderDoor = (room: FloorPlan.Room, door: FloorPlan.Door) => {
     const thickness = 20;
     const isVertical = door.position === 'left' || door.position === 'right';
     const w = isVertical ? thickness : door.width;
@@ -736,7 +774,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     const x = room.x + (door.x ?? 0);
     const y = room.y + (door.y ?? 0);
 
-    const isSelected = selected?.metadata?.originalType === 'door' && selected.metadata.roomId === room.id && selected.metadata.doorId === door.id;
+    const isSelected = selectedElement?.originalType === 'door' && selectedElement.roomId === room.id && selectedElement.doorId === door.id;
     const stroke = isSelected ? '#faad14' : '#333';
 
     return (
@@ -753,9 +791,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         />
       </g>
     );
-  }, [selected, previewMode]);
+  };
 
-  const renderWindow = React.useMemo(() => (room: FloorPlan.Room, window: FloorPlan.Window) => {
+  const renderWindow = (room: FloorPlan.Room, window: FloorPlan.Window) => {
     const thickness = 15;
     const isVertical = window.position === 'left' || window.position === 'right';
     const w = isVertical ? thickness : window.width;
@@ -763,8 +801,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
     const x = room.x + (window.x ?? 0);
     const y = room.y + (window.y ?? 0);
 
-    const isSelected = selected?.metadata?.originalType === 'window' && selected.metadata.roomId === room.id && selected.metadata.windowId === window.id;
-    const stroke = isSelected ? '#1890ff' : '#1890ff';
+    const isSelected = selectedElement?.originalType === 'window' && selectedElement.roomId === room.id && selectedElement.windowId === window.id;
+    const stroke = isSelected ? '#faad14' : '#1890ff';
 
     return (
       <g key={window.id}>
@@ -780,7 +818,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
         />
       </g>
     );
-  }, [selected, previewMode]);
+  };
 
   return (
     <Card
@@ -838,7 +876,10 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             const target = e.target as Element;
-            const isHandle = target.tagName === 'rect' && (target as any).style?.cursor?.includes('resize');
+            const cursor = (target as any).style?.cursor ?? '';
+            // resize 手柄（rect + cursor 包含 resize）或旋转手柄（circle + cursor 为 grab）
+            const isHandle = (target.tagName === 'rect' && cursor.includes('resize')) ||
+                             (target.tagName === 'circle' && cursor === 'grab');
             if (isHandle) return;
             const isElement = target.tagName === 'rect';
             if (isElement) return;
@@ -847,7 +888,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
           }}
           onDrop={handleDrop}
           onDragOver={onDragOver}
-          style={{ background: '#f5f5f5', touchAction: 'none', pointerEvents: 'all' }}
+          style={{ background: semanticColors.grayf5[mode], touchAction: 'none', pointerEvents: 'all' }}
         >
           <defs>
             {houseConfig.showGrid && (
@@ -869,6 +910,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ previewMode = false, onElementS
               width={canvasSize.width / viewport.zoom + 4000}
               height={canvasSize.height / viewport.zoom + 4000}
               fill="url(#gridPattern)"
+              pointerEvents="none"
             />
           )}
 

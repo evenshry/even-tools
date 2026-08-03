@@ -6,10 +6,13 @@ import { EyeOutlined } from '@ant-design/icons';
 import { usePrinterStore } from '../../store/usePrinterStore';
 import { useCommandCompiler } from '../../hooks/useCommandCompiler';
 import { formatHexDump } from '../../utils/command/hexDump';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { Text } = Typography;
 
 const HexPreview: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   const commandInput = usePrinterStore(s => s.commandInput);
   const { bytes, error, byteCount } = useCommandCompiler(commandInput);
 
@@ -48,11 +51,11 @@ const HexPreview: React.FC = () => {
       }}>
         {dumpLines.map((line, i) => (
           <div key={i}>
-            <span style={{ color: '#888' }}>{line.offset}</span>
+            <span style={{ color: semanticColors.gray888[mode] }}>{line.offset}</span>
             {'  '}
-            <span style={{ color: '#2563eb' }}>{line.hex}</span>
+            <span style={{ color: semanticColors.blue2563eb[mode] }}>{line.hex}</span>
             {'  '}
-            <span style={{ color: '#16a34a' }}>{line.ascii}</span>
+            <span style={{ color: semanticColors.green16a34a[mode] }}>{line.ascii}</span>
           </div>
         ))}
       </pre>

@@ -4,6 +4,8 @@ import { PlusOutlined, SaveOutlined, DeleteOutlined, ReloadOutlined } from '@ant
 import { useCanvasStore } from '../store/useCanvasStore';
 import { builtinTemplates, type PageTemplate } from '../data/templates';
 import type { SavedTemplate } from '../store/usePagePersistence';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 import './TemplateGallery.scss';
 
 const { TextArea } = Input;
@@ -31,6 +33,7 @@ const savedToTemplate = (saved: SavedTemplate): UserTemplateItem => {
 };
 
 const TemplateGallery: React.FC = () => {
+  const mode = useThemeStore((s) => s.mode);
   const nodes = useCanvasStore((s) => s.nodes);
   const applyTemplate = useCanvasStore((s) => s.applyTemplate);
   const saveTemplate = useCanvasStore((s) => s.saveTemplate);
@@ -249,7 +252,7 @@ const TemplateGallery: React.FC = () => {
               maxLength={200}
             />
           </div>
-          <div style={{ fontSize: 12, color: '#8c8c8c' }}>
+          <div style={{ fontSize: 12, color: semanticColors.gray8c[mode] }}>
             当前画布有 {Object.keys(nodes).length} 个节点，将一并保存到模板。
           </div>
         </div>

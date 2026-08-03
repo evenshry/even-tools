@@ -11,6 +11,8 @@ import type {
   DividerElement, TableElement, ImageElement, Alignment, BarcodeType, QrErrorLevel,
 } from '../../data/interface';
 import { compressImage, processImage, bitmapToDataUrl } from '../../utils/imageProcessor';
+import { useThemeStore } from "@/store/useThemeStore";
+import { semanticColors } from "@/styles/themeColors";
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -312,6 +314,7 @@ const ImageProps: React.FC<{
   el: ImageElement;
   update: (patch: Partial<PrintElement>) => void;
 }> = ({ el, update }) => {
+  const mode = useThemeStore((s) => s.mode);
   const profile = usePrinterStore(s => s.profile);
   const [bitmapPreview, setBitmapPreview] = React.useState<string>('');
   const [bitmapInfo, setBitmapInfo] = React.useState<string>('');
@@ -365,7 +368,7 @@ const ImageProps: React.FC<{
               <img
                 src={el.src}
                 alt="preview"
-                style={{ maxWidth: '100%', maxHeight: 150, objectFit: 'contain', border: '1px solid #e8e8e8', borderRadius: 4 }}
+                style={{ maxWidth: '100%', maxHeight: 150, objectFit: 'contain', border: `1px solid ${semanticColors.graye8[mode]}`, borderRadius: 4 }}
               />
               <Space size={4} style={{ marginTop: 8 }}>
                 <Upload
@@ -396,7 +399,7 @@ const ImageProps: React.FC<{
             <img
               src={bitmapPreview}
               alt="bitmap preview"
-              style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', border: '1px solid #e8e8e8', borderRadius: 4, imageRendering: 'pixelated' }}
+              style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', border: `1px solid ${semanticColors.graye8[mode]}`, borderRadius: 4, imageRendering: 'pixelated' }}
             />
             <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
               {bitmapInfo}

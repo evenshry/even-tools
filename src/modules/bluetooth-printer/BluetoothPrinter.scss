@@ -5,19 +5,10 @@
   display: flex;
   flex-direction: column;
 
-  .module-header {
-    background: #fff;
-
-    .module-header__title {
-      color: #000;
-      margin: 0;
-    }
-  }
-
   &__content {
     flex: 1;
     padding: 12px;
-    background: #f0f2f5;
+    background: var(--et-bg-page);
     overflow: hidden;
     height: calc(100vh - 64px);
   }
@@ -68,7 +59,7 @@
 
 .bp-toolbar-row {
   padding: 8px 12px;
-  background: #fff;
+  background: var(--et-bg-card);
   border-radius: 6px;
   margin-bottom: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -195,5 +186,12 @@
   .bp-designer-grid {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto 1fr;
+  }
+}
+
+:root[data-theme="dark"] {
+  // —— box-shadow ——
+  .bp-toolbar-row {
+    box-shadow: var(--et-shadow-sm);
   }
 }

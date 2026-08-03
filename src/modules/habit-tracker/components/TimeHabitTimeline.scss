@@ -31,7 +31,7 @@
   &__info {
     margin-bottom: 20px;
     padding: 16px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 8px;
   }
 
@@ -84,7 +84,7 @@
     display: flex;
     gap: 24px;
     padding-top: 24px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--et-border);
   }
 
   &__stat-item {
@@ -95,5 +95,34 @@
       display: block;
       margin-bottom: 4px;
     }
+  }
+}
+
+:root[data-theme="dark"] {
+  .time-habit-timeline__action-btn {
+    &--check {
+      background: var(--et-success);
+      border-color: var(--et-success);
+
+      &:hover {
+        background: var(--et-success);
+        border-color: var(--et-success);
+      }
+    }
+
+    &--cancel {
+      background: var(--et-error);
+      border-color: var(--et-error);
+
+      &:hover {
+        background: var(--et-error);
+        border-color: var(--et-error);
+      }
+    }
+  }
+
+  // —— box-shadow ——
+  .time-habit-timeline__action-btn:hover {
+    box-shadow: var(--et-shadow-lg);
   }
 }

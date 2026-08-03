@@ -1,64 +1,80 @@
 .module-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid #e8e8e8;
-  height: auto;
-  min-height: 64px;
+  gap: var(--et-sp-4);
+  padding: 0 var(--et-sp-6);
+  border-bottom: 1px solid var(--et-border);
+  height: 56px;
+  min-height: 56px;
   line-height: normal;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
 
-  &__left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    min-width: 0;
-  }
+:root[data-theme="dark"] .module-header {
+  background: rgba(26, 29, 33, 0.85);
+}
 
-  &__title {
-    margin: 0;
-    margin-bottom: 0px !important;
-  }
+.module-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--et-sp-3);
+  min-width: 0;
+}
 
-  &__center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    flex: 0 0 auto;
-    max-width: 60%;
-    min-width: 0;
+.module-header__title {
+  margin: 0 !important;
+  font-weight: var(--et-fw-strong) !important;
+  color: var(--et-ink) !important;
+}
 
-    .ant-tabs {
-      &.ant-tabs-top {
-        > .ant-tabs-nav {
-          margin-bottom: 0;
-          padding: 0;
-        }
+.module-header__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--et-sp-3);
+  flex: 0 0 auto;
+  max-width: 60%;
+  min-width: 0;
 
-        > .ant-tabs-nav::before {
-          border-bottom: none;
-        }
+  .ant-tabs {
+    &.ant-tabs-top {
+      > .ant-tabs-nav {
+        margin-bottom: 0;
+        padding: 0;
+      }
+
+      > .ant-tabs-nav::before {
+        border-bottom: none;
       }
     }
   }
+}
 
-  &__extra {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-    justify-content: flex-end;
-  }
+.module-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--et-sp-2);
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.module-header__extra {
+  display: flex;
+  align-items: center;
+  gap: var(--et-sp-2);
 }
 
 @media (max-width: 768px) {
   .module-header {
-    padding: 8px 16px;
+    padding: 0 var(--et-sp-4);
     flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
 
     &__center {
       order: 3;

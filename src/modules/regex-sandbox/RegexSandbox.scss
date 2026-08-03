@@ -1,6 +1,6 @@
 .regex-sandbox {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: var(--et-bg-page);
 
   &__content {
     padding: 0;
@@ -13,7 +13,7 @@
   }
 
   &__left-panel {
-    background: #fff;
+    background: var(--et-bg-card);
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.09);
     z-index: 1;
     overflow-y: auto;
@@ -22,11 +22,11 @@
   &__middle-panel {
     padding: 10px;
     overflow-y: auto;
-    background: #f5f5f5;
+    background: var(--et-bg-page);
   }
 
   &__right-panel {
-    background: #fff;
+    background: var(--et-bg-card);
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.09);
     z-index: 1;
     overflow-y: auto;
@@ -114,9 +114,9 @@
 
   .match-stats {
     padding: 16px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 6px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--et-border);
   }
 
   .match-preview {
@@ -128,9 +128,9 @@
 
     .match-preview-content {
       padding: 16px;
-      background: #fafafa;
+      background: var(--et-bg-subtle);
       border-radius: 6px;
-      border: 1px solid #d9d9d9;
+      border: 1px solid var(--et-border-strong);
       min-height: 100px;
       font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
       font-size: 14px;
@@ -149,8 +149,8 @@
 
     .match-item {
       padding: 12px;
-      background: #fafafa;
-      border: 1px solid #e8e8e8;
+      background: var(--et-bg-subtle);
+      border: 1px solid var(--et-border);
       border-radius: 6px;
 
       .match-item-header {
@@ -230,22 +230,22 @@
   .preset-pattern-display {
     margin-top: 8px;
     padding: 8px;
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 4px;
   }
 
   .regex-structure {
     padding: 12px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 6px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--et-border);
   }
 
   .regex-flags {
     padding: 12px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 6px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--et-border);
   }
 }
 
@@ -274,14 +274,14 @@
 .regex-guide-examples {
   .use-case-item {
     padding: 12px;
-    background: #fafafa;
+    background: var(--et-bg-subtle);
     border-radius: 6px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--et-border);
   }
 
   .use-case-header {
     padding-bottom: 8px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--et-border);
     margin-bottom: 12px;
   }
 
@@ -294,14 +294,14 @@
   .use-case-result {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #e8e8e8;
+    border-top: 1px solid var(--et-border);
   }
 
   .final-pattern {
     .pattern-display {
       margin-top: 8px;
       padding: 8px 12px;
-      background: #f0f0f0;
+      background: var(--et-bg-subtle);
       border-radius: 4px;
     }
   }
@@ -309,7 +309,7 @@
   .example-demo {
     margin-top: 12px;
     padding: 8px;
-    background: #fff;
+    background: var(--et-bg-card);
     border-radius: 4px;
   }
 
@@ -339,7 +339,7 @@
       height: auto;
       max-height: 400px;
       box-shadow: none;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--et-border);
     }
 
     &__middle-panel {
@@ -396,5 +396,106 @@
       flex-direction: column;
       align-items: flex-start;
     }
+  }
+}
+
+// —— 暗色模式覆盖 ——
+:root[data-theme="dark"] {
+  .regex-sandbox {
+    &__left-panel,
+    &__right-panel {
+      box-shadow: none;
+      border-right: 1px solid var(--et-border);
+      border-left: 1px solid var(--et-border);
+    }
+  }
+
+  .regex-tester-result {
+    .match-summary {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: var(--et-success);
+    }
+
+    .match-stats {
+      border-color: var(--et-border);
+    }
+
+    .match-preview-content {
+      background: var(--et-bg-subtle);
+      border-color: var(--et-border);
+      color: var(--et-ink);
+    }
+
+    .match-item {
+      border-color: var(--et-border);
+    }
+
+    .match-explanation {
+      background: var(--et-info-soft);
+      border-left-color: var(--et-info);
+    }
+  }
+
+  .highlighted-text {
+    .match-highlight {
+      background-color: rgba(224, 72, 79, 0.35);
+      color: #fff;
+    }
+  }
+
+  .regex-library {
+    .preset-item {
+      &--selected {
+        background-color: var(--et-info-soft);
+        border-left-color: var(--et-info);
+      }
+    }
+  }
+
+  .regex-visualizer {
+    .regex-preset-info {
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
+    }
+
+    .regex-structure,
+    .regex-flags {
+      border-color: var(--et-border);
+    }
+  }
+
+  .regex-guide-examples {
+    .use-case-item {
+      border-color: var(--et-border);
+    }
+
+    .use-case-header {
+      border-bottom-color: var(--et-border);
+    }
+
+    .use-case-result {
+      border-top-color: var(--et-border);
+    }
+
+    .final-pattern {
+      .pattern-display {
+        background: var(--et-bg-subtle);
+        color: var(--et-ink);
+      }
+    }
+
+    .guide-tips {
+      background: var(--et-info-soft);
+      border-left-color: var(--et-info);
+    }
+  }
+
+  // —— box-shadow ——
+  .regex-sandbox__left-panel {
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.35);
+  }
+
+  .regex-sandbox__right-panel {
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.35);
   }
 }
