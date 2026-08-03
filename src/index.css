@@ -7,17 +7,21 @@
 html, body, #root {
   height: 100%;
   width: 100%;
+  background: var(--et-bg-page);
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--et-bg-page) !important;
+  color: var(--et-ink);
 }
 
 #root {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
 /* 页面构建器动画定义 */
