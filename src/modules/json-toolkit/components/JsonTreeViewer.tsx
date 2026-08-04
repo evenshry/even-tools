@@ -44,10 +44,10 @@ interface JsonTreeViewerProps {
 
 // 各类型的值文本颜色
 const typeValueColor: Record<string, string> = {
-  object: "#722ed1",
-  array: "#13c2c2",
-  string: "#389e0d",
-  number: "#fa8c16",
+  object: "#9244ff",
+  array: "#37d3d3",
+  string: "#4dc41b",
+  number: "#f68e1f",
   boolean: "#eb2f96",
   null: "#8c8c8c",
   undefined: "#bfbfbf",
