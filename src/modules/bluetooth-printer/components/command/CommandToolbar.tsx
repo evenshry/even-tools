@@ -1,13 +1,13 @@
 // 指令工具栏 - 发送/编码选择
 
 import React from 'react';
-import { Button, Select, InputNumber, Checkbox, Space, Tooltip } from 'antd';
+import { Button, Select, InputNumber, Checkbox, Space, Tooltip, Segmented } from 'antd';
 import { PrinterOutlined, ClearOutlined, SaveOutlined } from '@ant-design/icons';
 import { usePrinterStore } from '../../store/usePrinterStore';
 import { useBluetoothPrinter } from '../../hooks/useBluetoothPrinter';
 import { useCommandCompiler } from '../../hooks/useCommandCompiler';
 import { usePrintQueue } from '../../hooks/usePrintQueue';
-import type { PrintJob } from '../../data/interface';
+import type { PrintJob, CommandSyntax } from '../../data/interface';
 
 const CommandToolbar: React.FC = () => {
   const commandInput = usePrinterStore(s => s.commandInput);
@@ -51,16 +51,28 @@ const CommandToolbar: React.FC = () => {
 
   return (
     <Space wrap>
-      <Select
+      <Segmented
         size="small"
-        value={commandInput.encoding}
-        onChange={(v) => setCommandInput({ encoding: v })}
+        value={commandInput.syntax}
+        onChange={(v) => setCommandInput({ syntax: v as CommandSyntax })}
         options={[
-          { value: 'utf8', label: 'UTF-8' },
-          { value: 'gbk', label: 'GBK' },
+          { label: '纯文本', value: 'plaintext' },
+          { label: 'Hex', value: 'hex' },
         ]}
-        style={{ width: 90 }}
       />
+
+      {commandInput.syntax === 'plaintext' && (
+        <Select
+          size="small"
+          value={commandInput.encoding}
+          onChange={(v) => setCommandInput({ encoding: v })}
+          options={[
+            { value: 'utf8', label: 'UTF-8' },
+            { value: 'gbk', label: 'GBK' },
+          ]}
+          style={{ width: 90 }}
+        />
+      )}
 
       {commandInput.syntax === 'plaintext' && (
         <Checkbox

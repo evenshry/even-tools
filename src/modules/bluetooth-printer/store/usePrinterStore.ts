@@ -26,20 +26,27 @@ function loadMode(): AppMode {
 }
 
 function loadCommandInput(): CommandInput {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY_COMMAND);
-    if (v) {
-      const parsed = JSON.parse(v);
-      return { ...parsed, syntax: 'plaintext' };
-    }
-  } catch { /* ignore */ }
-  return {
+  const fallback: CommandInput = {
     syntax: 'plaintext',
     raw: '',
     encoding: 'utf8',
     appendNewline: false,
     repeat: 1,
   };
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_COMMAND);
+    if (v) {
+      const parsed = JSON.parse(v);
+      return {
+        syntax: parsed.syntax === 'hex' ? 'hex' : 'plaintext',
+        raw: typeof parsed.raw === 'string' ? parsed.raw : '',
+        encoding: parsed.encoding === 'gbk' ? 'gbk' : 'utf8',
+        appendNewline: !!parsed.appendNewline,
+        repeat: Number.isFinite(parsed.repeat) && parsed.repeat > 0 ? parsed.repeat : 1,
+      };
+    }
+  } catch { /* ignore */ }
+  return fallback;
 }
 
 function loadProfile(): PrinterProfile {
@@ -150,7 +157,7 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   // 指令模式
   commandInput: loadCommandInput(),
   setCommandInput: (patch) => {
-    const newInput: CommandInput = { ...get().commandInput, ...patch, syntax: 'plaintext' as const };
+    const newInput: CommandInput = { ...get().commandInput, ...patch };
     try { localStorage.setItem(STORAGE_KEY_COMMAND, JSON.stringify(newInput)); } catch { /* ignore */ }
     set({ commandInput: newInput });
   },
