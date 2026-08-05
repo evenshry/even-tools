@@ -11,8 +11,9 @@
 
 .alignment-guide {
   position: absolute;
-  background-color: #ff4d4f;
-  box-shadow: 0 0 1px rgba(255, 77, 79, 0.6);
+  background-color: var(--et-brand);
+  box-shadow: 0 0 1px
+    color-mix(in srgb, var(--et-brand) 60%, transparent);
 
   &--horizontal {
     left: 0;
@@ -24,16 +25,5 @@
     top: 0;
     height: 100%;
     width: 1px;
-  }
-}
-
-:root[data-theme="dark"] {
-  .alignment-guide {
-    background-color: var(--et-brand);
-  }
-
-  // —— box-shadow ——
-  .alignment-guide {
-    box-shadow: 0 0 1px rgba(242, 89, 98, 0.7);
   }
 }

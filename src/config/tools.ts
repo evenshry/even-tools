@@ -6,6 +6,7 @@ export interface Tool {
   icon: string; // 工具图标（emoji或图标组件）
   category: string; // 工具分类
   path: string; // 路由路径
+  keywords?: string; // 搜索关键词（中英文，空格分隔）
 }
 
 // 可用工具列表配置
@@ -17,6 +18,7 @@ export const tools: Tool[] = [
     icon: "🔍",
     category: "开发工具",
     path: "/regex-sandbox",
+    keywords: "regex 正则 表达式 编辑器 测试器 常用正则",
   },
   {
     id: "bluetooth-printer",
@@ -25,6 +27,7 @@ export const tools: Tool[] = [
     icon: "🖨️",
     category: "开发工具",
     path: "/bluetooth-printer",
+    keywords: "bluetooth 蓝牙 打印机 ESC POS 热敏",
   },
   {
     id: "barcode-generator",
@@ -33,6 +36,7 @@ export const tools: Tool[] = [
     icon: "🏷️",
     category: "开发工具",
     path: "/barcode-generator",
+    keywords: "barcode 二维码 条形码 生成 颜色 尺寸 容错",
   },
   {
     id: "json-toolkit",
@@ -41,6 +45,7 @@ export const tools: Tool[] = [
     icon: "🧬",
     category: "开发工具",
     path: "/json-toolkit",
+    keywords: "json 格式化 压缩 校验 JSONPath 转换 统计",
   },
   {
     id: "color-calculator",
@@ -49,6 +54,7 @@ export const tools: Tool[] = [
     icon: "🎨",
     category: "设计工具",
     path: "/color-calculator",
+    keywords: "color 颜色 计算器 搭配 对比度 色盲 渐变",
   },
   {
     id: "visual-page-builder",
@@ -57,6 +63,7 @@ export const tools: Tool[] = [
     icon: "🎨",
     category: "设计工具",
     path: "/visual-page-builder",
+    keywords: "visual page builder 视觉 页面 构建 拖拽 预览 组件",
   },
   {
     id: "floor-plan-generator",
@@ -65,6 +72,7 @@ export const tools: Tool[] = [
     icon: "🏠",
     category: "设计工具",
     path: "/floor-plan-generator",
+    keywords: "floor plan 房屋 平面 设计 房间 布局 门窗 家具",
   },
   {
     id: "unit-converter",
@@ -73,6 +81,7 @@ export const tools: Tool[] = [
     icon: "🔄",
     category: "生活工具",
     path: "/unit-converter",
+    keywords: "unit converter 单位 换算 大全 现代 古代 计量",
   },
   {
     id: "habit-tracker",
@@ -81,5 +90,6 @@ export const tools: Tool[] = [
     icon: "📅",
     category: "生活工具",
     path: "/habit-tracker",
+    keywords: "habit tracker 习惯 追踪 打卡 进度 统计 图表",
   },
 ];

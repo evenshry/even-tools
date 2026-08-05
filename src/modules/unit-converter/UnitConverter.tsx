@@ -106,7 +106,7 @@ const UnitConverter = () => {
     <Layout className="unit-converter">
       <ModuleHeader 
         title="单位换算大全"
-        extra={<GlobalSearch onSearchResultClick={handleGlobalSearchResultClick} />}
+        center={<GlobalSearch onSearchResultClick={handleGlobalSearchResultClick} />}
       />
 
       <Layout>

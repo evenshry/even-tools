@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Layout, Tabs, Select, Button, Space, Typography, message } from "antd";
+import { Layout, Tabs, Select, Button, Space, message } from "antd";
 import {
   CheckCircleOutlined,
   NodeIndexOutlined,
@@ -21,7 +21,13 @@ import JsonValidator from "@/modules/json-toolkit/components/JsonValidator";
 import { samples } from "@/modules/json-toolkit/data/samples";
 import type { JsonToolkitTypes } from "@/modules/json-toolkit/data/interface";
 import { formatJson, minifyJson, computeStats, byteSize } from "@/modules/json-toolkit/utils/jsonUtils";
-import { lenientParseJson, tolerantParseToTree, mapDiagnosticsToPaths, buildErrorNodesFromDiagnostics, getFieldNodeOffsets } from "@/modules/json-toolkit/utils/jsonDiagnostics";
+import {
+  lenientParseJson,
+  tolerantParseToTree,
+  mapDiagnosticsToPaths,
+  buildErrorNodesFromDiagnostics,
+  getFieldNodeOffsets,
+} from "@/modules/json-toolkit/utils/jsonDiagnostics";
 import "@/modules/json-toolkit/JsonToolkit.scss";
 
 const { Content } = Layout;
@@ -195,11 +201,9 @@ const JsonToolkit = () => {
   return (
     <Layout className="json-toolkit">
       <ModuleHeader
+        title="JSON 工具箱"
         center={
           <div className="json-toolkit__header-center">
-            <Typography.Title level={3} className="json-toolkit__header-title">
-              JSON 工具箱
-            </Typography.Title>
             <Tabs
               activeKey={activeTopTab}
               onChange={setActiveTopTab}

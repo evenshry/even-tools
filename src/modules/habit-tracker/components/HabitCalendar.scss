@@ -50,25 +50,26 @@
     justify-content: center;
     padding: 12px 8px;
     border: 2px solid var(--et-border-strong);
-    border-radius: 8px;
+    border-radius: var(--et-radius-md);
     cursor: default;
-    transition: all 0.2s;
+    transition: background var(--et-transition-fast),
+      border-color var(--et-transition-fast);
     background: var(--et-bg-card);
     min-height: 120px;
 
     &--completed {
-      background: #f6ffed;
-      border-color: #52c41a;
+      background: var(--et-success-soft);
+      border-color: var(--et-success);
     }
 
     &--missed {
-      background: #fff1f0;
-      border-color: #f5222d;
+      background: var(--et-error-soft);
+      border-color: var(--et-error);
     }
 
     &--today {
-      background: #e6f7ff;
-      border-color: #1890ff;
+      background: var(--et-info-soft);
+      border-color: var(--et-info);
       border-width: 3px;
     }
 
@@ -92,7 +93,7 @@
 
   &__day-date {
     font-size: 12px;
-    color: #8c8c8c;
+    color: var(--et-ink-3);
     margin-bottom: 4px;
   }
 
@@ -114,11 +115,14 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    transition: all 0.2s;
+    transition: transform var(--et-transition-fast),
+      background var(--et-transition-fast),
+      border-color var(--et-transition-fast),
+      box-shadow var(--et-transition-fast);
 
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--et-shadow-sm);
     }
 
     &:active {
@@ -126,35 +130,35 @@
     }
 
     &--check {
-      background: #52c41a;
-      border-color: #52c41a;
+      background: var(--et-success);
+      border-color: var(--et-success);
 
       &:hover {
-        background: #73d13d;
-        border-color: #73d13d;
+        background: color-mix(in srgb, var(--et-success) 85%, white);
+        border-color: color-mix(in srgb, var(--et-success) 85%, white);
       }
     }
 
     &--cancel {
-      background: #f5222d;
-      border-color: #f5222d;
+      background: var(--et-error);
+      border-color: var(--et-error);
 
       &:hover {
-        background: #ff4d4f;
-        border-color: #ff4d4f;
+        background: color-mix(in srgb, var(--et-error) 85%, white);
+        border-color: color-mix(in srgb, var(--et-error) 85%, white);
       }
     }
 
     &--disabled {
       background: var(--et-bg-page);
       border-color: var(--et-border-strong);
-      color: #bfbfbf;
+      color: var(--et-ink-3);
       cursor: not-allowed;
 
       &:hover {
         background: var(--et-bg-page);
         border-color: var(--et-border-strong);
-        color: #bfbfbf;
+        color: var(--et-ink-3);
         transform: none;
         box-shadow: none;
       }
@@ -178,15 +182,15 @@
     font-size: 16px;
 
     &--completed {
-      color: #52c41a;
+      color: var(--et-success);
     }
 
     &--missed {
-      color: #f5222d;
+      color: var(--et-error);
     }
 
     &--today {
-      color: #1890ff;
+      color: var(--et-info);
     }
 
     &--future {
@@ -204,93 +208,5 @@
     align-items: center;
     padding: 40px 20px;
     text-align: center;
-  }
-}
-
-:root[data-theme="dark"] {
-  .habit-calendar__day {
-    border-color: var(--et-border);
-
-    &--completed {
-      background: var(--et-success-soft);
-      border-color: var(--et-success);
-    }
-
-    &--missed {
-      background: var(--et-error-soft);
-      border-color: var(--et-error);
-    }
-
-    &--today {
-      background: var(--et-info-soft);
-      border-color: var(--et-info);
-    }
-
-    &--future {
-      border-color: var(--et-border);
-    }
-
-    &--past {
-      border-color: var(--et-border);
-    }
-  }
-
-  .habit-calendar__day-date {
-    color: var(--et-ink-3);
-  }
-
-  .habit-calendar__action-btn {
-    &--check {
-      background: var(--et-success);
-      border-color: var(--et-success);
-
-      &:hover {
-        background: var(--et-success);
-        border-color: var(--et-success);
-      }
-    }
-
-    &--cancel {
-      background: var(--et-error);
-      border-color: var(--et-error);
-
-      &:hover {
-        background: var(--et-error);
-        border-color: var(--et-error);
-      }
-    }
-
-    &--disabled {
-      border-color: var(--et-border);
-      color: var(--et-ink-3);
-
-      &:hover {
-        border-color: var(--et-border);
-        color: var(--et-ink-3);
-      }
-    }
-  }
-
-  .habit-calendar__legend-icon {
-    &--completed {
-      color: var(--et-success);
-    }
-
-    &--missed {
-      color: var(--et-error);
-    }
-
-    &--today {
-      color: var(--et-info);
-    }
-
-    &--future {
-      border-color: var(--et-border);
-    }
-  }
-
-  // —— box-shadow ——
-  .habit-calendar__action-btn:not(.habit-calendar__action-btn--disabled):hover {
-    box-shadow: var(--et-shadow-md);
   }
 }

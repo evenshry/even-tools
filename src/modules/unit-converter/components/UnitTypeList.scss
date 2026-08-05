@@ -8,7 +8,7 @@
     height: auto;
 
     &--selected {
-      border-color: #1890ff !important;
+      border-color: var(--et-info) !important;
       border-width: 2px !important;
     }
   }
@@ -37,11 +37,5 @@
 
   &__statistic-value {
     font-size: 20px;
-  }
-}
-
-:root[data-theme="dark"] {
-  .unit-type-list__card--selected {
-    border-color: var(--et-info) !important;
   }
 }

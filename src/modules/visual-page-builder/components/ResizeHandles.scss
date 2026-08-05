@@ -10,11 +10,15 @@
   width: 10px;
   height: 10px;
   background: var(--et-bg-card);
-  border: 1px solid #1890ff;
-  border-radius: 2px;
+  border: 1px solid var(--et-info);
+  border-radius: var(--et-radius-xs);
   pointer-events: auto;
   cursor: pointer;
-  box-shadow: 0 0 2px rgba(24, 144, 255, 0.4);
+  box-shadow: 0 0 2px
+    color-mix(in srgb, var(--et-info) 40%, transparent);
+  transition: background var(--et-transition-fast),
+    border-color var(--et-transition-fast),
+    transform var(--et-transition-fast);
 
   // 四角
   &--nw {
@@ -72,13 +76,13 @@
 
   // 流布局节点只有 'e' 手柄，调整样式避免遮挡
   &--flow {
-    background: #1890ff;
-    border-color: #fff;
+    background: var(--et-info);
+    border-color: var(--et-bg-card);
   }
 
   &:hover {
-    background: #1890ff;
-    border-color: #fff;
+    background: var(--et-info);
+    border-color: var(--et-bg-card);
     transform: scale(1.2);
   }
 
@@ -97,24 +101,5 @@
   // 流布局 'e' 手柄 hover
   &--flow:hover {
     transform: translateY(-50%) scale(1.2);
-  }
-}
-
-:root[data-theme="dark"] {
-  .resize-handle {
-    border-color: var(--et-info);
-
-    &--flow {
-      background: var(--et-info);
-    }
-
-    &:hover {
-      background: var(--et-info);
-    }
-  }
-
-  // —— box-shadow ——
-  .resize-handle {
-    box-shadow: 0 0 2px rgba(96, 165, 250, 0.6);
   }
 }

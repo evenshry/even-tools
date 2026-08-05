@@ -60,9 +60,9 @@
 .bp-toolbar-row {
   padding: 8px 12px;
   background: var(--et-bg-card);
-  border-radius: 6px;
+  border-radius: var(--et-radius-md);
   margin-bottom: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--et-shadow-sm);
 }
 
 // ===== 指令模式布局 =====

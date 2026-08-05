@@ -113,8 +113,8 @@ const PrintHistory: React.FC = () => {
                       <pre
                         style={{
                           fontSize: 12,
-                          color: "#666",
-                          backgroundColor: "#f5f5f5",
+                          color: "var(--et-ink-3)",
+                          backgroundColor: "var(--et-bg-subtle)",
                           padding: "4px 8px",
                           borderRadius: 4,
                           margin: 0,

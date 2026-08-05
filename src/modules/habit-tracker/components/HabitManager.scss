@@ -26,7 +26,7 @@
     border-left-style: solid;
 
     &--selected {
-      background-color: #e6f7ff;
+      background-color: var(--et-info-soft);
     }
 
     &-header {
@@ -65,11 +65,5 @@
     align-items: center;
     padding: 40px 20px;
     text-align: center;
-  }
-}
-
-:root[data-theme="dark"] {
-  .habit-manager__card--selected {
-    background-color: var(--et-info-soft);
   }
 }

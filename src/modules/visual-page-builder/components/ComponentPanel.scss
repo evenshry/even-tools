@@ -3,34 +3,34 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  
+
   .search-section {
     padding: 0;
     margin-bottom: 0;
-    
+
     .ant-input-affix-wrapper {
-      border-radius: 6px;
+      border-radius: var(--et-radius-md);
     }
   }
-  
+
   .ant-tabs {
     flex: 1;
-    
+
     .ant-tabs-content-holder {
       overflow: auto;
       padding: 0 8px;
     }
-    
+
     .ant-tabs-tab {
       padding: 8px 12px !important;
       margin: 0 2px !important;
-      
+
       .ant-tabs-tab-btn {
         font-size: 12px;
       }
     }
   }
-  
+
   .panel-footer {
     display: flex;
     align-items: center;
@@ -48,15 +48,19 @@
   gap: 8px;
   padding: 8px 12px;
   border: 1px solid var(--et-border-strong);
-  border-radius: 6px;
+  border-radius: var(--et-radius-md);
   background: var(--et-bg-card);
   cursor: grab;
-  transition: all 0.2s;
+  transition: border-color var(--et-transition),
+    box-shadow var(--et-transition),
+    background var(--et-transition),
+    opacity var(--et-transition);
   margin-bottom: 4px;
 
   &:hover {
-    border-color: #1890ff;
-    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+    border-color: var(--et-info);
+    box-shadow: 0 2px 8px
+      color-mix(in srgb, var(--et-info) 18%, transparent);
   }
 
   &:active {
@@ -65,8 +69,8 @@
 
   &.dragging {
     opacity: 0.5;
-    border-color: #1890ff;
-    background: #f0f8ff;
+    border-color: var(--et-info);
+    background: var(--et-info-soft);
   }
 
   .component-icon {
@@ -77,7 +81,7 @@
 
   .component-name {
     font-size: 14px;
-    color: #262626;
+    color: var(--et-ink);
     flex: 1;
   }
 }
@@ -85,18 +89,18 @@
 // 组件列表内容
 .component-list-content {
   height: 100%;
-  
+
   .ant-empty {
     margin: 40px 0;
-    
+
     .ant-empty-image {
       height: 60px;
       margin-bottom: 8px;
     }
-    
+
     .ant-empty-description {
       font-size: 12px;
-      color: #8c8c8c;
+      color: var(--et-ink-3);
     }
   }
 }
@@ -107,39 +111,11 @@
     .ant-tabs {
       .ant-tabs-tab {
         padding: 6px 8px !important;
-        
+
         .ant-tabs-tab-btn {
           font-size: 11px;
         }
       }
     }
-  }
-}
-
-:root[data-theme="dark"] {
-  .draggable-component {
-    .component-name {
-      color: var(--et-ink);
-    }
-
-    &:hover {
-      border-color: var(--et-info);
-    }
-
-    &.dragging {
-      border-color: var(--et-info);
-      background: var(--et-info-soft);
-    }
-  }
-
-  .component-list-content {
-    .ant-empty-description {
-      color: var(--et-ink-3);
-    }
-  }
-
-  // —— box-shadow ——
-  .draggable-component:hover {
-    box-shadow: 0 2px 8px rgba(96, 165, 250, 0.18);
   }
 }

@@ -4,10 +4,16 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
-  height: 100%;
+html, body {
+  min-height: 100%;
   width: 100%;
   background: var(--et-bg-page);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 body {
@@ -110,5 +116,180 @@ body {
   }
   20%, 40%, 60%, 80% {
     transform: translate3d(10px, 0, 0);
+  }
+}
+
+/* ============================================================
+ * 模块页面入场与主题切换动效 —— 墨骨朱魂设计方向
+ * ============================================================ */
+
+/* 入场：自下而上淡入 */
+@keyframes etFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 入场：纯淡入 */
+@keyframes etFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 入场：轻微缩放淡入 */
+@keyframes etScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 通用入场工具类 */
+.et-fade-in-up {
+  animation: etFadeInUp 0.4s var(--et-transition-slow, cubic-bezier(0.32, 0.72, 0, 1)) both;
+}
+.et-fade-in {
+  animation: etFadeIn 0.3s ease both;
+}
+.et-scale-in {
+  animation: etScaleIn 0.3s var(--et-transition-slow, cubic-bezier(0.32, 0.72, 0, 1)) both;
+}
+
+/* 错峰入场：通过 --et-stagger-i 自定义属性传递索引 */
+.et-stagger {
+  animation: etFadeInUp 0.45s var(--et-transition-slow, cubic-bezier(0.32, 0.72, 0, 1)) both;
+  animation-delay: calc(var(--et-stagger-i, 0) * 60ms);
+}
+
+/* ============================================================
+ * 模块页面根节点入场动效
+ * 所有模块均以 <Layout class="<module-name>"> 作为顶层容器，
+ * 统一应用一次性的自下而上淡入，提升路由切换时的视觉连续性。
+ * ============================================================ */
+.ant-layout.bluetooth-printer,
+.ant-layout.barcode-generator,
+.ant-layout.color-calculator,
+.ant-layout.floor-plan-generator,
+.ant-layout.habit-tracker,
+.ant-layout.json-toolkit,
+.ant-layout.regex-sandbox,
+.ant-layout.unit-converter,
+.ant-layout.visual-page-builder {
+  animation: etFadeInUp 0.4s var(--et-transition-slow, cubic-bezier(0.32, 0.72, 0, 1)) both;
+}
+
+/* 模块主内容区轻微淡入，避免路由切换硬切 */
+.bluetooth-printer__content,
+.barcode-generator__content,
+.color-calculator__content,
+.habit-tracker__content,
+.json-toolkit__content,
+.regex-sandbox__content,
+.unit-converter__content,
+.builder-body,
+.floor-plan-generator .ant-layout-content {
+  animation: etFadeIn 0.35s ease both;
+  animation-delay: 0.05s;
+}
+
+/* ============================================================
+ * 主题切换过渡
+ * 在 <html data-theme> 切换时，让颜色相关属性平滑过渡，
+ * 避免暗/亮模式硬切。仅作用于背景/边框/文字色，不影响布局。
+ * ============================================================ */
+:root,
+:root[data-theme="dark"] {
+  --et-theme-transition: background-color 0.3s ease, border-color 0.3s ease,
+    color 0.3s ease;
+}
+
+body,
+.et-page,
+.module-header,
+.et-header,
+.ant-layout.bluetooth-printer,
+.ant-layout.barcode-generator,
+.ant-layout.color-calculator,
+.ant-layout.floor-plan-generator,
+.ant-layout.habit-tracker,
+.ant-layout.json-toolkit,
+.ant-layout.regex-sandbox,
+.ant-layout.unit-converter,
+.ant-layout.visual-page-builder {
+  transition: background-color 0.3s ease, border-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* AntD 卡片在主题切换时也平滑过渡 */
+.ant-card,
+.ant-tabs-tab,
+.ant-btn,
+.ant-input,
+.ant-select-selector,
+.ant-collapse,
+.ant-modal-content,
+.ant-drawer-content {
+  transition: background-color 0.3s ease, border-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* 尊重用户的动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .et-fade-in-up,
+  .et-fade-in,
+  .et-scale-in,
+  .et-stagger,
+  .ant-layout.bluetooth-printer,
+  .ant-layout.barcode-generator,
+  .ant-layout.color-calculator,
+  .ant-layout.floor-plan-generator,
+  .ant-layout.habit-tracker,
+  .ant-layout.json-toolkit,
+  .ant-layout.regex-sandbox,
+  .ant-layout.unit-converter,
+  .ant-layout.visual-page-builder,
+  .bluetooth-printer__content,
+  .barcode-generator__content,
+  .color-calculator__content,
+  .habit-tracker__content,
+  .json-toolkit__content,
+  .regex-sandbox__content,
+  .unit-converter__content,
+  .builder-body,
+  .floor-plan-generator .ant-layout-content {
+    animation: none !important;
+  }
+
+  body,
+  .et-page,
+  .module-header,
+  .et-header,
+  .ant-layout.bluetooth-printer,
+  .ant-layout.barcode-generator,
+  .ant-layout.color-calculator,
+  .ant-layout.floor-plan-generator,
+  .ant-layout.habit-tracker,
+  .ant-layout.json-toolkit,
+  .ant-layout.regex-sandbox,
+  .ant-layout.unit-converter,
+  .ant-layout.visual-page-builder,
+  .ant-card,
+  .ant-tabs-tab,
+  .ant-btn,
+  .ant-input,
+  .ant-select-selector,
+  .ant-collapse,
+  .ant-modal-content,
+  .ant-drawer-content {
+    transition: none !important;
   }
 }

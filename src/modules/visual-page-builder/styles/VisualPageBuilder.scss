@@ -71,15 +71,7 @@
   // 预览布局
   .preview-layout {
     height: 100%;
-    background: #f8f9fa;
+    background: var(--et-bg-subtle);
     overflow-y: auto;
-  }
-}
-
-:root[data-theme="dark"] {
-  .visual-page-builder {
-    .preview-layout {
-      background: var(--et-bg-subtle);
-    }
   }
 }

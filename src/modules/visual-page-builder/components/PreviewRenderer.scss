@@ -1,121 +1,123 @@
 // 预览渲染器样式
+// 注意：预览渲染器模拟真实网页输出，节点背景使用 token 以适配暗色模式
 .preview-node {
   box-sizing: border-box;
-  
+
   // 页面节点
   &.page-node {
     width: 100%;
     min-height: 100vh;
-    background: #ffffff;
-    
+    background: var(--et-bg-card);
+
     .page-content {
       width: 100%;
       min-height: 100%;
     }
   }
-  
+
   // 区块节点
   &.section-node {
     width: 100%;
     min-height: 200px;
-    background: #f8f9fa;
+    background: var(--et-bg-subtle);
     margin-bottom: 20px;
     padding: 20px;
   }
-  
+
   // 容器节点
   &.container-node {
     width: 100%;
     min-height: 200px;
-    background: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
+    background: var(--et-bg-card);
+    border: 1px solid var(--et-border);
+    border-radius: var(--et-radius-md);
     padding: 16px;
     margin-bottom: 16px;
   }
-  
+
   // 弹性布局节点
   &.flex-node {
     display: flex;
     width: 100%;
     min-height: 200px;
-    background: #f8f9fa;
+    background: var(--et-bg-subtle);
     padding: 16px;
     gap: 10px;
     margin-bottom: 16px;
-    
+
     // 子节点样式
     & > .preview-node {
       flex: 1;
       min-height: 100px;
-      background: #ffffff;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
+      background: var(--et-bg-card);
+      border: 1px solid var(--et-border);
+      border-radius: var(--et-radius-sm);
       padding: 8px;
     }
   }
-  
+
   // 网格布局节点
   &.grid-node {
     display: grid;
     width: 100%;
     min-height: 200px;
-    background: #f8f9fa;
+    background: var(--et-bg-subtle);
     padding: 16px;
     gap: 10px;
     margin-bottom: 16px;
-    
+
     // 子节点样式
     & > .preview-node {
-      background: #ffffff;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
+      background: var(--et-bg-card);
+      border: 1px solid var(--et-border);
+      border-radius: var(--et-radius-sm);
       padding: 8px;
     }
   }
-  
+
   // Div节点
   &.div-node {
     width: 100%;
     min-height: 100px;
-    background: #e9ecef;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
+    background: var(--et-bg-subtle);
+    border: 1px solid var(--et-border);
+    border-radius: var(--et-radius-sm);
     padding: 8px;
     margin-bottom: 10px;
   }
-  
+
   // 文本节点
   &.text-node {
     font-size: 14px;
-    color: #333333;
+    color: var(--et-ink);
     line-height: 1.5;
     margin: 4px 0;
   }
-  
+
   // 标题节点
   &.heading-node {
     font-size: 24px;
     font-weight: bold;
-    color: #333333;
+    color: var(--et-ink);
     margin: 0 0 16px 0;
   }
-  
+
   // 按钮节点
   &.button-node {
     padding: 8px 16px;
-    background: #007bff;
-    color: #ffffff;
+    background: var(--et-info);
+    color: var(--et-ink-inverse);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--et-radius-sm);
     cursor: pointer;
     font-size: 14px;
-    
+    transition: background var(--et-transition);
+
     &:hover {
-      background: #0056b3;
+      background: color-mix(in srgb, var(--et-info) 85%, black);
     }
   }
-  
+
   // 图片节点
   &.image-node {
     .image-placeholder {
@@ -125,25 +127,25 @@
       justify-content: center;
       width: 200px;
       height: 150px;
-      background: #f8f9fa;
-      border: 2px dashed #dee2e6;
-      border-radius: 8px;
-      color: #6c757d;
+      background: var(--et-bg-subtle);
+      border: 2px dashed var(--et-border);
+      border-radius: var(--et-radius-md);
+      color: var(--et-ink-3);
       font-size: 12px;
-      
+
       span:first-child {
         font-size: 24px;
         margin-bottom: 4px;
       }
     }
   }
-  
+
   // 未知节点
   &.unknown-node {
-    background: #ffc107;
-    color: #856404;
+    background: var(--et-warning-soft);
+    color: var(--et-warning);
     padding: 8px;
-    border-radius: 4px;
+    border-radius: var(--et-radius-sm);
     font-size: 12px;
     margin: 4px 0;
   }
@@ -155,7 +157,7 @@
     &.flex-node {
       flex-direction: column;
     }
-    
+
     &.grid-node {
       grid-template-columns: 1fr;
     }

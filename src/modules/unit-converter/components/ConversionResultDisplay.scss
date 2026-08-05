@@ -48,13 +48,13 @@
     }
 
     &--from {
-      background-color: #f6ffed;
-      border-color: #b7eb8f;
+      background-color: var(--et-success-soft);
+      border-color: var(--et-success);
     }
 
     &--to {
-      background-color: #e6f7ff;
-      border-color: #91d5ff;
+      background-color: var(--et-info-soft);
+      border-color: var(--et-info);
     }
   }
 
@@ -105,7 +105,7 @@
   }
 
   &__result-text--highlight {
-    color: #1890ff;
+    color: var(--et-info);
     font-size: 28px;
     font-weight: bold;
   }
@@ -160,25 +160,5 @@
   100% {
     transform: translateX(0);
     opacity: 1;
-  }
-}
-
-:root[data-theme="dark"] {
-  .conversion-result-display {
-    &__unit-card {
-      &--from {
-        background-color: var(--et-success-soft);
-        border-color: var(--et-success);
-      }
-
-      &--to {
-        background-color: var(--et-info-soft);
-        border-color: var(--et-info);
-      }
-    }
-
-    &__result-text--highlight {
-      color: var(--et-info);
-    }
   }
 }

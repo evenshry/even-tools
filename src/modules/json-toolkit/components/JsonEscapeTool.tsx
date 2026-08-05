@@ -94,7 +94,7 @@ const JsonEscapeTool = () => {
                 fontFamily: '"Monaco","Menlo","Ubuntu Mono","Consolas",monospace',
                 fontSize: 13,
                 marginTop: 4,
-                background: "#fafafa",
+                background: "var(--et-bg-subtle)",
               }}
             />
           )}

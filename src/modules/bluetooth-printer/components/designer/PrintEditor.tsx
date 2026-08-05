@@ -133,7 +133,7 @@ const PrintEditor: React.FC = () => {
                 </Space>
               </div>
               <div style={{
-                background: '#fafafa',
+                background: 'var(--et-bg-subtle)',
                 padding: 4,
                 borderRadius: 2,
                 minHeight: 24,

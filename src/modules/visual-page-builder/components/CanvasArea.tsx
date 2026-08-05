@@ -1,4 +1,12 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { Button, Tooltip, Space } from 'antd';
+import {
+  BorderOuterOutlined,
+  ColumnHeightOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  AimOutlined,
+} from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { useDragManager } from '../hooks/useDragManager';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -7,7 +15,11 @@ import AlignmentGuides from './AlignmentGuides';
 import Ruler from './Ruler';
 import './CanvasArea.scss';
 
-const CanvasArea: React.FC = () => {
+interface CanvasAreaProps {
+  extraActions?: React.ReactNode;
+}
+
+const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
   // 画布引用和状态
   const canvasRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -56,32 +68,51 @@ const CanvasArea: React.FC = () => {
     <div className="canvas-area">
       {/* 画布工具栏 */}
       <div className="canvas-toolbar">
-        <div className="toolbar-group">
-          <button className={`toolbar-btn ${gridVisible ? "active" : ""}`} onClick={toggleGrid} title="切换网格">
-            📐
-          </button>
-          <button
-            className={`toolbar-btn ${alignmentGuidesVisible ? "active" : ""}`}
-            onClick={toggleAlignmentGuides}
-            title="切换标尺与对齐参考线"
-          >
-            📏
-          </button>
-        </div>
+        <Space className="toolbar-group">
+          <Tooltip title="切换网格">
+            <Button
+              size="small"
+              type={gridVisible ? "primary" : "default"}
+              icon={<BorderOuterOutlined />}
+              onClick={toggleGrid}
+            />
+          </Tooltip>
+          <Tooltip title="切换标尺与对齐参考线">
+            <Button
+              size="small"
+              type={alignmentGuidesVisible ? "primary" : "default"}
+              icon={<ColumnHeightOutlined />}
+              onClick={toggleAlignmentGuides}
+            />
+          </Tooltip>
+        </Space>
 
-        <div className="toolbar-group">
-          <button className="toolbar-btn" onClick={() => setZoom((z) => Math.min(z + 0.1, 3))} title="放大">
-            🔍+
-          </button>
-          <button className="toolbar-btn" onClick={() => setZoom((z) => Math.max(z - 0.1, 0.1))} title="缩小">
-            🔍-
-          </button>
-          <button className="toolbar-btn" onClick={() => setZoom(1)} title="重置缩放">
-            100%
-          </button>
+        {extraActions && <div className="toolbar-group toolbar-group--actions">{extraActions}</div>}
 
+        <Space className="toolbar-group">
+          <Tooltip title="放大">
+            <Button
+              size="small"
+              icon={<ZoomInOutlined />}
+              onClick={() => setZoom((z) => Math.min(z + 0.1, 3))}
+            />
+          </Tooltip>
+          <Tooltip title="缩小">
+            <Button
+              size="small"
+              icon={<ZoomOutOutlined />}
+              onClick={() => setZoom((z) => Math.max(z - 0.1, 0.1))}
+            />
+          </Tooltip>
+          <Tooltip title="重置缩放">
+            <Button
+              size="small"
+              icon={<AimOutlined />}
+              onClick={() => setZoom(1)}
+            />
+          </Tooltip>
           <span className="zoom-info">缩放: {(zoom * 100).toFixed(0)}%</span>
-        </div>
+        </Space>
       </div>
 
       {/* 标尺 + 画布 grid 布局（标尺开关时切换布局） */}

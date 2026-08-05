@@ -26,14 +26,34 @@
       }
     }
 
+    // 画布区域样式
     .canvas-area-container {
       position: relative;
-      
+
       .ant-card-body {
         padding: 0;
         height: 100%;
         position: relative;
       }
+    }
+
+    // 画布工具栏
+    .canvas-toolbar {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: var(--et-sp-2);
+      padding: 6px 10px;
+      background: color-mix(in srgb, var(--et-bg-card) 90%, transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: var(--et-radius-md);
+      box-shadow: var(--et-shadow-sm);
+      border: 1px solid var(--et-border);
+      transition: background-color 0.3s ease, border-color 0.3s ease;
     }
   }
 
@@ -62,7 +82,7 @@
       cursor: grabbing;
       
       svg {
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--et-shadow-sm);
       }
     }
   }
@@ -76,15 +96,18 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(255, 255, 255, 0.9);
+    background: color-mix(in srgb, var(--et-bg-card) 90%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     padding: 8px 12px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: var(--et-radius-md);
+    box-shadow: var(--et-shadow-md);
     border: 1px solid var(--et-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 
     .zoom-level {
       font-size: 12px;
-      color: #666;
+      color: var(--et-ink-2);
       font-weight: 500;
       min-width: 60px;
       text-align: center;
@@ -104,15 +127,18 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      background: rgba(255, 255, 255, 0.9);
+      background: color-mix(in srgb, var(--et-bg-card) 90%, transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       padding: 8px 12px;
-      border-radius: 6px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: var(--et-radius-md);
+      box-shadow: var(--et-shadow-md);
       border: 1px solid var(--et-border);
+      transition: background-color 0.3s ease, border-color 0.3s ease;
 
       .zoom-level {
         font-size: 12px;
-        color: #666;
+        color: var(--et-ink-2);
         font-weight: 500;
         min-width: 60px;
         text-align: center;
@@ -128,7 +154,7 @@
       transition: background-color 0.2s;
 
       &:hover {
-        background-color: #e6f7ff !important;
+        background-color: var(--et-info-soft) !important;
       }
     }
   }
@@ -204,7 +230,7 @@
   // —— box-shadow ——
   .floor-plan-generator {
     .canvas-area.dragging svg {
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--et-shadow-lg);
     }
 
     .canvas-controls {

@@ -27,7 +27,7 @@
     transition: all 0.2s;
 
     &--selected {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--et-shadow-lg);
     }
 
     .ant-card-body {
@@ -69,14 +69,7 @@
     text-align: center;
     padding: 48px 24px;
     background: var(--et-bg-subtle);
-    border-radius: 8px;
+    border-radius: var(--et-radius-md);
     border: 2px dashed var(--et-border-strong);
-  }
-}
-
-:root[data-theme="dark"] {
-  // —— box-shadow ——
-  .time-habit-manager__card--selected {
-    box-shadow: var(--et-shadow-lg);
   }
 }

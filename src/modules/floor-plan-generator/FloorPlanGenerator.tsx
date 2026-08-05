@@ -28,6 +28,7 @@ const FloorPlanGenerator: React.FC = () => {
         <ComponentPanel />
       </div>
       <div className="canvas-area-container">
+        {canvasToolbar}
         <CanvasArea previewMode={false} />
       </div>
       <div className="property-panel-container">
@@ -112,15 +113,15 @@ const FloorPlanGenerator: React.FC = () => {
     input.click();
   };
 
-  // 头部额外内容
-  const headerExtra = (
-    <div className="header-actions">
+  // 画布工具栏
+  const canvasToolbar = (
+    <div className="canvas-toolbar">
       <Tooltip title="切换预览模式">
         <Button 
+          size="small"
           type={previewMode ? "primary" : "default"}
           icon={<EyeOutlined />}
           onClick={togglePreview}
-          size="small"
         >
           {previewMode ? "退出预览" : "预览"}
         </Button>
@@ -128,10 +129,9 @@ const FloorPlanGenerator: React.FC = () => {
       
       <Tooltip title="导入设计">
         <Button 
+          size="small"
           icon={<ImportOutlined />}
           onClick={handleImport}
-          size="small"
-          style={{ marginLeft: 8 }}
         >
           导入
         </Button>
@@ -150,7 +150,7 @@ const FloorPlanGenerator: React.FC = () => {
             onClick: ({ key }) => handleExport(key as any)
           }}
         >
-          <Button icon={<ExportOutlined />} size="small" style={{ marginLeft: 8 }}>
+          <Button size="small" icon={<ExportOutlined />}>
             导出
           </Button>
         </Dropdown>
@@ -158,10 +158,9 @@ const FloorPlanGenerator: React.FC = () => {
       
       <Tooltip title="重置配置">
         <Button 
+          size="small"
           icon={<ReloadOutlined />}
           onClick={handleReset}
-          size="small"
-          style={{ marginLeft: 8 }}
         >
           重置
         </Button>
@@ -173,7 +172,6 @@ const FloorPlanGenerator: React.FC = () => {
     <Layout className="floor-plan-generator">
       <ModuleHeader
         title="房屋平面设计图生成器"
-        extra={headerExtra}
       />
       <Content style={{ padding: "16px", height: "calc(100vh - 120px)" }}>
         {previewMode ? renderPreviewMode() : renderEditMode()}

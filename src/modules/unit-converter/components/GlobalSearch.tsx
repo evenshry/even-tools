@@ -92,7 +92,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearchResultClick }) => {
         onFocus={handleFocus}
         onBlur={handleBlur}
         allowClear
-        size="large"
+        size="middle"
         className="global-search__input"
       />
 

@@ -72,7 +72,7 @@ const BluetoothPrinter: React.FC = () => {
     <Layout className="bluetooth-printer">
       <ModuleHeader
         title="蓝牙打印机"
-        extra={<ModeSwitcher />}
+        center={<ModeSwitcher />}
       />
       <Content className="bluetooth-printer__content">
         <div className="bluetooth-printer__layout">

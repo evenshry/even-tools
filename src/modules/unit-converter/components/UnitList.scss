@@ -20,12 +20,12 @@
 
   &__card {
     &--from-selected {
-      border-color: #52c41a !important;
+      border-color: var(--et-success) !important;
       border-width: 2px !important;
     }
 
     &--to-selected {
-      border-color: #1890ff !important;
+      border-color: var(--et-info) !important;
       border-width: 2px !important;
     }
   }
@@ -54,41 +54,15 @@
 
   &__button {
     &--from-selected {
-      color: #fff !important; 
-      border-color: #52c41a !important;
-      background-color: #52c41a !important;
+      color: var(--et-ink-inverse) !important;
+      border-color: var(--et-success) !important;
+      background-color: var(--et-success) !important;
     }
 
     &--to-selected {
-      color: #fff !important; 
-      border-color: #1890ff !important;
-      background-color: #1890ff !important;
-    }
-  }
-}
-
-:root[data-theme="dark"] {
-  .unit-list {
-    &__card {
-      &--from-selected {
-        border-color: var(--et-success) !important;
-      }
-
-      &--to-selected {
-        border-color: var(--et-info) !important;
-      }
-    }
-
-    &__button {
-      &--from-selected {
-        border-color: var(--et-success) !important;
-        background-color: var(--et-success) !important;
-      }
-
-      &--to-selected {
-        border-color: var(--et-info) !important;
-        background-color: var(--et-info) !important;
-      }
+      color: var(--et-ink-inverse) !important;
+      border-color: var(--et-info) !important;
+      background-color: var(--et-info) !important;
     }
   }
 }

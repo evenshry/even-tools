@@ -1,7 +1,7 @@
 .time-habit-timeline {
   &__card {
     border-width: 3px;
-    border-color: var(--habit-color, #1890ff);
+    border-color: var(--habit-color, var(--et-info));
 
     .ant-card-body {
       padding: 24px;
@@ -32,7 +32,7 @@
     margin-bottom: 20px;
     padding: 16px;
     background: var(--et-bg-subtle);
-    border-radius: 8px;
+    border-radius: var(--et-radius-md);
   }
 
   &__info-item {
@@ -51,31 +51,34 @@
     width: 100%;
     height: 48px;
     font-size: 16px;
-    font-weight: 500;
-    transition: all 0.2s;
+    font-weight: var(--et-fw-medium);
+    transition: transform var(--et-transition-fast),
+      background var(--et-transition-fast),
+      border-color var(--et-transition-fast),
+      box-shadow var(--et-transition-fast);
 
     &:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--et-shadow-lg);
     }
 
     &--check {
-      background: #52c41a;
-      border-color: #52c41a;
+      background: var(--et-success);
+      border-color: var(--et-success);
 
       &:hover {
-        background: #73d13d;
-        border-color: #73d13d;
+        background: color-mix(in srgb, var(--et-success) 85%, white);
+        border-color: color-mix(in srgb, var(--et-success) 85%, white);
       }
     }
 
     &--cancel {
-      background: #f5222d;
-      border-color: #f5222d;
+      background: var(--et-error);
+      border-color: var(--et-error);
 
       &:hover {
-        background: #ff4d4f;
-        border-color: #ff4d4f;
+        background: color-mix(in srgb, var(--et-error) 85%, white);
+        border-color: color-mix(in srgb, var(--et-error) 85%, white);
       }
     }
   }
@@ -95,34 +98,5 @@
       display: block;
       margin-bottom: 4px;
     }
-  }
-}
-
-:root[data-theme="dark"] {
-  .time-habit-timeline__action-btn {
-    &--check {
-      background: var(--et-success);
-      border-color: var(--et-success);
-
-      &:hover {
-        background: var(--et-success);
-        border-color: var(--et-success);
-      }
-    }
-
-    &--cancel {
-      background: var(--et-error);
-      border-color: var(--et-error);
-
-      &:hover {
-        background: var(--et-error);
-        border-color: var(--et-error);
-      }
-    }
-  }
-
-  // —— box-shadow ——
-  .time-habit-timeline__action-btn:hover {
-    box-shadow: var(--et-shadow-lg);
   }
 }

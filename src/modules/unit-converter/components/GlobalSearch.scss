@@ -14,13 +14,13 @@
     z-index: 1000;
     max-height: 400px;
     overflow-y: auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--et-shadow-lg);
     margin-top: 8px;
   }
 
   &__result-item {
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color var(--et-transition-fast);
     padding: 12px 16px;
 
     &:hover {
@@ -68,18 +68,5 @@
   &__result-description {
     font-size: 13px;
     display: block;
-  }
-}
-
-:root[data-theme="dark"] {
-  .global-search {
-    &__result-item {
-      background-color: var(--et-bg-subtle);
-    }
-  }
-
-  // —— box-shadow ——
-  .global-search__results {
-    box-shadow: var(--et-shadow-lg);
   }
 }

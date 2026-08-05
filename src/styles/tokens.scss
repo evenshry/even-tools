@@ -1,50 +1,58 @@
 // ============================================================
-// etools 设计 token —— 墨骨朱魂
+// etools 设计 token —— 墨骨朱魂（升级稿）
 // 品牌瞬间朱红 + 墨色为骨，工具是主角，UI 是配角
 // 所有颜色走 CSS 自定义属性，便于亮/暗主题切换
+// 对照：etools-design-direction/colors_and_type.css
 // ============================================================
 
 :root {
-  // —— 品牌色（朱红，源自 logo #d81e06）——
+  // —— 品牌色 ——
   --et-brand: #e0484f;
   --et-brand-hover: #c73d43;
   --et-brand-active: #b03338;
-  --et-brand-soft: #fce7e8;       // 朱红浅底（徽章 / 图标底）
+  --et-brand-soft: #fce7e8;
   --et-brand-border: #f4b6b9;
 
   // —— 文本 ——
-  --et-ink: #1a1d21;              // 主文本（墨色）
-  --et-ink-2: #475569;            // 次要文本（石板）
-  --et-ink-3: #94a3b8;            // 辅助 / 占位（灰）
-  --et-ink-inverse: #ffffff;      // 反色文本
+  --et-ink: #1a1d21;
+  --et-ink-2: #475569;
+  --et-ink-3: #94a3b8;
+  --et-ink-inverse: #ffffff;
 
   // —— 背景 ——
-  --et-bg-page: #f7f8fa;          // 页面底
-  --et-bg-card: #ffffff;          // 卡片
-  --et-bg-subtle: #f1f3f5;        // 次级面板 / 悬停底
-  --et-bg-elevated: #ffffff;      // 浮层（dropdown / popover）
+  --et-bg-page: #f7f8fa;
+  --et-bg-card: #ffffff;
+  --et-bg-subtle: #f1f3f5;
+  --et-bg-elevated: #ffffff;
 
   // —— 边框 ——
-  --et-border: #e5e7eb;
+  // 新规范使用 --et-border-color，旧代码仍引用 --et-border，二者保持同值
+  --et-border-color: #e5e7eb;
   --et-border-strong: #d1d5db;
+  --et-border: var(--et-border-color);
   --et-border-brand: #e0484f;
 
-  // —— 分类色（用于分类徽章）——
-  --et-cat-dev: #3b82f6;          // 开发工具
+  // —— 分类色（仅用于状态/分类徽章）——
+  --et-cat-dev: #3b82f6;
   --et-cat-dev-soft: rgba(59, 130, 246, 0.1);
-  --et-cat-design: #e0484f;       // 设计工具
+  --et-cat-design: #e0484f;
   --et-cat-design-soft: #fce7e8;
-  --et-cat-life: #10b981;         // 生活工具
+  --et-cat-life: #10b981;
   --et-cat-life-soft: rgba(16, 185, 129, 0.1);
 
   // —— 功能色 ——
-  --et-success: #10b981;
+  // 新规范使用 --et-state-*，旧代码仍引用 --et-success 等，二者保持同值
+  --et-state-success: #10b981;
+  --et-state-warning: #f59e0b;
+  --et-state-error: #ef4444;
+  --et-state-info: #3b82f6;
+  --et-success: var(--et-state-success);
   --et-success-soft: rgba(16, 185, 129, 0.1);
-  --et-warning: #f59e0b;
+  --et-warning: var(--et-state-warning);
   --et-warning-soft: rgba(245, 158, 11, 0.12);
-  --et-error: #ef4444;
+  --et-error: var(--et-state-error);
   --et-error-soft: rgba(239, 68, 68, 0.1);
-  --et-info: #3b82f6;
+  --et-info: var(--et-state-info);
   --et-info-soft: rgba(59, 130, 246, 0.1);
 
   // —— 字体 ——
@@ -62,6 +70,7 @@
   --et-fs-2xl: 24px;
   --et-fs-3xl: 30px;
   --et-fs-4xl: 36px;
+  --et-fs-display: clamp(40px, 6vw, 88px);
 
   // —— 字重 ——
   --et-fw-normal: 400;
@@ -69,10 +78,14 @@
   --et-fw-strong: 600;
 
   // —— 圆角 ——
+  // 新规范使用 --et-radius-xs/sm/md/lg/full，旧代码引用 --et-radius / --et-radius-card
+  --et-radius-xs: 2px;
   --et-radius-sm: 4px;
-  --et-radius: 8px;
-  --et-radius-card: 12px;
+  --et-radius-md: 8px;
+  --et-radius-lg: 16px;
   --et-radius-full: 999px;
+  --et-radius: var(--et-radius-md);
+  --et-radius-card: 12px;
 
   // —— 间距 ——
   --et-sp-1: 4px;
@@ -92,7 +105,23 @@
   --et-shadow-brand: 0 6px 16px rgba(224, 72, 79, 0.1);
 
   // —— 过渡 ——
+  --et-transition-fast: 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
   --et-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --et-transition-slow: 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+
+  // —— 语义别名（供 head contract / Tailwind 使用）——
+  --et-background: var(--et-bg-page);
+  --et-foreground: var(--et-ink);
+  --et-card: var(--et-bg-card);
+  --et-card-foreground: var(--et-ink);
+  --et-popover: var(--et-bg-elevated);
+  --et-popover-foreground: var(--et-ink);
+  --et-primary: var(--et-brand);
+  --et-primary-foreground: var(--et-ink-inverse);
+  --et-muted: var(--et-bg-subtle);
+  --et-muted-foreground: var(--et-ink-2);
+  --et-input: var(--et-border-color);
+  --et-ring: var(--et-brand);
 
   // —— AntD 兼容映射（供未替换模块平滑过渡）——
   --primary-color: var(--et-brand);
@@ -118,7 +147,7 @@
   --et-bg-subtle: #252930;
   --et-bg-elevated: #252930;
 
-  --et-border: #2a2f37;
+  --et-border-color: #2a2f37;
   --et-border-strong: #3a3f47;
   --et-border-brand: #f25962;
 
@@ -129,13 +158,13 @@
   --et-cat-life: #34d399;
   --et-cat-life-soft: rgba(52, 211, 153, 0.14);
 
-  --et-success: #34d399;
+  --et-state-success: #34d399;
+  --et-state-warning: #fbbf24;
+  --et-state-error: #f87171;
+  --et-state-info: #60a5fa;
   --et-success-soft: rgba(52, 211, 153, 0.14);
-  --et-warning: #fbbf24;
   --et-warning-soft: rgba(251, 191, 36, 0.16);
-  --et-error: #f87171;
   --et-error-soft: rgba(248, 113, 113, 0.14);
-  --et-info: #60a5fa;
   --et-info-soft: rgba(96, 165, 250, 0.14);
 
   --et-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);

@@ -1,10 +1,14 @@
+// ============================================================
+// 模块页通用 Header —— 墨骨朱魂设计方向
+// ============================================================
+
 .module-header {
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--et-background) 72%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
-  gap: var(--et-sp-4);
+  gap: var(--et-sp-6);
   padding: 0 var(--et-sp-6);
   border-bottom: 1px solid var(--et-border);
   height: 56px;
@@ -13,33 +17,163 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  animation: et-header-enter 0.35s var(--et-transition-slow, cubic-bezier(0.32, 0.72, 0, 1)) both;
 }
 
-:root[data-theme="dark"] .module-header {
-  background: rgba(26, 29, 33, 0.85);
+@keyframes et-header-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+// —— 左侧：品牌 + 标题 ——
 .module-header__left {
   display: flex;
   align-items: center;
   gap: var(--et-sp-3);
+  flex-shrink: 0;
   min-width: 0;
+}
+
+.module-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--et-sp-2);
+  text-decoration: none;
+  color: var(--et-ink);
+  transition: opacity var(--et-transition);
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.module-header__logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.module-header__brand-name {
+  font-size: var(--et-fs-lg);
+  font-weight: var(--et-fw-strong);
+  letter-spacing: -0.01em;
+  color: var(--et-foreground);
+  white-space: nowrap;
+}
+
+.module-header__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--et-border);
+  flex-shrink: 0;
 }
 
 .module-header__title {
-  margin: 0 !important;
-  font-weight: var(--et-fw-strong) !important;
-  color: var(--et-ink) !important;
+  font-size: var(--et-fs-xl);
+  font-weight: var(--et-fw-strong);
+  color: var(--et-ink);
+  letter-spacing: -0.01em;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+// —— 右侧：导航 + 操作区 ——
+.module-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--et-sp-2);
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+// —— Top Nav 水平菜单 ——
+.module-header__nav {
+  display: flex;
+  align-items: center;
+}
+
+.module-header__menu {
+  border-bottom: none !important;
+  background: transparent !important;
+  min-width: 0;
+
+  .ant-menu-item::after,
+  .ant-menu-submenu-title::after {
+    display: none !important;
+  }
+
+  .ant-menu-item,
+  .ant-menu-submenu-title {
+    height: 56px !important;
+    line-height: 56px !important;
+    padding-inline: var(--et-sp-3) !important;
+    color: var(--et-ink-2) !important;
+    font-weight: var(--et-fw-medium) !important;
+    font-size: var(--et-fs-sm) !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    transition:
+      color var(--et-transition),
+      border-color var(--et-transition),
+      background var(--et-transition) !important;
+
+    &:hover,
+    &.ant-menu-item-selected,
+    &.ant-menu-submenu-active {
+      color: var(--et-primary) !important;
+      border-bottom-color: var(--et-primary) !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+    }
+  }
+
+  .ant-menu-submenu-arrow {
+    color: var(--et-ink-3);
+    font-size: 10px;
+    margin-inline-start: 2px;
+  }
+
+  .ant-menu-sub:hover > .ant-menu-submenu-title .ant-menu-submenu-arrow {
+    color: var(--et-primary);
+  }
+}
+
+// —— 导航菜单项 ——
+.module-header__nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--et-sp-2);
+
+  span {
+    font-size: var(--et-fs-sm);
+  }
+}
+
+.module-header__nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--et-primary);
+  font-size: 12px;
+}
+
+// —— 中间区域 ——
 .module-header__center {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--et-sp-3);
-  flex: 0 0 auto;
-  max-width: 60%;
-  min-width: 0;
+  gap: var(--et-sp-2);
+  flex-shrink: 0;
 
   .ant-tabs {
     &.ant-tabs-top {
@@ -53,14 +187,12 @@
       }
     }
   }
-}
 
-.module-header__right {
-  display: flex;
-  align-items: center;
-  gap: var(--et-sp-2);
-  flex: 1;
-  justify-content: flex-end;
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--et-sp-2);
+  }
 }
 
 .module-header__extra {
@@ -69,18 +201,92 @@
   gap: var(--et-sp-2);
 }
 
+// —— 主题切换按钮 ——
+.module-header .theme-toggle.ant-btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--et-radius-full);
+  border: 1px solid var(--et-border);
+  background: var(--et-card);
+  color: var(--et-foreground);
+  transition:
+    color var(--et-transition),
+    border-color var(--et-transition),
+    background var(--et-transition);
+
+  &:hover,
+  &:focus {
+    color: var(--et-primary);
+    border-color: var(--et-primary);
+    background: var(--et-card);
+  }
+}
+
+// —— 返回按钮 ——
+.module-header .back-button__btn.ant-btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--et-radius-full);
+  color: var(--et-ink-2);
+  transition:
+    color var(--et-transition),
+    background var(--et-transition);
+
+  &:hover,
+  &:focus {
+    color: var(--et-brand);
+    background: var(--et-brand-soft);
+  }
+}
+
+// —— 响应式 ——
 @media (max-width: 768px) {
   .module-header {
     padding: 0 var(--et-sp-4);
     flex-wrap: wrap;
     height: auto;
     min-height: 56px;
+    gap: var(--et-sp-3);
 
-    &__center {
-      order: 3;
-      flex: 1 1 100%;
-      max-width: 100%;
-      justify-content: flex-start;
+    &__brand-name {
+      display: none;
     }
+
+    &__divider {
+      display: none;
+    }
+
+    &__title {
+      max-width: 100px;
+    }
+
+    &__right {
+      width: 100%;
+      margin-left: 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: var(--et-sp-1);
+    }
+
+    &__nav {
+      flex-shrink: 0;
+    }
+
+    &__menu {
+      min-width: max-content;
+    }
+  }
+}
+
+// 尊重用户的动效偏好
+@media (prefers-reduced-motion: reduce) {
+  .module-header {
+    animation: none !important;
   }
 }

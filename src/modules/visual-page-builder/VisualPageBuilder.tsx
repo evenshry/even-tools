@@ -105,8 +105,8 @@ const VisualPageBuilder: React.FC = () => {
     try {
       await saveCurrentPage();
       message.success({ content: `已保存 ${nodeCount} 个节点`, key: "vpb-save" });
-    } catch (e) {
-      message.error({ content: "保存失败（浏览器可能不支持 IndexedDB）", key: "vpb-save" });
+    } catch (error: any) {
+      message.error({ content: "保存失败（浏览器可能不支持 IndexedDB）"+ error.message, key: "vpb-save" });
     }
   }, [nodes, saveCurrentPage]);
 
@@ -184,7 +184,7 @@ const VisualPageBuilder: React.FC = () => {
         />
       </Card>
       <Card className="canvas-area-container" title="画布" size="small" style={{ height: "100%", overflow: "hidden" }}>
-        <CanvasArea />
+        <CanvasArea extraActions={canvasExtraActions} />
       </Card>
       <Card className="property-panel-container" title="属性面板" size="small" style={{ height: "100%" }}>
         <PropertyPanel />
@@ -198,11 +198,12 @@ const VisualPageBuilder: React.FC = () => {
     </div>
   );
 
-  const headerExtra = (
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+  const canvasExtraActions = (
+    <>
       <Space>
         <Tooltip title="撤销 (Ctrl+Z)">
           <Button
+            size="small"
             icon={<UndoOutlined />}
             onClick={undo}
             disabled={!canUndo}
@@ -210,12 +211,14 @@ const VisualPageBuilder: React.FC = () => {
         </Tooltip>
         <Tooltip title="重做 (Ctrl+Shift+Z)">
           <Button
+            size="small"
             icon={<RedoOutlined />}
             onClick={redo}
             disabled={!canRedo}
           />
         </Tooltip>
         <Button
+          size="small"
           type="primary"
           icon={<SaveOutlined />}
           onClick={handleSave}
@@ -223,17 +226,22 @@ const VisualPageBuilder: React.FC = () => {
         >
           保存
         </Button>
-        <Button type={previewMode !== PreviewMode.EDIT ? "primary" : "default"} icon={<EyeOutlined />} onClick={togglePreview}>
+        <Button
+          size="small"
+          type={previewMode !== PreviewMode.EDIT ? "primary" : "default"}
+          icon={<EyeOutlined />}
+          onClick={togglePreview}
+        >
           {previewMode === PreviewMode.EDIT ? "预览" : "返回编辑"}
         </Button>
-        <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
-        <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
+        <Button size="small" icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+        <Button size="small" icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
       </Space>
-      <Text>
+      <Text style={{ fontSize: 12, color: "var(--et-ink-2)" }}>
         节点数: {Object.keys(nodes).length} | 选中: {selectedNodeId ? nodes[selectedNodeId]?.name : "无"}
         {isDirty && <span style={{ color: semanticColors.warning[mode], marginLeft: 8 }}>· 未保存</span>}
       </Text>
-    </div>
+    </>
   );
 
   const headerTitle = `可视化页面构建器${
@@ -243,7 +251,7 @@ const VisualPageBuilder: React.FC = () => {
   return (
     <DndProvider backend={HTML5Backend}>
       <Layout className="visual-page-builder">
-        <ModuleHeader title={headerTitle} extra={headerExtra} />
+        <ModuleHeader title={headerTitle} />
         <Content className="builder-body">{previewMode === PreviewMode.EDIT ? renderEditMode() : renderPreviewMode()}</Content>
         <CodeExportModal
           open={exportModalOpen}

@@ -148,11 +148,11 @@ const ComponentPanel: React.FC = () => {
               flexDirection: 'column',
               alignItems: 'center',
               padding: '8px',
-              border: '1px solid #d9d9d9',
+              border: '1px solid var(--et-border)',
               borderRadius: '4px',
               cursor: 'grab',
               transition: 'all 0.2s',
-              backgroundColor: draggingItem?.id === component.id ? '#f0f0f0' : '#fff',
+              backgroundColor: draggingItem?.id === component.id ? 'var(--et-bg-subtle)' : 'var(--et-bg-card)',
               transform: draggingItem?.id === component.id ? 'scale(0.95)' : 'scale(1)'
             }}
             draggable
@@ -174,9 +174,9 @@ const ComponentPanel: React.FC = () => {
             }}>
               {component.name}
             </div>
-            <div style={{ 
-              fontSize: '10px', 
-              color: '#666',
+            <div style={{
+              fontSize: '10px',
+              color: 'var(--et-ink-3)',
               marginTop: '2px'
             }}>
               {component.width}x{component.height}
@@ -194,7 +194,7 @@ const ComponentPanel: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>组件库</span>
             <Tooltip title="拖拽组件到画布">
-              <DragOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
+              <DragOutlined style={{ color: 'var(--et-brand)', fontSize: '16px' }} />
             </Tooltip>
           </div>
         }
@@ -209,10 +209,10 @@ const ComponentPanel: React.FC = () => {
                 <div
                   key={tpl.id}
                   style={{
-                    border: '1px solid #e8e8e8',
+                    border: '1px solid var(--et-border)',
                     borderRadius: 6,
                     padding: 10,
-                    background: '#fff'
+                    background: 'var(--et-bg-card)'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
