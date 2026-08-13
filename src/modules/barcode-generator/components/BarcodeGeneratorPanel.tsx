@@ -23,9 +23,9 @@ const BARCODE_TYPES = [
 ];
 
 const SIZE_PRESETS = [
-  { name: "小", width: 240, height: 100, lineWidth: 2 },
-  { name: "中", width: 300, height: 130, lineWidth: 3 },
-  { name: "大", width: 360, height: 160, lineWidth: 4 },
+  { name: "小", width: 240, height: 100, lineWidth: 3 },
+  { name: "中", width: 300, height: 130, lineWidth: 4 },
+  { name: "大", width: 360, height: 160, lineWidth: 5 },
   { name: "特大", width: 480, height: 220, lineWidth: 6 },
 ];
 
@@ -40,14 +40,55 @@ const COLOR_PRESETS = [
 interface GeneratedItem {
   id: number;
   value: string;
+  pngDataUrl: string;
+  pngWidth: number;
+  pngHeight: number;
   svgDataUrl: string;
   svgString: string;
-  svgWidth: number;
-  svgHeight: number;
   error?: string;
 }
 
 const BARCODE_SVG_NS = "http://www.w3.org/2000/svg";
+
+const renderBarcodeToPng = (
+  value: string,
+  type: string,
+  lineWidth: number,
+  height: number,
+  fontSize: number,
+  textPosition: string,
+  margin: number,
+  color: string,
+  displayValue: boolean,
+) => {
+  const lw = Math.max(1, Math.round(lineWidth));
+  const h = Math.max(30, Math.round(height));
+  const m = Math.max(4, Math.round(margin));
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#ffffff";
+
+  JsBarcode(canvas, value, {
+    format: type as any,
+    width: lw,
+    height: h,
+    displayValue,
+    fontSize: Math.max(8, Math.round(fontSize)),
+    textPosition: textPosition as any,
+    margin: m,
+    lineColor: color,
+    background: "#ffffff",
+  });
+
+  const pngDataUrl = canvas.toDataURL("image/png");
+  return {
+    pngDataUrl,
+    pngWidth: canvas.width,
+    pngHeight: canvas.height,
+  };
+};
 
 const renderBarcodeToSvg = (
   value: string,
@@ -62,51 +103,26 @@ const renderBarcodeToSvg = (
 ) => {
   const lw = Math.max(1, Math.round(lineWidth));
   const h = Math.max(30, Math.round(height));
+  const m = Math.max(4, Math.round(margin));
+
   const svg = document.createElementNS(BARCODE_SVG_NS, "svg");
   JsBarcode(svg, value, {
     format: type as any,
     width: lw,
     height: h,
     displayValue,
-    fontSize,
+    fontSize: Math.max(8, Math.round(fontSize)),
     textPosition: textPosition as any,
-    margin: Math.round(margin),
+    margin: m,
     lineColor: color,
     background: "#ffffff",
   });
 
-  const w = parseInt(svg.getAttribute("width") || "0", 10);
-  const sh = parseInt(svg.getAttribute("height") || "0", 10);
   const svgString = new XMLSerializer().serializeToString(svg);
   const svgDataUrl =
     "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgString);
 
-  return { svgDataUrl, svgString, svgWidth: w, svgHeight: sh };
-};
-
-const rasterizeSvgToPng = (
-  svgDataUrl: string,
-  svgWidth: number,
-  svgHeight: number,
-  scale = 2,
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = svgWidth * scale;
-      canvas.height = svgHeight * scale;
-      const ctx = canvas.getContext("2d")!;
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, svgWidth, svgHeight);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
-      resolve(canvas.toDataURL("image/png"));
-    };
-    img.onerror = () => reject(new Error("图片加载失败"));
-    img.src = svgDataUrl;
-  });
+  return { svgDataUrl, svgString };
 };
 
 const BarcodeGeneratorPanel = () => {
@@ -115,7 +131,7 @@ const BarcodeGeneratorPanel = () => {
   const [barcodeType, setBarcodeType] = useState("CODE128");
   const [width, setWidth] = useState(240);
   const [height, setHeight] = useState(100);
-  const [lineWidth, setLineWidth] = useState(2);
+  const [lineWidth, setLineWidth] = useState(3);
   const [fontSize, setFontSize] = useState(14);
   const [color, setColor] = useState("#000000");
   const [displayValue, setDisplayValue] = useState(true);
@@ -136,34 +152,46 @@ const BarcodeGeneratorPanel = () => {
 
     const newItems: GeneratedItem[] = values.map((value, index) => {
       try {
-        const { svgDataUrl, svgString, svgWidth, svgHeight } =
-          renderBarcodeToSvg(
-            value,
-            barcodeType,
-            lineWidth,
-            height,
-            fontSize,
-            textPosition,
-            margin,
-            color,
-            displayValue,
-          );
+        const { pngDataUrl, pngWidth, pngHeight } = renderBarcodeToPng(
+          value,
+          barcodeType,
+          lineWidth,
+          height,
+          fontSize,
+          textPosition,
+          margin,
+          color,
+          displayValue,
+        );
+        const { svgDataUrl, svgString } = renderBarcodeToSvg(
+          value,
+          barcodeType,
+          lineWidth,
+          height,
+          fontSize,
+          textPosition,
+          margin,
+          color,
+          displayValue,
+        );
         return {
           id: index,
           value,
+          pngDataUrl,
+          pngWidth,
+          pngHeight,
           svgDataUrl,
           svgString,
-          svgWidth,
-          svgHeight,
         };
       } catch (error) {
         return {
           id: index,
           value,
+          pngDataUrl: "",
+          pngWidth: 0,
+          pngHeight: 0,
           svgDataUrl: "",
           svgString: "",
-          svgWidth: 0,
-          svgHeight: 0,
           error: (error as Error).message,
         };
       }
@@ -179,7 +207,7 @@ const BarcodeGeneratorPanel = () => {
     item: GeneratedItem,
     format: "png" | "jpeg" | "svg",
   ) => {
-    if (item.error || !item.svgDataUrl) {
+    if (item.error || !item.pngDataUrl) {
       message.warning(`"${item.value}" 生成失败，无法下载`);
       return;
     }
@@ -200,47 +228,39 @@ const BarcodeGeneratorPanel = () => {
       return;
     }
 
-    try {
-      const pngDataUrl = await rasterizeSvgToPng(
-        item.svgDataUrl,
-        item.svgWidth,
-        item.svgHeight,
-      );
-
-      if (format === "jpeg") {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext("2d")!;
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(img, 0, 0);
-          const jpegUrl = canvas.toDataURL("image/jpeg", 1.0);
-          const link = document.createElement("a");
-          link.download = `barcode_${safeName}.jpeg`;
-          link.href = jpegUrl;
-          link.click();
-          message.success("已下载 JPEG 图片");
-        };
-        img.src = pngDataUrl;
-        return;
-      }
-
+    if (format === "png") {
       const link = document.createElement("a");
       link.download = `barcode_${safeName}.png`;
-      link.href = pngDataUrl;
+      link.href = item.pngDataUrl;
       link.click();
       message.success("已下载 PNG 图片");
-    } catch {
-      message.error("图片生成失败");
+      return;
+    }
+
+    if (format === "jpeg") {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = item.pngWidth;
+        canvas.height = item.pngHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0);
+        const jpegUrl = canvas.toDataURL("image/jpeg", 1.0);
+        const link = document.createElement("a");
+        link.download = `barcode_${safeName}.jpeg`;
+        link.href = jpegUrl;
+        link.click();
+        message.success("已下载 JPEG 图片");
+      };
+      img.src = item.pngDataUrl;
     }
   };
 
   const downloadAll = async (format: "png" | "jpeg") => {
-    const validItems = items.filter((item) => !item.error && item.svgDataUrl);
+    const validItems = items.filter((item) => !item.error && item.pngDataUrl);
     if (validItems.length === 0) {
       message.warning("没有可下载的条形码");
       return;
@@ -538,10 +558,10 @@ const BarcodeGeneratorPanel = () => {
                     </div>
                   ) : (
                     <img
-                      src={item.svgDataUrl}
+                      src={item.pngDataUrl}
                       alt={item.value}
                       className="preview-grid__img"
-                      style={{ imageRendering: "crisp-edges" }}
+                      style={{ imageRendering: "pixelated" }}
                     />
                   )}
                   <div className="preview-grid__label">
