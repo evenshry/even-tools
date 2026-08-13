@@ -23,10 +23,10 @@ const BARCODE_TYPES = [
 ];
 
 const SIZE_PRESETS = [
-  { name: "小", width: 240, height: 100, lineWidth: 3 },
-  { name: "中", width: 300, height: 130, lineWidth: 4 },
-  { name: "大", width: 360, height: 160, lineWidth: 6 },
-  { name: "特大", width: 480, height: 220, lineWidth: 8 },
+  { name: "小", width: 240, height: 100, lineWidth: 2 },
+  { name: "中", width: 300, height: 130, lineWidth: 3 },
+  { name: "大", width: 360, height: 160, lineWidth: 4 },
+  { name: "特大", width: 480, height: 220, lineWidth: 6 },
 ];
 
 const COLOR_PRESETS = [
@@ -40,22 +40,87 @@ const COLOR_PRESETS = [
 interface GeneratedItem {
   id: number;
   value: string;
-  dataUrl: string;
+  svgDataUrl: string;
+  svgString: string;
+  svgWidth: number;
+  svgHeight: number;
   error?: string;
 }
+
+const BARCODE_SVG_NS = "http://www.w3.org/2000/svg";
+
+const renderBarcodeToSvg = (
+  value: string,
+  type: string,
+  lineWidth: number,
+  height: number,
+  fontSize: number,
+  textPosition: string,
+  margin: number,
+  color: string,
+  displayValue: boolean,
+) => {
+  const lw = Math.max(1, Math.round(lineWidth));
+  const h = Math.max(30, Math.round(height));
+  const svg = document.createElementNS(BARCODE_SVG_NS, "svg");
+  JsBarcode(svg, value, {
+    format: type as any,
+    width: lw,
+    height: h,
+    displayValue,
+    fontSize,
+    textPosition: textPosition as any,
+    margin: Math.round(margin),
+    lineColor: color,
+    background: "#ffffff",
+  });
+
+  const w = parseInt(svg.getAttribute("width") || "0", 10);
+  const sh = parseInt(svg.getAttribute("height") || "0", 10);
+  const svgString = new XMLSerializer().serializeToString(svg);
+  const svgDataUrl =
+    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgString);
+
+  return { svgDataUrl, svgString, svgWidth: w, svgHeight: sh };
+};
+
+const rasterizeSvgToPng = (
+  svgDataUrl: string,
+  svgWidth: number,
+  svgHeight: number,
+  scale = 2,
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = svgWidth * scale;
+      canvas.height = svgHeight * scale;
+      const ctx = canvas.getContext("2d")!;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, svgWidth, svgHeight);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("图片加载失败"));
+    img.src = svgDataUrl;
+  });
+};
 
 const BarcodeGeneratorPanel = () => {
   const mode = useThemeStore((s) => s.mode);
   const [inputText, setInputText] = useState("123456789012");
   const [barcodeType, setBarcodeType] = useState("CODE128");
-  const [width, setWidth] = useState(360);
-  const [height, setHeight] = useState(160);
-  const [lineWidth, setLineWidth] = useState(6);
-  const [fontSize, setFontSize] = useState(18);
+  const [width, setWidth] = useState(240);
+  const [height, setHeight] = useState(100);
+  const [lineWidth, setLineWidth] = useState(2);
+  const [fontSize, setFontSize] = useState(14);
   const [color, setColor] = useState("#000000");
   const [displayValue, setDisplayValue] = useState(true);
   const [textPosition, setTextPosition] = useState("bottom");
-  const [margin, setMargin] = useState(15);
+  const [margin, setMargin] = useState(10);
   const [items, setItems] = useState<GeneratedItem[]>([]);
 
   const generateBarcodes = useCallback(() => {
@@ -69,33 +134,36 @@ const BarcodeGeneratorPanel = () => {
       return;
     }
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
-
     const newItems: GeneratedItem[] = values.map((value, index) => {
-      const canvas = document.createElement("canvas");
       try {
-        JsBarcode(canvas, value, {
-          format: barcodeType as any,
-          width: lineWidth * dpr,
-          height: height * dpr,
-          displayValue: displayValue,
-          fontSize: fontSize * dpr,
-          textPosition: textPosition as any,
-          margin: margin * dpr,
-          lineColor: color,
-          background: "#ffffff",
-        });
-
+        const { svgDataUrl, svgString, svgWidth, svgHeight } =
+          renderBarcodeToSvg(
+            value,
+            barcodeType,
+            lineWidth,
+            height,
+            fontSize,
+            textPosition,
+            margin,
+            color,
+            displayValue,
+          );
         return {
           id: index,
           value,
-          dataUrl: canvas.toDataURL("image/png"),
+          svgDataUrl,
+          svgString,
+          svgWidth,
+          svgHeight,
         };
       } catch (error) {
         return {
           id: index,
           value,
-          dataUrl: "",
+          svgDataUrl: "",
+          svgString: "",
+          svgWidth: 0,
+          svgHeight: 0,
           error: (error as Error).message,
         };
       }
@@ -107,89 +175,138 @@ const BarcodeGeneratorPanel = () => {
     generateBarcodes();
   }, [generateBarcodes]);
 
-  const downloadSingle = (item: GeneratedItem, format: "png" | "jpeg" | "svg") => {
-    if (item.error || !item.dataUrl) {
+  const downloadSingle = async (
+    item: GeneratedItem,
+    format: "png" | "jpeg" | "svg",
+  ) => {
+    if (item.error || !item.svgDataUrl) {
       message.warning(`"${item.value}" 生成失败，无法下载`);
       return;
     }
 
+    const safeName = item.value.replace(/[^a-zA-Z0-9]/g, "_");
+
     if (format === "svg") {
-      const tempCanvas = document.createElement("canvas");
-      try {
-        JsBarcode(tempCanvas, item.value, {
-          format: barcodeType as any,
-          width: lineWidth,
-          height: height,
-          displayValue: displayValue,
-          fontSize: fontSize,
-          textPosition: textPosition as any,
-          margin: margin,
-          lineColor: color,
-          background: "#ffffff",
-        });
-        const svgData = tempCanvas.outerHTML;
-        const blob = new Blob([svgData], { type: "image/svg+xml" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.download = `barcode_${item.value.replace(/[^a-zA-Z0-9]/g, "_")}.${format}`;
-        link.href = url;
-        link.click();
-        URL.revokeObjectURL(url);
-        message.success("已下载 SVG 图片");
-      } catch {
-        message.error("生成 SVG 失败");
-      }
+      const blob = new Blob([item.svgString], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = `barcode_${safeName}.svg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.success("已下载 SVG 图片");
       return;
     }
 
-    const link = document.createElement("a");
-    link.download = `barcode_${item.value.replace(/[^a-zA-Z0-9]/g, "_")}.${format}`;
-    link.href = item.dataUrl;
-    link.click();
-    message.success("已下载图片");
+    try {
+      const pngDataUrl = await rasterizeSvgToPng(
+        item.svgDataUrl,
+        item.svgWidth,
+        item.svgHeight,
+      );
+
+      if (format === "jpeg") {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0);
+          const jpegUrl = canvas.toDataURL("image/jpeg", 1.0);
+          const link = document.createElement("a");
+          link.download = `barcode_${safeName}.jpeg`;
+          link.href = jpegUrl;
+          link.click();
+          message.success("已下载 JPEG 图片");
+        };
+        img.src = pngDataUrl;
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.download = `barcode_${safeName}.png`;
+      link.href = pngDataUrl;
+      link.click();
+      message.success("已下载 PNG 图片");
+    } catch {
+      message.error("图片生成失败");
+    }
   };
 
   const downloadAll = async (format: "png" | "jpeg") => {
-    const validItems = items.filter((item) => !item.error && item.dataUrl);
+    const validItems = items.filter((item) => !item.error && item.svgDataUrl);
     if (validItems.length === 0) {
       message.warning("没有可下载的条形码");
       return;
     }
 
     for (const item of validItems) {
-      const link = document.createElement("a");
-      link.download = `barcode_${item.value.replace(/[^a-zA-Z0-9]/g, "_")}.${format}`;
-      link.href = item.dataUrl;
-      link.click();
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await downloadSingle(item, format);
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
     message.success(`已下载 ${validItems.length} 个图片`);
   };
 
   return (
-    <div style={{ display: "flex", gap: 24, flexDirection: "row", flexWrap: "wrap" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: 24,
+        flexDirection: "row",
+        flexWrap: "wrap",
+      }}
+    >
       <div style={{ flex: "0 0 35%", minWidth: 450 }}>
         <Card title="条形码设置" className="barcode-card">
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 500,
+                }}
+              >
                 输入内容（每行一个，支持批量生成）
               </label>
               <Input.TextArea
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={"请输入条形码内容，每行一个，例如：\n123456789012\nABC123\nhttps://example.com"}
+                placeholder={
+                  "请输入条形码内容，每行一个，例如：\n123456789012\nABC123\nhttps://example.com"
+                }
                 rows={5}
                 maxLength={5000}
               />
-              <div style={{ marginTop: 8, fontSize: 12, color: semanticColors.gray999[mode] }}>
-                共 {inputText.split("\n").filter((v) => v.trim()).length} 条记录
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: semanticColors.gray999[mode],
+                }}
+              >
+                共 {inputText.split("\n").filter((v) => v.trim()).length}{" "}
+                条记录
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>条码类型</label>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
+                  条码类型
+                </label>
                 <Select
                   value={barcodeType}
                   onChange={setBarcodeType}
@@ -198,7 +315,15 @@ const BarcodeGeneratorPanel = () => {
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>文字位置</label>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
+                  文字位置
+                </label>
                 <Select
                   value={textPosition}
                   onChange={setTextPosition}
@@ -214,35 +339,99 @@ const BarcodeGeneratorPanel = () => {
 
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
                   线条宽度: {lineWidth}px
                 </label>
-                <Slider min={1} max={10} value={lineWidth} onChange={setLineWidth} step={0.5} />
+                <Slider
+                  min={1}
+                  max={10}
+                  value={lineWidth}
+                  onChange={setLineWidth}
+                  step={1}
+                />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
                   高度: {height}px
                 </label>
-                <Slider min={30} max={400} value={height} onChange={setHeight} step={10} />
+                <Slider
+                  min={30}
+                  max={400}
+                  value={height}
+                  onChange={setHeight}
+                  step={10}
+                />
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
                   字体大小: {fontSize}px
                 </label>
-                <Slider min={8} max={48} value={fontSize} onChange={setFontSize} step={2} />
+                <Slider
+                  min={8}
+                  max={48}
+                  value={fontSize}
+                  onChange={setFontSize}
+                  step={2}
+                />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>边距: {margin}px</label>
-                <Slider min={0} max={50} value={margin} onChange={setMargin} step={2} />
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: 8,
+                    fontWeight: 500,
+                  }}
+                >
+                  边距(静区): {margin}px
+                </label>
+                <Slider
+                  min={4}
+                  max={50}
+                  value={margin}
+                  onChange={setMargin}
+                  step={2}
+                />
               </div>
             </div>
 
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>颜色</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 500,
+                }}
+              >
+                颜色
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
                 {COLOR_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
@@ -252,7 +441,10 @@ const BarcodeGeneratorPanel = () => {
                       height: 40,
                       borderRadius: 8,
                       backgroundColor: preset.value,
-                      border: color === preset.value ? "3px solid #1890ff" : "2px solid #d9d9d9",
+                      border:
+                        color === preset.value
+                          ? "3px solid #1890ff"
+                          : "2px solid #d9d9d9",
                       cursor: "pointer",
                       transition: "border-color 0.2s",
                     }}
@@ -263,13 +455,42 @@ const BarcodeGeneratorPanel = () => {
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  style={{ width: 40, height: 40, borderRadius: 8, cursor: "pointer" }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
                 />
               </div>
             </div>
 
+            {color.toLowerCase() !== "#000000" && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  background: "#fffbe6",
+                  border: "1px solid #ffe58f",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: "#d46b08",
+                  lineHeight: 1.6,
+                }}
+              >
+                ⚠️ 当前选择的颜色可能降低扫码识别率。推荐使用
+                <span style={{ fontWeight: 600 }}>黑色</span>
+                以确保最佳扫描效果。
+              </div>
+            )}
+
             <div>
-              <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={displayValue}
@@ -290,7 +511,11 @@ const BarcodeGeneratorPanel = () => {
           extra={
             items.length > 1 && (
               <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => downloadAll("png")} size="small" type="primary">
+                <Button
+                  onClick={() => downloadAll("png")}
+                  size="small"
+                  type="primary"
+                >
                   全部下载 PNG
                 </Button>
                 <Button onClick={() => downloadAll("jpeg")} size="small">
@@ -312,14 +537,36 @@ const BarcodeGeneratorPanel = () => {
                       <small>{item.error}</small>
                     </div>
                   ) : (
-                    <img src={item.dataUrl} alt={item.value} className="preview-grid__img" />
+                    <img
+                      src={item.svgDataUrl}
+                      alt={item.value}
+                      className="preview-grid__img"
+                      style={{ imageRendering: "crisp-edges" }}
+                    />
                   )}
-                  <div className="preview-grid__label">{item.value}</div>
+                  <div className="preview-grid__label">
+                    {item.value}
+                  </div>
                   {!item.error && (
                     <div className="preview-grid__actions">
-                      <Button size="small" onClick={() => downloadSingle(item, "png")}>PNG</Button>
-                      <Button size="small" onClick={() => downloadSingle(item, "jpeg")}>JPEG</Button>
-                      <Button size="small" onClick={() => downloadSingle(item, "svg")}>SVG</Button>
+                      <Button
+                        size="small"
+                        onClick={() => downloadSingle(item, "png")}
+                      >
+                        PNG
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => downloadSingle(item, "jpeg")}
+                      >
+                        JPEG
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => downloadSingle(item, "svg")}
+                      >
+                        SVG
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -329,7 +576,15 @@ const BarcodeGeneratorPanel = () => {
 
           <div className="barcode-options">
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>尺寸预设</label>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 500,
+                }}
+              >
+                尺寸预设
+              </label>
               <div className="size-presets">
                 {SIZE_PRESETS.map((preset) => (
                   <Button
@@ -339,7 +594,11 @@ const BarcodeGeneratorPanel = () => {
                       setHeight(preset.height);
                       setLineWidth(preset.lineWidth);
                     }}
-                    type={width === preset.width && height === preset.height ? "primary" : "default"}
+                    type={
+                      width === preset.width && height === preset.height
+                        ? "primary"
+                        : "default"
+                    }
                   >
                     {preset.name} ({preset.width}×{preset.height})
                   </Button>
