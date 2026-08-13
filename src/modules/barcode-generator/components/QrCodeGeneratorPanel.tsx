@@ -55,6 +55,8 @@ const QrCodeGeneratorPanel = () => {
       return;
     }
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+
     const newItems: GeneratedItem[] = [];
 
     for (let i = 0; i < values.length; i++) {
@@ -62,7 +64,7 @@ const QrCodeGeneratorPanel = () => {
       const canvas = document.createElement("canvas");
       try {
         await QRCode.toCanvas(canvas, value, {
-          width: size,
+          width: size * dpr,
           margin: margin,
           color: {
             dark: color,
@@ -151,7 +153,7 @@ const QrCodeGeneratorPanel = () => {
 
   return (
     <div style={{ display: "flex", gap: 24, flexDirection: "row", flexWrap: "wrap" }}>
-      <div style={{ flex: "0 0 40%", minWidth: 500 }}>
+      <div style={{ flex: "0 0 35%", minWidth: 450 }}>
         <Card title="二维码设置" className="qrcode-card">
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <div>

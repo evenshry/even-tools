@@ -23,10 +23,10 @@ const BARCODE_TYPES = [
 ];
 
 const SIZE_PRESETS = [
-  { name: "小", width: 200, height: 80, lineWidth: 2 },
-  { name: "中", width: 300, height: 120, lineWidth: 3 },
-  { name: "大", width: 400, height: 160, lineWidth: 4 },
-  { name: "特大", width: 500, height: 200, lineWidth: 5 },
+  { name: "小", width: 240, height: 100, lineWidth: 3 },
+  { name: "中", width: 300, height: 130, lineWidth: 4 },
+  { name: "大", width: 360, height: 160, lineWidth: 6 },
+  { name: "特大", width: 480, height: 220, lineWidth: 8 },
 ];
 
 const COLOR_PRESETS = [
@@ -48,14 +48,14 @@ const BarcodeGeneratorPanel = () => {
   const mode = useThemeStore((s) => s.mode);
   const [inputText, setInputText] = useState("123456789012");
   const [barcodeType, setBarcodeType] = useState("CODE128");
-  const [width, setWidth] = useState(300);
-  const [height, setHeight] = useState(120);
-  const [lineWidth, setLineWidth] = useState(4);
-  const [fontSize, setFontSize] = useState(16);
+  const [width, setWidth] = useState(360);
+  const [height, setHeight] = useState(160);
+  const [lineWidth, setLineWidth] = useState(6);
+  const [fontSize, setFontSize] = useState(18);
   const [color, setColor] = useState("#000000");
   const [displayValue, setDisplayValue] = useState(true);
   const [textPosition, setTextPosition] = useState("bottom");
-  const [margin, setMargin] = useState(10);
+  const [margin, setMargin] = useState(15);
   const [items, setItems] = useState<GeneratedItem[]>([]);
 
   const generateBarcodes = useCallback(() => {
@@ -69,20 +69,23 @@ const BarcodeGeneratorPanel = () => {
       return;
     }
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+
     const newItems: GeneratedItem[] = values.map((value, index) => {
       const canvas = document.createElement("canvas");
       try {
         JsBarcode(canvas, value, {
           format: barcodeType as any,
-          width: lineWidth,
-          height: height,
+          width: lineWidth * dpr,
+          height: height * dpr,
           displayValue: displayValue,
-          fontSize: fontSize,
+          fontSize: fontSize * dpr,
           textPosition: textPosition as any,
-          margin: margin,
+          margin: margin * dpr,
           lineColor: color,
           background: "#ffffff",
         });
+
         return {
           id: index,
           value,
@@ -165,7 +168,7 @@ const BarcodeGeneratorPanel = () => {
 
   return (
     <div style={{ display: "flex", gap: 24, flexDirection: "row", flexWrap: "wrap" }}>
-      <div style={{ flex: "0 0 40%", minWidth: 500 }}>
+      <div style={{ flex: "0 0 35%", minWidth: 450 }}>
         <Card title="条形码设置" className="barcode-card">
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <div>
@@ -220,7 +223,7 @@ const BarcodeGeneratorPanel = () => {
                 <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
                   高度: {height}px
                 </label>
-                <Slider min={30} max={300} value={height} onChange={setHeight} step={10} />
+                <Slider min={30} max={400} value={height} onChange={setHeight} step={10} />
               </div>
             </div>
 
