@@ -6,7 +6,8 @@ export const jsonToYaml = (value: unknown, indent = 2): string => {
   const indentStr = " ".repeat(indent);
 
   const emit = (v: unknown, depth: number, key?: string) => {
-    const prefix = key !== undefined ? `${indentStr.repeat(depth)}${key}:` : indentStr.repeat(depth);
+    const prefix =
+      key !== undefined ? `${indentStr.repeat(depth)}${formatYamlKey(key)}:` : indentStr.repeat(depth);
 
     if (v === null) {
       lines.push(key !== undefined ? `${prefix} null` : `${indentStr.repeat(depth)}null`);
@@ -39,6 +40,14 @@ export const jsonToYaml = (value: unknown, indent = 2): string => {
 
   emit(value, 0);
   return lines.join("\n");
+};
+
+// YAML key：仅在安全时省略引号，避免含 : 、空格、数字开头的 key 产生非法 YAML
+const formatYamlKey = (key: string): string => {
+  if (/^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(key) && !/^(true|false|null|yes|no|on|off)$/i.test(key)) {
+    return key;
+  }
+  return JSON.stringify(key);
 };
 
 const formatYamlScalar = (v: unknown): string => {
@@ -80,8 +89,8 @@ export const jsonToCsv = (value: unknown, delimiter = ","): string => {
   if (keys.length === 0) return "";
 
   const escape = (s: string) => {
-    if (delimiter === "\t") return s.replace(/\t/g, " ").replace(/\n/g, " ");
-    if (/[",\n]/.test(s)) {
+    const specialRe = delimiter === "\t" ? /[\t\n\r"]/ : /[",\n\r]/;
+    if (specialRe.test(s)) {
       return `"${s.replace(/"/g, '""')}"`;
     }
     return s;

@@ -28,17 +28,29 @@ export namespace JsonToolkitTypes {
     severity: "error" | "warning";
   }
 
-  // 验证结果
+  // 严格校验结果（JSON.parse 语义）
   interface ValidationResult {
     isValid: boolean;
     error?: string;
     errorLine?: number;
     errorColumn?: number;
     parsed?: unknown;
-    diagnostics?: JsonDiagnosticError[];
-    fixes?: Array<{ position: number; length: number; replacement: string; description: string }>;
-    fixedText?: string;
   }
+
+  // 诊断错误按父路径归组后的节点信息（用于可视化树补全错误节点）
+  interface JsonErrorGroup {
+    keyName: string;
+    errorMessage: string;
+    errorSuggestion: string;
+    valueText: string;
+    startOffset: number;
+    endOffset: number;
+    errorTypes: string[];
+    hasCriticalError: boolean;
+    errors: JsonDiagnosticError[];
+  }
+
+  type JsonErrorMap = Record<string, JsonErrorGroup[]>;
 
   // 统计信息
   interface JsonStats {
@@ -56,8 +68,8 @@ export namespace JsonToolkitTypes {
 
   // 树节点
   interface TreeNode {
-    key: string;
-    label: string; // 兼容旧字段
+    uid: string; // antd Tree 使用的唯一 key（同名 path 出现多次时追加序号）
+    depth: number; // 节点层级，根节点为 0
     keyName: string; // 键名（如 "name" 或 "0"），根节点为 "$"
     valueText: string; // 值文本（原始值/对象/数组的概要）
     value?: unknown;

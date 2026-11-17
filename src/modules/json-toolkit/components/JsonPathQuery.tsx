@@ -8,7 +8,7 @@ const { Search } = Input;
 
 interface JsonPathQueryProps {
   data: unknown;
-  onDataValid: boolean;
+  dataValid: boolean;
 }
 
 const examples = [
@@ -19,15 +19,15 @@ const examples = [
   { label: "$..skills", expr: "$..skills" },
 ];
 
-const JsonPathQuery = ({ data, onDataValid }: JsonPathQueryProps) => {
+const JsonPathQuery = ({ data, dataValid }: JsonPathQueryProps) => {
   const [expr, setExpr] = useState("$..name");
 
   const result = useMemo(() => {
-    if (!onDataValid) {
+    if (!dataValid) {
       return { ok: false, error: "请先输入有效 JSON", matches: [] };
     }
     return queryJsonPath(data, expr);
-  }, [data, expr, onDataValid]);
+  }, [data, expr, dataValid]);
 
   return (
     <Card
@@ -61,7 +61,6 @@ const JsonPathQuery = ({ data, onDataValid }: JsonPathQueryProps) => {
         onChange={(e) => setExpr(e.target.value)}
         placeholder="输入 JSONPath 表达式，例如 $.user.address.city"
         enterButton="查询"
-        onSearch={() => {}}
         style={{ marginBottom: 12 }}
         spellCheck={false}
       />

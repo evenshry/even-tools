@@ -1,6 +1,5 @@
-import { Card, Input, Button, Space, Typography, Alert, Empty, Tag } from "antd";
+import { Card, Input, Button, Space, Typography, Alert, Empty, Tag, message } from "antd";
 import { CopyOutlined } from "@ant-design/icons";
-import { message } from "antd";
 import { describeValue } from "../utils/jsonUtils";
 
 const { Text } = Typography;

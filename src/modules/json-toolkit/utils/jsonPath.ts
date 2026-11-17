@@ -26,8 +26,8 @@ export const queryJsonPath = (root: unknown, expr: string): QueryResult => {
 
   try {
     const tokens = tokenize(trimmed);
-    const matches: { path: string; value: unknown }[] = [{ path: "$", value: root }];
-    const result = applyTokens(root, "$", tokens, matches);
+    // 注意：不能预先塞入根节点，否则任何查询都会多出一条根记录
+    const result = applyTokens(root, "$", tokens, []);
     return { ok: true, matches: result };
   } catch (e) {
     return { ok: false, error: (e as Error).message, matches: [] };
@@ -100,17 +100,24 @@ const tokenize = (expr: string): Token[] => {
           inner = inner.trim();
           if (inner.includes(":")) {
             const [s, e] = inner.split(":");
+            const startText = s.trim();
+            const endText = e.trim();
+            if (
+              (startText !== "" && !/^-?\d+$/.test(startText)) ||
+              (endText !== "" && !/^-?\d+$/.test(endText))
+            ) {
+              throw new Error(`切片索引必须是整数：${inner}`);
+            }
             tokens.push({
               kind: "slice",
-              start: s.trim() === "" ? null : parseInt(s.trim(), 10),
-              end: e.trim() === "" ? null : parseInt(e.trim(), 10),
+              start: startText === "" ? null : parseInt(startText, 10),
+              end: endText === "" ? null : parseInt(endText, 10),
             });
           } else {
-            const idx = parseInt(inner, 10);
-            if (Number.isNaN(idx)) {
+            if (!/^-?\d+$/.test(inner)) {
               throw new Error(`无法解析索引：${inner}`);
             }
-            tokens.push({ kind: "index", index: idx });
+            tokens.push({ kind: "index", index: parseInt(inner, 10) });
           }
         }
       } else {
@@ -150,7 +157,12 @@ const applyTokens = (
 
   switch (head.kind) {
     case "child": {
-      if (current !== null && typeof current === "object" && !Array.isArray(current)) {
+      if (
+        current !== null &&
+        typeof current === "object" &&
+        !Array.isArray(current) &&
+        Object.prototype.hasOwnProperty.call(current, head.name)
+      ) {
         const v = (current as Record<string, unknown>)[head.name];
         applyTokens(v, `${currentPath}.${head.name}`, rest, out);
       }
@@ -194,7 +206,7 @@ const applyTokens = (
               v.forEach((item, i) => collect(item, `${p}[${i}]`));
             } else {
               const obj = v as Record<string, unknown>;
-              if (head.name in obj) {
+              if (Object.prototype.hasOwnProperty.call(obj, head.name)) {
                 applyTokens(obj[head.name], `${p}.${head.name}`, rest, out);
               }
               Object.entries(obj).forEach(([k, val]) => collect(val, `${p}.${k}`));

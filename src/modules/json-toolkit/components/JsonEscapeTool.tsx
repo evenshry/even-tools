@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { Card, Input, Button, Space, Typography, Alert, Segmented } from "antd";
+import { useMemo, useState } from "react";
+import { Card, Input, Button, Space, Typography, Alert, Segmented, message } from "antd";
 import { CopyOutlined, ArrowRightOutlined } from "@ant-design/icons";
-import { message } from "antd";
 import { escapeJsonString, unescapeJsonString } from "../utils/jsonUtils";
 
 const { Text } = Typography;
@@ -13,14 +12,16 @@ const JsonEscapeTool = () => {
   const [input, setInput] = useState("");
   const [direction, setDirection] = useState<Direction>("escape");
 
-  const output = (() => {
-    if (!input) return "";
+  const { output, error } = useMemo<{ output: string; error?: string }>(() => {
+    if (!input) return { output: "" };
     try {
-      return direction === "escape" ? escapeJsonString(input) : unescapeJsonString(input);
+      return {
+        output: direction === "escape" ? escapeJsonString(input) : unescapeJsonString(input),
+      };
     } catch (e) {
-      return `错误：${(e as Error).message}`;
+      return { output: "", error: (e as Error).message };
     }
-  })();
+  }, [input, direction]);
 
   const handleCopy = () => {
     if (!output) {
@@ -32,7 +33,7 @@ const JsonEscapeTool = () => {
   };
 
   const handleSwap = () => {
-    if (output && !output.startsWith("错误：")) {
+    if (output && !error) {
       setInput(output);
       setDirection((d) => (d === "escape" ? "unescape" : "escape"));
     }
@@ -83,8 +84,8 @@ const JsonEscapeTool = () => {
         </Space>
         <div>
           <Text type="secondary" style={{ fontSize: 12 }}>输出</Text>
-          {output.startsWith("错误：") ? (
-            <Alert type="error" showIcon message={output} style={{ marginTop: 4 }} />
+          {error ? (
+            <Alert type="error" showIcon message={error} style={{ marginTop: 4 }} />
           ) : (
             <TextArea
               value={output}

@@ -9,14 +9,14 @@ type Format = "yaml" | "csv" | "tsv" | "xml" | "properties";
 
 interface JsonConverterProps {
   data: unknown;
-  onDataValid: boolean;
+  dataValid: boolean;
 }
 
-const JsonConverter = ({ data, onDataValid }: JsonConverterProps) => {
+const JsonConverter = ({ data, dataValid }: JsonConverterProps) => {
   const [format, setFormat] = useState<Format>("yaml");
 
   const { result, warning } = useMemo(() => {
-    if (!onDataValid) {
+    if (!dataValid) {
       return { result: "", warning: "请先输入有效 JSON" };
     }
     try {
@@ -41,7 +41,7 @@ const JsonConverter = ({ data, onDataValid }: JsonConverterProps) => {
     } catch (e) {
       return { result: "", warning: (e as Error).message };
     }
-  }, [data, format, onDataValid]);
+  }, [data, format, dataValid]);
 
   const titleMap: Record<Format, string> = {
     yaml: "YAML 输出",

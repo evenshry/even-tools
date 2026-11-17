@@ -26,19 +26,7 @@ interface JsonTreeViewerProps {
   data: unknown;
   onPathClick?: (path: string, value: unknown) => void;
   pathErrors?: Record<string, JsonToolkitTypes.JsonDiagnosticError[]>;
-  errorNodes?: Record<
-    string,
-    {
-      keyName: string;
-      errorMessage: string;
-      errorSuggestion: string;
-      valueText: string;
-      startOffset: number;
-      errorTypes?: string[];
-      hasCriticalError?: boolean;
-      errors?: JsonToolkitTypes.JsonDiagnosticError[];
-    }[]
-  >;
+  errorNodes?: JsonToolkitTypes.JsonErrorMap;
   nodeOffsets?: Record<string, number>;
 }
 
@@ -113,7 +101,7 @@ const convertNode = (
 ): AntdTreeNode => {
   const lowerKeyword = keyword.toLowerCase();
   const matchesKeyword = !keyword || nodeMatches(node, lowerKeyword);
-  const isCurrentMatch = opts.currentMatchKey === node.path;
+  const isCurrentMatch = opts.currentMatchKey === node.uid;
 
   const typeTag = opts.showType ? (
     <Tag color={typeTagColor[node.type]} style={{ marginInlineEnd: 4, fontSize: 11, lineHeight: "18px" }}>
@@ -234,7 +222,7 @@ const convertNode = (
       ) : null;
 
     return {
-      key: node.path,
+      key: node.uid,
       title: (
         <span className={`json-tree-viewer__node json-tree-viewer__node--error ${matchesKeyword ? "" : "is-dim"}`}>
           <span className="json-tree-viewer__main">
@@ -374,35 +362,35 @@ const convertNode = (
   );
 
   return {
-    key: node.path,
+    key: node.uid,
     title,
     path: node.path,
     children: node.children?.map((c) => convertNode(c, keyword, opts, handleCopyPath, pathErrors, mode)),
   };
 };
 
-// 收集所有节点路径，用于默认全展开
+// 收集所有可展开节点的 key（与 antd onExpand 返回的语义保持一致）
 const collectAllKeys = (node: JsonToolkitTypes.TreeNode, out: string[] = []): string[] => {
-  out.push(node.path);
+  if (node.expandable) out.push(node.uid);
   if (node.children) {
     node.children.forEach((c) => collectAllKeys(c, out));
   }
   return out;
 };
 
-// 获取指定路径节点的所有祖先节点 key（不含自身），从根到直接父级排列
-const getAncestorKeys = (targetPath: string, root: JsonToolkitTypes.TreeNode): string[] => {
+// 获取指定节点 key 的所有祖先节点 key（不含自身），从根到直接父级排列
+const getAncestorKeys = (targetKey: string, root: JsonToolkitTypes.TreeNode): string[] => {
   const ancestors: string[] = [];
-  if (targetPath === root.path) return ancestors;
+  if (targetKey === root.uid) return ancestors;
   const walk = (node: JsonToolkitTypes.TreeNode): boolean => {
     if (!node.children) return false;
     for (const child of node.children) {
-      if (child.path === targetPath) {
-        ancestors.push(node.path);
+      if (child.uid === targetKey) {
+        ancestors.push(node.uid);
         return true;
       }
       if (walk(child)) {
-        ancestors.push(node.path);
+        ancestors.push(node.uid);
         return true;
       }
     }
@@ -415,7 +403,7 @@ const getAncestorKeys = (targetPath: string, root: JsonToolkitTypes.TreeNode): s
 // 收集所有匹配关键字的节点 key
 const collectMatchKeys = (node: JsonToolkitTypes.TreeNode, lowerKeyword: string, out: string[] = []): string[] => {
   if (nodeMatches(node, lowerKeyword)) {
-    out.push(node.path);
+    out.push(node.uid);
   }
   if (node.children) {
     node.children.forEach((c) => collectMatchKeys(c, lowerKeyword, out));
@@ -423,42 +411,21 @@ const collectMatchKeys = (node: JsonToolkitTypes.TreeNode, lowerKeyword: string,
   return out;
 };
 
-// 根据路径计算节点的层级深度
-// 根节点 $ 为 0 层，$.user 为 1 层，$.items[0].name 为 3 层
-const getDepthFromPath = (path: string): number => {
-  if (path === "$") return 0;
-  let depth = 0;
-  for (let i = 1; i < path.length; i++) {
-    const ch = path[i];
-    if (ch === "." || ch === "[") depth++;
-  }
-  return depth;
-};
-
-// 收集指定深度层级的所有可展开节点 key
-const collectKeysByDepth = (node: JsonToolkitTypes.TreeNode, targetDepth: number, currentDepth = 0, out: string[] = []): string[] => {
-  if (currentDepth === targetDepth && node.expandable) {
-    out.push(node.path);
-  }
-  if (node.children) {
-    node.children.forEach((c) => collectKeysByDepth(c, targetDepth, currentDepth + 1, out));
-  }
-  return out;
-};
-
-// 获取树中存在可展开节点的所有有效深度（过滤掉只有叶子节点的层级）
-const getEffectiveDepths = (node: JsonToolkitTypes.TreeNode): number[] => {
-  const depths = new Set<number>();
-  const walk = (n: JsonToolkitTypes.TreeNode, depth: number) => {
-    if (n.expandable && depth >= 0) {
-      depths.add(depth);
+// 构建 key -> 层级、层级 -> 可展开节点 key 的索引，避免每次渲染都遍历整棵树
+const buildTreeIndex = (root: JsonToolkitTypes.TreeNode) => {
+  const depthOf = new Map<string, number>();
+  const keysByDepth = new Map<number, string[]>();
+  const walk = (node: JsonToolkitTypes.TreeNode) => {
+    depthOf.set(node.uid, node.depth);
+    if (node.expandable) {
+      const keys = keysByDepth.get(node.depth);
+      if (keys) keys.push(node.uid);
+      else keysByDepth.set(node.depth, [node.uid]);
     }
-    if (n.children) {
-      n.children.forEach((c) => walk(c, depth + 1));
-    }
+    node.children?.forEach(walk);
   };
-  walk(node, 0);
-  return Array.from(depths).sort((a, b) => a - b);
+  walk(root);
+  return { depthOf, keysByDepth };
 };
 
 // 从 valueText 中提取不含计数的文本（如 "{} (3 项)" → "{}"）
@@ -477,6 +444,11 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
   const [treeHeight, setTreeHeight] = useState(() => window.innerHeight - 240);
   const [matchIndex, setMatchIndex] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 标记需要滚动的目标节点 + 待展开的祖先 key
+  const [pendingScroll, setPendingScroll] = useState<{
+    key: string;
+    ancestors: string[];
+  } | null>(null);
   const treeRef = useRef<any>(null);
 
   // 响应窗口 resize
@@ -494,19 +466,8 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
   };
 
   const root = useMemo(() => {
-    const tree = data === undefined ? null : buildTree(data, "$", errorNodes, nodeOffsets);
-    console.log(
-      "[JsonTreeViewer] root tree:",
-      JSON.stringify(
-        tree,
-        (key, value) => {
-          if (key === "value" && typeof value === "object" && value !== null) return "[object]";
-          return value;
-        },
-        2,
-      ),
-    );
-    return tree;
+    if (data === undefined) return null;
+    return buildTree(data, errorNodes, nodeOffsets);
   }, [data, errorNodes, nodeOffsets]);
 
   // 计算匹配列表
@@ -523,11 +484,17 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
   // 当前高亮的匹配节点 key
   const currentMatchKey = matchKeys.length > 0 ? matchKeys[matchIndex] : null;
 
-  // 计算树的有效深度层级（只统计有可展开节点的层级）
-  const effectiveDepths = useMemo(() => {
-    if (!root) return [];
-    return getEffectiveDepths(root);
+  // 树索引：key -> 层级 / 层级 -> 可展开节点，避免渲染时反复遍历
+  const { depthOf, keysByDepth } = useMemo(() => {
+    if (!root) return { depthOf: new Map<string, number>(), keysByDepth: new Map<number, string[]>() };
+    return buildTreeIndex(root);
   }, [root]);
+
+  // 计算树的有效深度层级（只统计有可展开节点的层级）
+  const effectiveDepths = useMemo(
+    () => Array.from(keysByDepth.keys()).sort((a, b) => a - b),
+    [keysByDepth],
+  );
 
   const treeData = useMemo(() => {
     if (!root) return [];
@@ -535,20 +502,23 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [root, search, showType, showIndex, showPath, showCount, currentMatchKey, pathErrors, mode]);
 
-  // data 变化时默认全展开
+  // 首次载入时全展开；后续编辑仅保留仍然存在的节点，避免用户收起的节点被反复展开
+  const allKeys = useMemo(() => (root ? collectAllKeys(root) : []), [root]);
+  const hasInitializedExpansion = useRef(false);
   useEffect(() => {
-    if (root) {
-      setExpandedKeys(collectAllKeys(root));
-    } else {
+    if (!root) {
       setExpandedKeys([]);
+      hasInitializedExpansion.current = false;
+      return;
     }
-  }, [root]);
-
-// 标记需要滚动的目标节点 + 待展开的祖先 key
-  const [pendingScroll, setPendingScroll] = useState<{
-    key: string;
-    ancestors: string[];
-  } | null>(null);
+    if (!hasInitializedExpansion.current) {
+      setExpandedKeys(allKeys);
+      hasInitializedExpansion.current = true;
+      return;
+    }
+    const available = new Set(allKeys);
+    setExpandedKeys((prev) => prev.filter((key) => available.has(key)));
+  }, [root, allKeys]);
 
   // 触发定位：先收集需要展开的祖先，再请求滚动
   useEffect(() => {
@@ -628,33 +598,31 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
     return effectiveDepths[level - 1] ?? 0;
   };
 
+  const expandedSet = useMemo(() => new Set(expandedKeys), [expandedKeys]);
+
+  // 每个层级是否已全部展开（一次性计算，避免 Popover 内循环里反复遍历）
+  const fullyExpandedLevels = useMemo(
+    () =>
+      effectiveDepths.map((depth) => {
+        const keysAtDepth = keysByDepth.get(depth) ?? [];
+        return keysAtDepth.length === 0 || keysAtDepth.every((k) => expandedSet.has(k));
+      }),
+    [effectiveDepths, keysByDepth, expandedSet],
+  );
+
   // 判断指定 UI 层级的所有可展开节点是否全部在 expandedKeys 中
-  const isLevelFullyExpanded = (level: number): boolean => {
-    if (!root) return false;
-    const depth = getDepthForLevel(level);
-    const keysAtDepth = collectKeysByDepth(root, depth);
-    if (keysAtDepth.length === 0) return true;
-    const expandedSet = new Set(expandedKeys);
-    return keysAtDepth.every((k) => expandedSet.has(k));
-  };
+  const isLevelFullyExpanded = (level: number): boolean => fullyExpandedLevels[level - 1] ?? true;
 
   // 判断所有节点是否全部展开
-  const isAllExpanded = useMemo(() => {
-    if (!root) return false;
-    const allKeys = collectAllKeys(root);
-    if (allKeys.length === 0) return true;
-    const expandedSet = new Set(expandedKeys);
-    return allKeys.every((k) => expandedSet.has(k));
-  }, [root, expandedKeys]);
+  const isAllExpanded = useMemo(
+    () => allKeys.length === 0 || allKeys.every((k) => expandedSet.has(k)),
+    [allKeys, expandedSet],
+  );
 
   // 全展开/全收起 切换
   const handleToggleAll = () => {
     if (!root) return;
-    if (isAllExpanded) {
-      setExpandedKeys([]);
-    } else {
-      setExpandedKeys(collectAllKeys(root));
-    }
+    setExpandedKeys(isAllExpanded ? [] : allKeys);
   };
 
   // 逐层展开/收起 切换（使用有效深度映射）
@@ -663,22 +631,21 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
     const targetDepth = getDepthForLevel(level);
     if (isLevelFullyExpanded(level)) {
       // 该层已展开：收起该层及所有更深层级
-      const filtered = expandedKeys.filter((key) => getDepthFromPath(key) < targetDepth);
-      setExpandedKeys(filtered);
+      setExpandedKeys(expandedKeys.filter((key) => (depthOf.get(key) ?? Infinity) < targetDepth));
     } else {
-      // 该层未展开：展开该层及所有祖先层级（有效深度中 <= targetDepth 的）
+      // 该层未展开：展开该层及所有祖先层级
       const newKeys = new Set(expandedKeys);
       for (const d of effectiveDepths) {
         if (d <= targetDepth) {
-          collectKeysByDepth(root, d).forEach((k) => newKeys.add(k));
+          (keysByDepth.get(d) ?? []).forEach((k) => newKeys.add(k));
         }
       }
       setExpandedKeys(Array.from(newKeys));
     }
   };
 
-  if (data === undefined || data === null) {
-    return <Empty description={data === null ? "JSON 为 null" : "尚未载入有效 JSON"} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  if (data === undefined) {
+    return <Empty description="尚未载入有效 JSON" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
   return (
@@ -687,7 +654,7 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="过滤键名 / 值 / 路径"
+          placeholder="高亮匹配：键名 / 值 / 路径"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: 1 }}
@@ -744,7 +711,7 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
           <Popover
             forceRender
             content={
-              <div className="json-tree-viewer__level-popover" key={expandedKeys.join(",")}>
+              <div className="json-tree-viewer__level-popover">
                 <div className="json-tree-viewer__level-popover-title">
                   <ColumnHeightOutlined /> 层级控制（共 {effectiveDepths.length} 层）
                 </div>
@@ -759,7 +726,7 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
                     const expanded = isLevelFullyExpanded(level);
                     // 第 1 层始终可用；第 N 层只有当前面所有层都展开时才可用
                     const prevAllExpanded =
-                      level === 1 || Array.from({ length: level - 1 }, (_, i) => i + 1).every((l) => isLevelFullyExpanded(l));
+                      level === 1 || fullyExpandedLevels.slice(0, level - 1).every(Boolean);
                     const disabled = !prevAllExpanded;
                     return (
                       <div key={level} className="json-tree-viewer__level-row">
@@ -790,12 +757,6 @@ const JsonTreeViewer = ({ data, onPathClick, pathErrors = {}, errorNodes, nodeOf
               层级
             </Button>
           </Popover>
-
-          {/* {Object.entries(typeValueColor).map(([t, c]) => (
-            <Tag key={t} color={typeTagColor[t]} style={{ marginInlineEnd: 3, fontSize: 11, marginBottom: 0 }}>
-              <span style={{ color: c }}>●</span> {t}
-            </Tag>
-          ))} */}
         </Space>
       </div>
       <Tree

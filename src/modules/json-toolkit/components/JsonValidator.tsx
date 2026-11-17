@@ -1,8 +1,7 @@
 import { Card, Typography, Alert, Space, Tag, List, Button } from "antd";
 import { BulbOutlined, FileSyncOutlined } from "@ant-design/icons";
 import JsonOutput from "./JsonOutput";
-import { validateJson } from "../utils/jsonUtils";
-import { useMemo } from "react";
+import { getIndentString } from "../utils/jsonUtils";
 import type { JsonToolkitTypes } from "../data/interface";
 
 const { Text, Paragraph } = Typography;
@@ -27,59 +26,71 @@ const errorTypeLabel: Record<string, { label: string; color: string }> = {
   single_quotes: { label: "单引号", color: "orange" },
   comment: { label: "注释", color: "purple" },
   nan_or_infinity: { label: "NaN/Infinity", color: "orange" },
-  // 新增映射
   value_expected: { label: "缺少值", color: "red" },
   colon_expected: { label: "缺少冒号", color: "orange" },
   comma_expected: { label: "缺少逗号", color: "orange" },
   close_brace_expected: { label: "缺少 }", color: "red" },
   close_bracket_expected: { label: "缺少 ]", color: "red" },
   end_of_file_expected: { label: "多余内容", color: "orange" },
+  parse_error: { label: "解析错误", color: "red" },
 };
 
 interface JsonValidatorProps {
-  rawText: string;
+  strictValid: boolean;
+  error?: string;
+  errorLine?: number;
+  errorColumn?: number;
+  parsed?: unknown;
   diagnostics?: JsonToolkitTypes.JsonDiagnosticError[];
-  fixes?: Array<{ position: number; length: number; replacement: string; description: string }>;
+  fixCount: number;
+  indent: JsonToolkitTypes.IndentStyle;
   onApplyFixes?: () => void;
 }
 
-const JsonValidator = ({ rawText, diagnostics, fixes, onApplyFixes }: JsonValidatorProps) => {
-  const validation = useMemo(() => validateJson(rawText), [rawText]);
-  const hasDiagnostics = diagnostics && diagnostics.length > 0;
+const JsonValidator = ({
+  strictValid,
+  error,
+  errorLine,
+  errorColumn,
+  parsed,
+  diagnostics,
+  fixCount,
+  indent,
+  onApplyFixes,
+}: JsonValidatorProps) => {
+  const hasDiagnostics = diagnostics !== undefined && diagnostics.length > 0;
+  const canApply = fixCount > 0 && onApplyFixes !== undefined;
 
   return (
     <Card
       title={
         <Space>
           <Text strong>校验结果</Text>
-          {validation.isValid ? (
-            <Tag color="success">VALID</Tag>
-          ) : (
-            <Tag color="error">INVALID</Tag>
-          )}
-          {hasDiagnostics && (
-            <Tag color="red">{diagnostics!.length} 处错误</Tag>
-          )}
+          {strictValid ? <Tag color="success">VALID</Tag> : <Tag color="error">INVALID</Tag>}
+          {hasDiagnostics && <Tag color="red">{diagnostics.length} 处错误</Tag>}
+          {!strictValid && canApply && <Tag color="orange">可自动修复</Tag>}
         </Space>
       }
       extra={
-        fixes && fixes.length > 0 && onApplyFixes ? (
+        canApply ? (
           <Button size="small" type="primary" icon={<FileSyncOutlined />} onClick={onApplyFixes}>
-            一键修复（{fixes.length} 处）
+            一键修复（{fixCount} 处）
           </Button>
         ) : null
       }
       className="json-validator"
       styles={{ body: { padding: 12 } }}
     >
-      {validation.isValid ? (
+      {strictValid ? (
         <Alert
           type="success"
           showIcon
           message="JSON 格式正确"
           description={
             <Paragraph style={{ marginBottom: 0 }}>
-              <Text>已成功解析为 {Array.isArray(validation.parsed) ? "数组" : typeof validation.parsed} 类型。</Text>
+              <Text>
+                已成功解析为 {Array.isArray(parsed) ? "数组" : typeof parsed} 类型。
+              </Text>
               <br />
               <Text type="secondary" style={{ fontSize: 12 }}>
                 可在「可视化树」标签中查看结构，或在「路径查询」「格式转换」中使用。
@@ -89,14 +100,14 @@ const JsonValidator = ({ rawText, diagnostics, fixes, onApplyFixes }: JsonValida
         />
       ) : (
         <Alert
-          type="error"
+          type={canApply ? "warning" : "error"}
           showIcon
-          message="JSON 校验失败"
+          message={canApply ? "JSON 校验失败（可一键修复）" : "JSON 校验失败"}
           description={
             <Paragraph style={{ marginBottom: 0 }}>
-              <Text>{validation.error}</Text>
-              {validation.errorLine && (
-                <Text type="secondary"> （第 {validation.errorLine} 行，第 {validation.errorColumn} 列）</Text>
+              <Text>{error ?? "无法解析该 JSON"}</Text>
+              {errorLine !== undefined && (
+                <Text type="secondary"> （第 {errorLine} 行，第 {errorColumn} 列）</Text>
               )}
             </Paragraph>
           }
@@ -108,17 +119,25 @@ const JsonValidator = ({ rawText, diagnostics, fixes, onApplyFixes }: JsonValida
           size="small"
           bordered
           style={{ marginTop: 12 }}
-          header={<Text strong style={{ fontSize: 12 }}><BulbOutlined /> 错误诊断</Text>}
-          dataSource={diagnostics!}
+          header={
+            <Text strong style={{ fontSize: 12 }}>
+              <BulbOutlined /> 错误诊断
+            </Text>
+          }
+          dataSource={diagnostics}
           renderItem={(item) => {
             const typeInfo = errorTypeLabel[item.type] || { label: item.type, color: "default" };
             return (
               <List.Item style={{ padding: "6px 10px" }}>
                 <Space direction="vertical" size={0} style={{ width: "100%" }}>
                   <Space size={4} wrap>
-                    <Tag color={typeInfo.color} style={{ fontSize: 11, lineHeight: "18px" }}>{typeInfo.label}</Tag>
+                    <Tag color={typeInfo.color} style={{ fontSize: 11, lineHeight: "18px" }}>
+                      {typeInfo.label}
+                    </Tag>
                     <Text style={{ fontSize: 12 }}>{item.message}</Text>
-                    <Text type="secondary" style={{ fontSize: 11 }}>L{item.line}:C{item.column}</Text>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      L{item.line}:C{item.column}
+                    </Text>
                   </Space>
                   <Text type="secondary" style={{ fontSize: 11, paddingLeft: 4 }}>
                     <BulbOutlined style={{ marginRight: 4 }} />
@@ -131,11 +150,19 @@ const JsonValidator = ({ rawText, diagnostics, fixes, onApplyFixes }: JsonValida
         />
       )}
 
-      {validation.isValid && (
+      {parsed !== undefined && (
         <div style={{ marginTop: 12 }}>
           <JsonOutput
-            title="格式化输出（同步预览）"
-            content={JSON.stringify(validation.parsed, null, 2)}
+            title={strictValid ? "格式化输出（同步预览）" : "自动修复后的结果预览（未应用）"}
+            content={
+              (() => {
+                try {
+                  return JSON.stringify(parsed, null, getIndentString(indent));
+                } catch {
+                  return "";
+                }
+              })()
+            }
             language="json"
           />
         </div>

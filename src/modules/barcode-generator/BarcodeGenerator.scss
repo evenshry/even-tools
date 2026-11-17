@@ -54,7 +54,8 @@
   }
 
   &__img {
-    height: auto;
+    max-width: 100%;
+    object-fit: contain;
     margin-bottom: 12px;
     border-radius: var(--et-radius-sm);
     display: block;

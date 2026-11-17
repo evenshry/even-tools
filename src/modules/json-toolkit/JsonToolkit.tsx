@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Layout, Tabs, Select, Button, Space, message } from "antd";
 import {
   CheckCircleOutlined,
@@ -20,13 +20,17 @@ import JsonEscapeTool from "@/modules/json-toolkit/components/JsonEscapeTool";
 import JsonValidator from "@/modules/json-toolkit/components/JsonValidator";
 import { samples } from "@/modules/json-toolkit/data/samples";
 import type { JsonToolkitTypes } from "@/modules/json-toolkit/data/interface";
-import { formatJson, minifyJson, computeStats, byteSize } from "@/modules/json-toolkit/utils/jsonUtils";
 import {
-  lenientParseJson,
-  tolerantParseToTree,
+  formatJson,
+  minifyJson,
+  computeStats,
+  byteSize,
+  getIndentString,
+} from "@/modules/json-toolkit/utils/jsonUtils";
+import {
+  analyzeJson,
   mapDiagnosticsToPaths,
   buildErrorNodesFromDiagnostics,
-  getFieldNodeOffsets,
 } from "@/modules/json-toolkit/utils/jsonDiagnostics";
 import "@/modules/json-toolkit/JsonToolkit.scss";
 
@@ -40,72 +44,71 @@ const JsonToolkit = () => {
   const [activeTopTab, setActiveTopTab] = useState("main");
   const [previewTab, setPreviewTab] = useState<PreviewTab>("tree");
 
-  // 校验（使用容错解析）
-  const validation = useMemo(() => {
-    const result = lenientParseJson(rawText);
-    return {
-      isValid: result.success && result.parsed !== undefined,
-      error: result.errors.length > 0 ? result.errors[0].message : undefined,
-      errorLine: result.errors.length > 0 ? result.errors[0].line : undefined,
-      errorColumn: result.errors.length > 0 ? result.errors[0].column : undefined,
-      parsed: result.parsed,
-      diagnostics: result.errors,
-      fixes: result.fixes,
-      fixedText: result.fixedText,
-    } satisfies JsonToolkitTypes.ValidationResult;
-  }, [rawText]);
-  const dataValid = validation.isValid;
-  const data = validation.parsed;
+  // 诊断文本延后取值：快速输入时跳过中间状态的重解析
+  const analyzedText = useDeferredValue(rawText);
+
+  // 一次解析同时得到：严格解析结果 / 容错结构 / 错误诊断 / 自动修复结果 / 字段偏移
+  const analysis = useMemo(() => analyzeJson(analyzedText), [analyzedText]);
+
+  const dataValid = analysis.strictValid;
+  const hasUsableData = analysis.data !== undefined;
+  const status: "valid" | "fixed" | "invalid" = dataValid ? "valid" : hasUsableData ? "fixed" : "invalid";
+
+  // 可视化树：严格有效用解析结果，否则用容错结构（并挂载错误节点）
+  const treeData = dataValid ? analysis.strictParsed : analysis.partial;
+  const displayData = analysis.data;
 
   // 统计
   const stats = useMemo(() => {
-    if (!dataValid || data === undefined) return null;
-    return computeStats(data, rawText);
-  }, [data, dataValid, rawText]);
+    if (displayData === undefined) return null;
+    return computeStats(displayData, rawText);
+  }, [displayData, rawText]);
 
   // 输出预览（根据 indent 实时格式化）
   const formattedOutput = useMemo(() => {
-    if (!dataValid) return "";
-    const r = formatJson(rawText, indent);
-    return r.ok ? r.result : "";
-  }, [rawText, indent, dataValid]);
+    if (displayData === undefined) return "";
+    try {
+      return JSON.stringify(displayData, null, getIndentString(indent));
+    } catch {
+      return "";
+    }
+  }, [displayData, indent]);
+
+  // 严格格式化：原文无效时提示先修复，避免静默改写用户输入
+  const reformat = (style: JsonToolkitTypes.IndentStyle) =>
+    style === 0 ? minifyJson(rawText) : formatJson(rawText, style);
+
+  const reportFormatError = (error: string) => {
+    message.error(
+      status === "fixed" ? "原文存在语法问题，请先在「校验结果」中一键修复" : error,
+    );
+  };
 
   const handleFormat = () => {
-    const r = formatJson(rawText, indent);
-    if (r.ok) {
-      setRawText(r.result);
-    } else {
-      message.error(r.error);
+    const r = reformat(indent);
+    if (!r.ok) {
+      reportFormatError(r.error);
+      return;
     }
+    setRawText(r.result);
   };
 
   const handleMinify = () => {
     const r = minifyJson(rawText);
-    if (r.ok) {
-      setRawText(r.result);
-    } else {
-      message.error(r.error);
+    if (!r.ok) {
+      reportFormatError(r.error);
+      return;
     }
+    setRawText(r.result);
   };
 
-  // 缩进按钮：切换后立即应用到文本
+  // 缩进切换：能格式化则立即应用到文本，否则只更新偏好
   const handleIndentChange = (v: JsonToolkitTypes.IndentStyle) => {
     setIndent(v);
-    if (v === 0) {
-      const r = minifyJson(rawText);
-      if (r.ok) {
-        setRawText(r.result);
-        message.success("已压缩");
-      }
-    } else {
-      const r = formatJson(rawText, v);
-      if (r.ok) {
-        setRawText(r.result);
-        message.success(`已应用 ${v === "tab" ? "Tab" : `${v} 空格`} 缩进`);
-      } else {
-        message.error(r.error);
-      }
-    }
+    const r = reformat(v);
+    if (!r.ok) return;
+    setRawText(r.result);
+    message.success(v === 0 ? "已压缩" : `已应用 ${v === "tab" ? "Tab" : `${v} 空格`} 缩进`);
   };
 
   const handleClear = () => {
@@ -135,67 +138,56 @@ const JsonToolkit = () => {
     }
   };
 
-  const rowHint = `${rawText.length} 字符 / ${byteSize(rawText)} ${rawText.split("\n").length} 行`;
-
-  // 容错解析：当 JSON 无效时用于可视化树展示部分结构
-  const partialData = useMemo(() => {
-    if (dataValid) return undefined;
-    return tolerantParseToTree(rawText).value;
-  }, [rawText, dataValid]);
+  const rowHint = useMemo(
+    () => `${rawText.length} 字符 / ${byteSize(rawText)} 字节 / ${rawText.split("\n").length} 行`,
+    [rawText],
+  );
 
   // 为无法解析的字段构建错误节点，用于补全树结构
   const errorNodes = useMemo(() => {
-    if (!validation.diagnostics?.length) return undefined;
-    return buildErrorNodesFromDiagnostics(rawText, validation.diagnostics);
-  }, [rawText, validation.diagnostics]);
-
-  // 所有字段在源文本中的偏移映射，用于可视化树保持原始顺序
-  const nodeOffsets = useMemo(() => {
-    if (!rawText) return undefined;
-    return getFieldNodeOffsets(rawText);
-  }, [rawText]);
+    if (!analysis.diagnostics.length) return undefined;
+    return buildErrorNodesFromDiagnostics(analyzedText, analysis.diagnostics);
+  }, [analyzedText, analysis.diagnostics]);
 
   // 将诊断错误按路径分组，用于在可视化树节点上显示
-  // 过滤掉已被 errorNodes 错误子节点覆盖的诊断，避免重复显示
+  // 已由 errorNodes 错误子节点覆盖的诊断不再重复内联显示
   const pathErrors = useMemo(() => {
-    if (!validation.diagnostics?.length) return {};
-    const raw = mapDiagnosticsToPaths(rawText, validation.diagnostics);
-    // 计算 errorNodes 中所有错误节点覆盖的位置区间
-    const coveredRanges: Array<{ path: string; start: number; end: number }> = [];
+    if (!analysis.diagnostics.length) return {};
+    const raw = mapDiagnosticsToPaths(analyzedText, analysis.diagnostics);
+    const covered: Array<{ path: string; start: number; end: number }> = [];
     if (errorNodes) {
-      for (const [parentPath, errs] of Object.entries(errorNodes)) {
-        for (const e of errs) {
-          coveredRanges.push({ path: parentPath, start: e.startOffset - 5, end: e.startOffset + 200 });
+      for (const [parentPath, groups] of Object.entries(errorNodes)) {
+        for (const g of groups) {
+          covered.push({ path: parentPath, start: g.startOffset, end: g.endOffset });
         }
       }
     }
-    // 过滤 pathErrors：移除落在 coveredRanges 内的诊断
     const filtered: Record<string, JsonToolkitTypes.JsonDiagnosticError[]> = {};
     for (const [p, diags] of Object.entries(raw)) {
-      filtered[p] = diags.filter((d) => {
-        for (const r of coveredRanges) {
-          if (r.path === p && d.position >= r.start && d.position <= r.end) {
-            return false; // 已被错误子节点覆盖，跳过
-          }
-        }
-        return true;
-      });
-      if (filtered[p].length === 0) delete filtered[p];
+      const kept = diags.filter(
+        (d) => !covered.some((r) => r.path === p && d.position >= r.start && d.position < r.end),
+      );
+      if (kept.length > 0) filtered[p] = kept;
     }
     return filtered;
-  }, [rawText, validation.diagnostics, errorNodes]);
+  }, [analyzedText, analysis.diagnostics, errorNodes]);
 
   // 传递给 JsonValidator 的诊断信息
   const validatorProps = {
-    rawText,
-    diagnostics: validation.diagnostics,
-    fixes: validation.fixes,
-    onApplyFixes: () => {
-      if (validation.fixedText) {
-        setRawText(validation.fixedText);
-        message.success(`已自动修复 ${validation.fixes?.length || 0} 处问题`);
-      }
-    },
+    strictValid: dataValid,
+    error: analysis.diagnostics[0]?.message,
+    errorLine: analysis.diagnostics[0]?.line,
+    errorColumn: analysis.diagnostics[0]?.column,
+    parsed: displayData,
+    diagnostics: analysis.diagnostics,
+    fixCount: analysis.fixes.length,
+    indent,
+    onApplyFixes: analysis.fixedText
+      ? () => {
+          setRawText(analysis.fixedText!);
+          message.success(`已自动修复 ${analysis.fixes.length} 处问题`);
+        }
+      : undefined,
   };
 
   return (
@@ -263,7 +255,7 @@ const JsonToolkit = () => {
                 onClear={handleClear}
                 onPaste={handlePaste}
                 rowHint={rowHint}
-                dataValid={dataValid}
+                status={status}
                 sizeBytes={stats?.size}
                 totalNodes={stats?.totalNodes}
                 depth={stats?.depth}
@@ -289,10 +281,13 @@ const JsonToolkit = () => {
                       ),
                       children: (
                         <div className="json-toolkit__preview-body json-toolkit__preview-body--tree">
-                          {dataValid ? (
-                            <JsonTreeViewer data={data} pathErrors={pathErrors} errorNodes={errorNodes} nodeOffsets={nodeOffsets} />
-                          ) : partialData !== undefined ? (
-                            <JsonTreeViewer data={partialData} pathErrors={pathErrors} errorNodes={errorNodes} nodeOffsets={nodeOffsets} />
+                          {treeData !== undefined ? (
+                            <JsonTreeViewer
+                              data={treeData}
+                              pathErrors={pathErrors}
+                              errorNodes={errorNodes}
+                              nodeOffsets={analysis.offsets}
+                            />
                           ) : (
                             <JsonValidator {...validatorProps} />
                           )}
@@ -309,12 +304,12 @@ const JsonToolkit = () => {
                       ),
                       children: (
                         <div className="json-toolkit__preview-body">
-                          {dataValid ? (
+                          {displayData !== undefined ? (
                             <JsonOutput
-                              title="格式化输出"
+                              title={dataValid ? "格式化输出" : "格式化输出（已按自动修复结果预览）"}
                               content={formattedOutput}
                               language="json"
-                              emptyText="输入有效 JSON 后此处显示格式化结果"
+                              emptyText="输入 JSON 后此处显示格式化结果"
                             />
                           ) : (
                             <JsonValidator {...validatorProps} />
@@ -332,7 +327,11 @@ const JsonToolkit = () => {
                       ),
                       children: (
                         <div className="json-toolkit__preview-body">
-                          {dataValid ? <JsonStats stats={stats} /> : <JsonValidator {...validatorProps} />}
+                          {displayData !== undefined ? (
+                            <JsonStats stats={stats} />
+                          ) : (
+                            <JsonValidator {...validatorProps} />
+                          )}
                         </div>
                       ),
                     },
@@ -346,7 +345,11 @@ const JsonToolkit = () => {
                       ),
                       children: (
                         <div className="json-toolkit__preview-body">
-                          {dataValid ? <JsonPathQuery data={data} onDataValid={dataValid} /> : <JsonValidator {...validatorProps} />}
+                          {displayData !== undefined ? (
+                            <JsonPathQuery data={displayData} dataValid={hasUsableData} />
+                          ) : (
+                            <JsonValidator {...validatorProps} />
+                          )}
                         </div>
                       ),
                     },
@@ -360,7 +363,11 @@ const JsonToolkit = () => {
                       ),
                       children: (
                         <div className="json-toolkit__preview-body">
-                          {dataValid ? <JsonConverter data={data} onDataValid={dataValid} /> : <JsonValidator {...validatorProps} />}
+                          {displayData !== undefined ? (
+                            <JsonConverter data={displayData} dataValid={hasUsableData} />
+                          ) : (
+                            <JsonValidator {...validatorProps} />
+                          )}
                         </div>
                       ),
                     },

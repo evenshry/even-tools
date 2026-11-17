@@ -1,6 +1,5 @@
-import { Card, Space, Typography, Input, Button, Segmented } from "antd";
+import { Card, Space, Typography, Input, Button, Segmented, message } from "antd";
 import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
-import { message } from "antd";
 import type { JsonToolkitTypes } from "../data/interface";
 
 const { Text } = Typography;
@@ -17,7 +16,7 @@ interface JsonEditorProps {
   onPaste: () => void;
   rowHint?: string;
   // 状态栏数据
-  dataValid: boolean;
+  status: "valid" | "fixed" | "invalid";
   sizeBytes?: number;
   totalNodes?: number;
   depth?: number;
@@ -34,7 +33,7 @@ const JsonEditor = ({
   onClear,
   onPaste,
   rowHint,
-  dataValid,
+  status,
   sizeBytes,
   totalNodes,
   depth,
@@ -99,9 +98,21 @@ const JsonEditor = ({
       {/* 状态栏：放在文本框下方，卡片内部 */}
       <div className="json-editor__status-bar">
         <Space size="large" wrap>
-          <Text type={dataValid ? "success" : "danger"} style={{ fontSize: 12 }}>
-            {dataValid ? "● JSON 有效" : "● JSON 无效"}
-          </Text>
+          {status === "valid" && (
+            <Text type="success" style={{ fontSize: 12 }}>
+              ● JSON 有效
+            </Text>
+          )}
+          {status === "fixed" && (
+            <Text type="warning" style={{ fontSize: 12 }}>
+              ● JSON 存在语法问题（可一键修复）
+            </Text>
+          )}
+          {status === "invalid" && (
+            <Text type="danger" style={{ fontSize: 12 }}>
+              ● JSON 无效
+            </Text>
+          )}
           {sizeBytes !== undefined && (
             <Text type="secondary" style={{ fontSize: 12 }}>
               大小：{sizeBytes} B

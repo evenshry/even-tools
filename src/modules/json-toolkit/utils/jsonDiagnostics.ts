@@ -1,26 +1,15 @@
 /**
  * JSON 错误诊断与容错解析
- * 使用 jsonc-parser（VS Code 同款）进行错误诊断和部分 AST 构建
+ * 使用 jsonc-parser（VS Code 同款）一次性构建 AST：同时得到容错结构、错误列表与字段偏移
  */
-import {
-  parse as parseJsonc,
-  getLocation,
-  createScanner,
-  visit,
-  parseTree,
-} from "jsonc-parser";
+import { parseTree, getNodeValue, getLocation } from "jsonc-parser";
+import type { Node, ParseError } from "jsonc-parser";
+import type { JsonToolkitTypes } from "../data/interface";
 
-// 本地常量替代 jsonc-parser 的 const enum（兼容 verbatimModuleSyntax / erasableSyntaxOnly）
-const ScanError = {
-  None: 0,
-  UnexpectedEndOfComment: 1,
-  UnexpectedEndOfString: 2,
-  UnexpectedEndOfNumber: 3,
-  InvalidUnicode: 4,
-  InvalidEscapeCharacter: 5,
-  InvalidCharacter: 6,
-} as const;
+export type JsonDiagnosticError = JsonToolkitTypes.JsonDiagnosticError;
+export type JsonErrorGroup = JsonToolkitTypes.JsonErrorGroup;
 
+// ParseErrorCode（jsonc-parser const enum 的本地数值映射）
 const ParseErrorCode = {
   InvalidSymbol: 1,
   InvalidNumberFormat: 2,
@@ -40,19 +29,6 @@ const ParseErrorCode = {
   InvalidCharacter: 16,
 } as const;
 
-export interface JsonDiagnosticError {
-  position: number;
-  length: number;
-  line: number;
-  column: number;
-  endLine: number;
-  endColumn: number;
-  type: string;
-  message: string;
-  suggestion: string;
-  severity: "error" | "warning";
-}
-
 export interface JsonFix {
   position: number;
   length: number;
@@ -60,54 +36,23 @@ export interface JsonFix {
   description: string;
 }
 
-export interface LenientParseResult {
-  success: boolean;
-  parsed?: unknown;
-  errors: JsonDiagnosticError[];
+export interface JsonAnalysis {
+  diagnostics: JsonDiagnosticError[];
   fixes: JsonFix[];
+  /** 自动修复后的文本（仅当修复结果可被严格解析时提供） */
   fixedText?: string;
+  /** 原文是否可通过严格 JSON.parse */
+  strictValid: boolean;
+  /** 严格解析结果（strictValid 时存在） */
+  strictParsed?: unknown;
+  /** 容错解析得到的部分结构（原文无效时用于树展示） */
+  partial?: unknown;
+  /** 可用数据：严格有效时为原文结果，否则为自动修复后的结果 */
+  data?: unknown;
+  /** 字段路径 -> 源文本偏移 */
+  offsets: Record<string, number>;
 }
 
-// ScanError 到诊断类型的映射
-const scanErrorInfo: Record<number, { type: string; message: string; suggestion: string }> = {
-  [ScanError.UnexpectedEndOfComment]: {
-    type: "unexpected_end_of_comment",
-    message: "注释未正确结束",
-    suggestion: "添加 */ 结束块注释",
-  },
-  [ScanError.UnexpectedEndOfString]: {
-    type: "unexpected_end_of_string",
-    message: "字符串未闭合",
-    suggestion: '在字符串末尾添加匹配的双引号 "',
-  },
-  [ScanError.UnexpectedEndOfNumber]: {
-    type: "unexpected_end_of_number",
-    message: "数字不完整",
-    suggestion: "补全数字",
-  },
-  [ScanError.InvalidUnicode]: {
-    type: "invalid_unicode",
-    message: "Unicode 转义序列无效",
-    suggestion: "使用 \\uXXXX 格式，X 为十六进制数字",
-  },
-  [ScanError.InvalidEscapeCharacter]: {
-    type: "invalid_escape_character",
-    message: "包含无效的转义字符",
-    suggestion: '使用合法转义: \\", \\, \/, \\b, \\f, \\n, \\r, \\t',
-  },
-  [ScanError.InvalidCharacter]: {
-    type: "invalid_character",
-    message: "存在无效的字符",
-    suggestion: "删除非法字符",
-  },
-};
-
-// ParseErrorCode 到诊断类型的映射（使用数字 key，避免常量名不匹配问题）
-// jsonc-parser 实际值：1=InvalidSymbol, 2=InvalidNumberFormat, 3=PropertyNameExpected,
-// 4=ValueExpected, 5=ColonExpected, 6=CommaExpected, 7=CloseBraceExpected,
-// 8=CloseBracketExpected, 9=EndOfFileExpected, 10=InvalidCommentToken,
-// 11=UnexpectedEndOfComment, 12=UnexpectedEndOfString, 13=UnexpectedEndOfNumber,
-// 14=InvalidUnicode, 15=InvalidEscapeCharacter, 16=InvalidCharacter
 const parseErrorInfo: Record<number, { type: string; message: string; suggestion: string }> = {
   [ParseErrorCode.InvalidSymbol]: {
     type: "invalid_symbol",
@@ -182,14 +127,14 @@ const parseErrorInfo: Record<number, { type: string; message: string; suggestion
   [ParseErrorCode.InvalidEscapeCharacter]: {
     type: "invalid_escape_character",
     message: "包含无效的转义字符",
-    suggestion: '使用合法转义: \\", \\, \/, \\b, \\f, \\n, \\r, \\t',
+    suggestion: '使用合法转义: \\", \\\\, \\/, \\b, \\f, \\n, \\r, \\t',
   },
   [ParseErrorCode.InvalidCharacter]: {
     type: "invalid_character",
     message: "存在无效的字符",
     suggestion: "删除非法字符",
   },
-  // 尾随逗号（由 scanner / visit 在特定模式下报告，此处兜底）
+  // 尾随逗号（jsonc 允许，严格 JSON 不允许，此处兜底）
   17: {
     type: "trailing_comma",
     message: "不允许尾随逗号",
@@ -197,270 +142,215 @@ const parseErrorInfo: Record<number, { type: string; message: string; suggestion
   },
 };
 
-// 计算行/列信息
-const getLineColumn = (text: string, position: number): { line: number; column: number } => {
-  const upTo = text.slice(0, position);
-  const lines = upTo.split("\n");
-  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
-};
+// 致命错误类型：表明该字段的值从根本上无法正确解析，应展示为错误节点而非解析节点
+const CRITICAL_ERROR_TYPES = new Set([
+  "invalid_number",
+  "value_expected",
+  "property_name_unquoted",
+  "colon_expected",
+]);
 
-const offsetRangeToLineColumn = (
-  text: string,
-  offset: number,
-  length: number,
-): { line: number; column: number; endLine: number; endColumn: number } => {
-  const start = getLineColumn(text, offset);
-  const end = getLineColumn(text, offset + length);
-  return { ...start, endLine: end.line, endColumn: end.column };
-};
+/** 预计算换行位置，避免每条错误都做 slice + split */
+class LineIndex {
+  private readonly starts: number[] = [0];
 
-/**
- * 使用 createScanner 扫描错误
- */
-const scanForErrors = (text: string): JsonDiagnosticError[] => {
-  const errors: JsonDiagnosticError[] = [];
-  const str = typeof text === "string" ? text : String(text ?? "");
-  if (!str) return errors;
-
-  const scanner = createScanner(str);
-
-  let tokenOffset: number;
-  let tokenLength: number;
-  let token: number;
-
-  // 遍历所有 token，收集错误
-  // SyntaxKind.EOF = 17，循环到 EOF 为止
-  while (true) {
-    token = scanner.scan();
-    if (token === 17) break; // EOF
-
-    tokenOffset = scanner.getTokenOffset();
-    tokenLength = scanner.getTokenLength();
-
-    const scanError = scanner.getTokenError();
-    if (scanError !== ScanError.None) {
-      const info = scanErrorInfo[scanError] || {
-        type: "scan_error",
-        message: "扫描错误",
-        suggestion: "检查该位置",
-      };
-      const range = offsetRangeToLineColumn(str, tokenOffset, tokenLength || 1);
-      errors.push({
-        position: tokenOffset,
-        length: tokenLength || 1,
-        line: range.line,
-        column: range.column,
-        endLine: range.endLine,
-        endColumn: range.endColumn,
-        type: info.type,
-        message: info.message,
-        suggestion: info.suggestion,
-        severity: "error",
-      });
+  constructor(text: string) {
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 10) this.starts.push(i + 1);
     }
   }
 
-  return errors;
+  toLineColumn(position: number): { line: number; column: number } {
+    const pos = Math.max(0, position);
+    let low = 0;
+    let high = this.starts.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (this.starts[mid] <= pos) low = mid;
+      else high = mid - 1;
+    }
+    return { line: low + 1, column: pos - this.starts[low] + 1 };
+  }
+}
+
+const createDiagnostic = (
+  index: LineIndex,
+  position: number,
+  length: number,
+  info: { type: string; message: string; suggestion: string },
+): JsonDiagnosticError => {
+  const safeLength = Math.max(length, 1);
+  const start = index.toLineColumn(position);
+  const end = index.toLineColumn(position + safeLength);
+  return {
+    position,
+    length: safeLength,
+    line: start.line,
+    column: start.column,
+    endLine: end.line,
+    endColumn: end.column,
+    type: info.type,
+    message: info.message,
+    suggestion: info.suggestion,
+    severity: "error",
+  };
 };
 
-/**
- * 使用 parseTree 检测错误
- */
-const parseTreeForErrors = (text: string): JsonDiagnosticError[] => {
-  const errors: JsonDiagnosticError[] = [];
-  const str = typeof text === "string" ? text : String(text ?? "");
-  if (!str) return errors;
+const isWhitespace = (ch: string): boolean =>
+  ch === " " || ch === "\n" || ch === "\r" || ch === "\t";
 
-  // visit 函数接收原始文本字符串作为第一个参数
-  visit(str, {
-    onError: (error, offset, length) => {
-      const info = parseErrorInfo[error] || {
-        type: "parse_error",
-        message: `解析错误 (code: ${error})`,
-        suggestion: "检查该位置的 JSON 语法",
-      };
-      const range = offsetRangeToLineColumn(str, offset, length || 1);
-      errors.push({
-        position: offset,
-        length: length || 1,
-        line: range.line,
-        column: range.column,
-        endLine: range.endLine,
-        endColumn: range.endColumn,
-        type: info.type,
-        message: info.message,
-        suggestion: info.suggestion,
-        severity: "error",
-      });
-    },
-  });
-
-  return errors;
-};
-
-/**
- * 检测不被 jsonc-parser 直接捕获的特殊错误（单引号、NaN、Infinity等）
- */
-const detectSpecialErrors = (text: string): JsonDiagnosticError[] => {
-  const errors: JsonDiagnosticError[] = [];
-  const str = typeof text === "string" ? text : String(text ?? "");
-  if (!str) return errors;
-
-  // 构建字符串区域索引，用于排除字符串内部
-  const stringRanges: Array<{ start: number; end: number }> = [];
+// 收集所有双引号字符串区间（用于排除字符串内部的误报）
+const collectStringRanges = (str: string): Array<{ start: number; end: number }> => {
+  const ranges: Array<{ start: number; end: number }> = [];
   let i = 0;
   while (i < str.length) {
-    if (str[i] === '"') {
-      const start = i;
+    if (str[i] !== '"') {
       i++;
-      while (i < str.length) {
-        if (str[i] === "\\") { i += 2; continue; }
-        if (str[i] === '"') { i++; break; }
-        if (str[i] === "\n") break;
-        i++;
+      continue;
+    }
+    const start = i;
+    i++;
+    while (i < str.length) {
+      if (str[i] === "\\") {
+        i += 2;
+        continue;
       }
-      stringRanges.push({ start, end: i });
-    } else {
+      if (str[i] === '"') {
+        i++;
+        break;
+      }
+      if (str[i] === "\n") break;
       i++;
     }
+    ranges.push({ start, end: i });
   }
+  return ranges;
+};
 
+/**
+ * 检测 jsonc-parser 不会报错的特殊情况（单引号、注释、NaN、尾随逗号、前导零）
+ */
+const detectSpecialErrors = (str: string, index: LineIndex): JsonDiagnosticError[] => {
+  const errors: JsonDiagnosticError[] = [];
+  const ranges = collectStringRanges(str);
+
+  // 二分查找位置是否落在某个字符串区间内（ranges 天然有序）
   const isInString = (pos: number): boolean => {
-    for (const r of stringRanges) {
-      if (pos >= r.start && pos < r.end) return true;
+    let low = 0;
+    let high = ranges.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const r = ranges[mid];
+      if (pos < r.start) high = mid - 1;
+      else if (pos >= r.end) low = mid + 1;
+      else return true;
     }
     return false;
   };
 
-  // 检测单引号字符串
+  // 单引号字符串
   const singleQuoteRe = /'((?:[^'\\\n]|\\.)*)'/g;
   let m: RegExpExecArray | null;
   while ((m = singleQuoteRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, m[0].length);
-    errors.push({
-      position: m.index,
-      length: m[0].length,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "single_quotes",
-      message: "使用了单引号，JSON 标准只接受双引号",
-      suggestion: `将单引号改为双引号`,
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, m[0].length, {
+        type: "single_quotes",
+        message: "使用了单引号，JSON 标准只接受双引号",
+        suggestion: "将单引号改为双引号",
+      }),
+    );
   }
 
-  // 检测注释 // 和 /* */（排除字符串内部）
+  // 单行注释
   const lineCommentRe = /\/\/[^\n]*/g;
   while ((m = lineCommentRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, m[0].length);
-    errors.push({
-      position: m.index,
-      length: m[0].length,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "comment",
-      message: "JSON 不支持单行注释",
-      suggestion: "删除注释内容",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, m[0].length, {
+        type: "comment",
+        message: "JSON 不支持单行注释",
+        suggestion: "删除注释内容",
+      }),
+    );
   }
 
+  // 块注释
   const blockCommentRe = /\/\*[\s\S]*?\*\//g;
   while ((m = blockCommentRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, m[0].length);
-    errors.push({
-      position: m.index,
-      length: m[0].length,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "comment",
-      message: "JSON 不支持块注释",
-      suggestion: "删除 /* ... */ 注释",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, m[0].length, {
+        type: "comment",
+        message: "JSON 不支持块注释",
+        suggestion: "删除 /* ... */ 注释",
+      }),
+    );
   }
 
-  // 检测 NaN
+  // NaN
   const nanRe = /\bNaN\b/g;
   while ((m = nanRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, 3);
-    errors.push({
-      position: m.index,
-      length: 3,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "nan_or_infinity",
-      message: "JSON 不支持 NaN",
-      suggestion: "将 NaN 替换为 null",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, 3, {
+        type: "nan_or_infinity",
+        message: "JSON 不支持 NaN",
+        suggestion: "将 NaN 替换为 null",
+      }),
+    );
   }
 
-  // 检测 Infinity
+  // Infinity / -Infinity
   const infRe = /(?<![-\w])Infinity\b/g;
   while ((m = infRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, 8);
-    errors.push({
-      position: m.index,
-      length: 8,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "nan_or_infinity",
-      message: "JSON 不支持 Infinity",
-      suggestion: "将 Infinity 替换为 null",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, 8, {
+        type: "nan_or_infinity",
+        message: "JSON 不支持 Infinity",
+        suggestion: "将 Infinity 替换为 null",
+      }),
+    );
   }
-
-  // 检测 -Infinity
   const negInfRe = /-Infinity\b/g;
   while ((m = negInfRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, 9);
-    errors.push({
-      position: m.index,
-      length: 9,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "nan_or_infinity",
-      message: "JSON 不支持 -Infinity",
-      suggestion: "将 -Infinity 替换为 null",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, 9, {
+        type: "nan_or_infinity",
+        message: "JSON 不支持 -Infinity",
+        suggestion: "将 -Infinity 替换为 null",
+      }),
+    );
   }
 
-  // 检测尾随逗号：, 后面紧跟（跳过空白后）} 或 ]
-  // 逐字符扫描，跳过字符串内部内容
+  // 尾随逗号：逗号后（跳过空白与注释）紧跟 } 或 ]
   let inStr = false;
   let strChar = "";
   let escNext = false;
   for (let p = 0; p < str.length; p++) {
     const c = str[p];
     if (inStr) {
-      if (escNext) { escNext = false; continue; }
-      if (c === "\\") { escNext = true; continue; }
-      if (c === strChar) { inStr = false; strChar = ""; }
+      if (escNext) {
+        escNext = false;
+        continue;
+      }
+      if (c === "\\") {
+        escNext = true;
+        continue;
+      }
+      if (c === strChar) {
+        inStr = false;
+        strChar = "";
+      }
       continue;
     }
-    if (c === '"' || c === "'") { inStr = true; strChar = c; continue; }
-    // 跳过注释
+    if (c === '"' || c === "'") {
+      inStr = true;
+      strChar = c;
+      continue;
+    }
     if (c === "/" && p + 1 < str.length) {
       if (str[p + 1] === "/") {
         while (p < str.length && str[p] !== "\n") p++;
@@ -475,77 +365,177 @@ const detectSpecialErrors = (text: string): JsonDiagnosticError[] => {
     }
     if (c === ",") {
       let q = p + 1;
-      while (q < str.length && /\s/.test(str[q])) q++;
+      while (q < str.length && isWhitespace(str[q])) q++;
       if (q < str.length && (str[q] === "}" || str[q] === "]")) {
-        const rng = offsetRangeToLineColumn(str, p, 1);
-        errors.push({
-          position: p,
-          length: 1,
-          line: rng.line,
-          column: rng.column,
-          endLine: rng.endLine,
-          endColumn: rng.endColumn,
-          type: "trailing_comma",
-          message: "不允许尾随逗号",
-          suggestion: "删除最后一个元素后的逗号",
-          severity: "error",
-        });
+        errors.push(
+          createDiagnostic(index, p, 1, {
+            type: "trailing_comma",
+            message: "不允许尾随逗号",
+            suggestion: "删除最后一个元素后的逗号",
+          }),
+        );
       }
     }
   }
 
-  // 检测非法数字：前导零的十进制整数（如 0123）、多个小数点、数字后跟非法字符
-  // 使用正则：0 后面紧跟数字（非浮点也非指数），即非允许的 0.x、0eX、0
+  // 前导零：如 0123
   const badNumRe = /(?<![\w$.])(0\d+)(?!\w)/g;
   while ((m = badNumRe.exec(str)) !== null) {
     if (isInString(m.index)) continue;
-    // 确保前面不是另一个数字的一部分（如 "101" 这种合法数字）
-    const before = m.index > 0 ? str[m.index - 1] : "";
-    if (/\d/.test(before)) continue;
-    const range = offsetRangeToLineColumn(str, m.index, m[1].length);
-    errors.push({
-      position: m.index,
-      length: m[1].length,
-      line: range.line,
-      column: range.column,
-      endLine: range.endLine,
-      endColumn: range.endColumn,
-      type: "invalid_number",
-      message: `数字格式错误：${m[1]}（前导零不合法）`,
-      suggestion: "使用无前置零的数字（如 123），或用字符串表示",
-      severity: "error",
-    });
+    errors.push(
+      createDiagnostic(index, m.index, m[1].length, {
+        type: "invalid_number",
+        message: `数字格式错误：${m[1]}（前导零不合法）`,
+        suggestion: "使用无前置零的数字（如 123），或用字符串表示",
+      }),
+    );
   }
 
   return errors;
 };
 
 /**
- * 诊断 JSON 错误
+ * 从 AST 提取所有字段路径 -> key 节点偏移的映射
  */
-export const diagnoseJson = (text: string): JsonDiagnosticError[] => {
-  const errors: JsonDiagnosticError[] = [];
+const collectFieldOffsets = (tree: Node | undefined): Record<string, number> => {
+  const offsets: Record<string, number> = {};
+  if (!tree) return offsets;
 
-  // 确保 text 是字符串
-  const str = typeof text === "string" ? text : String(text ?? "");
+  const walk = (node: Node, path: string) => {
+    if (node.type === "object") {
+      for (const child of node.children ?? []) {
+        if (child.type !== "property" || !child.children || child.children.length < 2) continue;
+        const [keyNode, valueNode] = child.children;
+        const key = keyNode.value !== undefined ? String(keyNode.value) : "";
+        const childPath = `${path}.${key}`;
+        if (!(childPath in offsets) || keyNode.offset < offsets[childPath]) {
+          offsets[childPath] = keyNode.offset;
+        }
+        walk(valueNode, childPath);
+      }
+    } else if (node.type === "array") {
+      (node.children ?? []).forEach((child, i) => walk(child, `${path}[${i}]`));
+    }
+  };
 
-  if (!str.trim()) return errors;
+  walk(tree, "$");
+  return offsets;
+};
 
-  // 1. 使用 parseTree 检测结构错误
-  const treeErrors = parseTreeForErrors(str);
-  errors.push(...treeErrors);
+/**
+ * 一次性解析：严格解析结果 + 容错结构 + 错误诊断 + 自动修复
+ */
+export const analyzeJson = (text: string): JsonAnalysis => {
+  const str = typeof text === "string" ? text : "";
+  if (!str.trim()) {
+    return {
+      diagnostics: [
+        {
+          position: 0,
+          length: 1,
+          line: 1,
+          column: 1,
+          endLine: 1,
+          endColumn: 2,
+          type: "value_expected",
+          message: "输入为空",
+          suggestion: "请粘贴或输入 JSON 内容",
+          severity: "error",
+        },
+      ],
+      fixes: [],
+      strictValid: false,
+      offsets: {},
+    };
+  }
 
-  // 2. 使用 scanner 检测扫描错误
-  const scanErrors = scanForErrors(str);
-  errors.push(...scanErrors);
+  // 1) 严格解析（原生实现，最快）
+  let strictParsed: unknown;
+  let strictValid = false;
+  let strictError: unknown;
+  try {
+    strictParsed = JSON.parse(str);
+    strictValid = true;
+  } catch (e) {
+    strictError = e;
+  }
 
-  // 3. 检测特殊错误（单引号、注释、NaN等）
-  const specialErrors = detectSpecialErrors(str);
-  errors.push(...specialErrors);
+  // 2) 一次 AST 解析，同时得到容错结构、错误列表与字段偏移
+  const parseErrors: ParseError[] = [];
+  const tree = parseTree(str, parseErrors);
+  const offsets = collectFieldOffsets(tree);
+  const partial = tree ? (getNodeValue(tree) as unknown) : undefined;
 
-  // 去重（同一位置同一类型只保留一个）
+  const index = new LineIndex(str);
+  const diagnostics: JsonDiagnosticError[] = [];
+
+  if (!strictValid) {
+    const parseDiagnostics: JsonDiagnosticError[] = [];
+    for (const e of parseErrors) {
+      const info = parseErrorInfo[e.error] ?? {
+        type: "parse_error",
+        message: `解析错误 (code: ${e.error})`,
+        suggestion: "检查该位置的 JSON 语法",
+      };
+      parseDiagnostics.push(createDiagnostic(index, e.offset, e.length, info));
+    }
+    const specialDiagnostics = detectSpecialErrors(str, index);
+    diagnostics.push(...mergeDiagnostics(parseDiagnostics, specialDiagnostics));
+
+    if (diagnostics.length === 0) {
+      // 兜底：从 JSON.parse 抛出的错误中尽力提取位置
+      const message = (strictError as Error)?.message ?? "无法解析该 JSON";
+      const posMatch = message.match(/position\s+(\d+)/i);
+      const offset = posMatch ? Math.min(parseInt(posMatch[1], 10), str.length) : 0;
+      diagnostics.push(
+        createDiagnostic(index, offset, 1, {
+          type: "invalid_symbol",
+          message,
+          suggestion: "检查该位置的语法是否符合 JSON 规范",
+        }),
+      );
+    }
+  }
+
+  if (strictValid) {
+    return {
+      diagnostics: [],
+      fixes: [],
+      strictValid,
+      strictParsed,
+      partial,
+      data: strictParsed,
+      offsets,
+    };
+  }
+
+  // 3) 仅在原文无效时尝试自动修复
+  const { fixed, fixes } = generateFixes(str);
+  let data: unknown;
+  let fixedParsed = false;
+  if (fixed !== str) {
+    try {
+      data = JSON.parse(fixed);
+      fixedParsed = true;
+    } catch {
+      fixedParsed = false;
+    }
+  }
+
+  return {
+    diagnostics,
+    fixes: fixedParsed ? fixes : [],
+    fixedText: fixedParsed ? fixed : undefined,
+    strictValid,
+    partial,
+    data,
+    offsets,
+  };
+};
+
+const dedupeDiagnostics = (diagnostics: JsonDiagnosticError[]): JsonDiagnosticError[] => {
   const seen = new Set<string>();
-  return errors.filter((e) => {
+  return diagnostics.filter((e) => {
     const key = `${e.position}:${e.type}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -554,36 +544,283 @@ export const diagnoseJson = (text: string): JsonDiagnosticError[] => {
 };
 
 /**
- * 容错解析：使用 jsonc-parser 的 parse 构建部分树
+ * 合并解析错误与特殊语法错误：特殊错误（单引号/注释/尾随逗号等）定位更精确，
+ * 以其为中心丢弃相邻的通用解析错误，避免同一处问题被重复列出
  */
-export const tolerantParseToTree = (text: string): {
-  value: unknown | undefined;
-} => {
-  const str = typeof text === "string" ? text : String(text ?? "");
-  if (!str) return { value: undefined };
-
-  // 使用 jsonc-parser 的 parse（容错解析，即使有错误也返回部分结果）
-  const value = parseJsonc(str);
-  return { value };
+const mergeDiagnostics = (
+  parseDiagnostics: JsonDiagnosticError[],
+  specialDiagnostics: JsonDiagnosticError[],
+): JsonDiagnosticError[] => {
+  const clustered = clusterDiagnostics(parseDiagnostics);
+  if (specialDiagnostics.length === 0) return dedupeDiagnostics(clustered);
+  const covered = (d: JsonDiagnosticError) =>
+    specialDiagnostics.some(
+      (s) => d.position >= s.position - 2 && d.position <= s.position + s.length + 2,
+    );
+  return dedupeDiagnostics(
+    [...specialDiagnostics, ...clustered.filter((d) => !covered(d))].sort(
+      (a, b) => a.position - b.position,
+    ),
+  );
 };
 
-// 字段区域类型
-export type JsonFieldRegion = {
-  path: string;          // 父路径（如 "$" 或 "$.malformed object"）
-  startOffset: number;   // 该字段起始位置（包含 { 或 , 后面的空白）
-  endOffset: number;     // 该字段结束位置（逗号或大括号前）
-  keyStart: number;      // key 名起始（精确）
-  keyEnd: number;        // key 名结束
-  keyName: string;       // 提取到的 key 名（可能带空格、可能无引号）
-  valueText: string;     // 提取到的 value 原始文本
-  valueStart: number;    // value 在源文本中的起始位置
+// 同一位置附近可能有多个解析错误，保留信息量最大的一条
+const PARSE_ERROR_PRIORITY: Record<string, number> = {
+  property_name_unquoted: 6,
+  colon_expected: 5,
+  comma_expected: 4,
+  close_brace_expected: 4,
+  close_bracket_expected: 4,
+  end_of_file_expected: 4,
+  unexpected_end_of_string: 4,
+  unexpected_end_of_number: 4,
+  value_expected: 3,
+  invalid_number: 3,
+  invalid_character: 2,
+  invalid_symbol: 1,
+};
+
+const clusterDiagnostics = (diagnostics: JsonDiagnosticError[]): JsonDiagnosticError[] => {
+  const sorted = [...diagnostics].sort((a, b) => a.position - b.position);
+  const result: JsonDiagnosticError[] = [];
+  let cluster: JsonDiagnosticError[] = [];
+
+  const flush = () => {
+    if (cluster.length === 0) return;
+    const best = cluster.reduce((acc, cur) =>
+      (PARSE_ERROR_PRIORITY[cur.type] ?? 0) > (PARSE_ERROR_PRIORITY[acc.type] ?? 0) ? cur : acc,
+    );
+    result.push(best);
+    cluster = [];
+  };
+
+  for (const diag of sorted) {
+    if (cluster.length > 0 && diag.position - cluster[cluster.length - 1].position > 2) flush();
+    cluster.push(diag);
+  }
+  flush();
+  return result;
 };
 
 /**
- * 扫描 JSON 文本，识别所有字段（key:value）的区域位置
- * 用于后续给解析节点和错误节点分配真实文本偏移
+ * 自动修复（字符串感知）：只处理字符串之外的内容，避免破坏字符串字面量
  */
-export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
+export const generateFixes = (text: string): { fixed: string; fixes: JsonFix[] } => {
+  const str = typeof text === "string" ? text : "";
+  const fixes: JsonFix[] = [];
+  const out: string[] = [];
+  const stack: Array<"object" | "array"> = [];
+
+  const record = (position: number, length: number, replacement: string, description: string) => {
+    fixes.push({ position, length, replacement, description });
+  };
+
+  // 识别注释，返回注释结束位置
+  const readComment = (i: number): { end: number; kind: "line" | "block" } | null => {
+    if (str[i] !== "/") return null;
+    if (str[i + 1] === "/") {
+      let j = i;
+      while (j < str.length && str[j] !== "\n") j++;
+      return { end: j, kind: "line" };
+    }
+    if (str[i + 1] === "*") {
+      const close = str.indexOf("*/", i + 2);
+      return { end: close === -1 ? str.length : close + 2, kind: "block" };
+    }
+    return null;
+  };
+
+  // 只查看不消费：用于前瞻判断（注释随后由主循环处理）
+  const peekTrivia = (from: number): number => {
+    let j = from;
+    for (;;) {
+      while (j < str.length && isWhitespace(str[j])) j++;
+      const comment = readComment(j);
+      if (!comment) return j;
+      j = comment.end;
+    }
+  };
+
+  // 消费并输出空白、丢弃注释（顺带记录修复项）
+  const emitTrivia = (from: number): number => {
+    let j = from;
+    for (;;) {
+      if (j < str.length && isWhitespace(str[j])) {
+        out.push(str[j]);
+        j++;
+        continue;
+      }
+      const comment = readComment(j);
+      if (!comment) return j;
+      record(j, comment.end - j, "", comment.kind === "line" ? "删除单行注释" : "删除块注释");
+      j = comment.end;
+    }
+  };
+
+  // 无引号属性名 -> 加双引号
+  const maybeQuoteKey = (from: number): number => {
+    const start = emitTrivia(from);
+    if (!/[A-Za-z_$]/.test(str[start] ?? "")) return start;
+    let j = start;
+    while (j < str.length && /[A-Za-z0-9_$]/.test(str[j])) j++;
+    let k = j;
+    while (k < str.length && isWhitespace(str[k])) k++;
+    if (str[k] !== ":") return start;
+    const name = str.slice(start, j);
+    out.push(`"${name}"`);
+    record(start, name.length, `"${name}"`, "给属性名添加双引号");
+    return j;
+  };
+
+  let i = 0;
+  while (i < str.length) {
+    const ch = str[i];
+
+    // 字符串：整段消费，内部内容一律不改写
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let j = i + 1;
+      let content = "";
+      while (j < str.length) {
+        const c = str[j];
+        if (c === "\\") {
+          const next = str[j + 1];
+          if (next === undefined) {
+            content += c;
+            j++;
+            break;
+          }
+          if (quote === "'") {
+            if (next === "'") content += "'";
+            else if (next === '"') content += '\\"';
+            else content += c + next;
+          } else {
+            content += c + next;
+          }
+          j += 2;
+          continue;
+        }
+        if (c === quote) {
+          j++;
+          break;
+        }
+        if (c === "\n" && quote === "'") break;
+        if (quote === "'" && c === '"') {
+          content += '\\"';
+          j++;
+          continue;
+        }
+        content += c;
+        j++;
+      }
+      if (quote === "'") {
+        out.push(`"${content}"`);
+        record(i, j - i, `"${content}"`, "单引号改为双引号");
+      } else {
+        out.push(str.slice(i, j));
+      }
+      i = j;
+      continue;
+    }
+
+    // 注释
+    const comment = readComment(i);
+    if (comment) {
+      record(i, comment.end - i, "", comment.kind === "line" ? "删除单行注释" : "删除块注释");
+      i = comment.end;
+      continue;
+    }
+
+    // 尾随逗号
+    if (ch === ",") {
+      const next = peekTrivia(i + 1);
+      if (next < str.length && (str[next] === "}" || str[next] === "]")) {
+        record(i, 1, "", "删除尾随逗号");
+        i++;
+        continue;
+      }
+      out.push(",");
+      i++;
+      if (stack[stack.length - 1] === "object") i = maybeQuoteKey(i);
+      continue;
+    }
+
+    if (ch === "{") {
+      stack.push("object");
+      out.push("{");
+      i++;
+      i = maybeQuoteKey(i);
+      continue;
+    }
+    if (ch === "[") {
+      stack.push("array");
+      out.push("[");
+      i++;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      stack.pop();
+      out.push(ch);
+      i++;
+      continue;
+    }
+
+    // NaN / Infinity / -Infinity
+    if (
+      str.startsWith("NaN", i) &&
+      !/[A-Za-z0-9_$]/.test(str[i - 1] ?? "")
+    ) {
+      record(i, 3, "null", "NaN 改为 null");
+      out.push("null");
+      i += 3;
+      continue;
+    }
+    if (
+      str.startsWith("Infinity", i) &&
+      !/[A-Za-z0-9_$]/.test(str[i - 1] ?? "")
+    ) {
+      record(i, 8, "null", "Infinity 改为 null");
+      out.push("null");
+      i += 8;
+      continue;
+    }
+    if (str.startsWith("-Infinity", i) && !/[A-Za-z0-9_$]/.test(str[i - 1] ?? "")) {
+      record(i, 9, "null", "-Infinity 改为 null");
+      out.push("null");
+      i += 9;
+      continue;
+    }
+
+    // 前导零：0123 -> 123
+    if (ch === "0" && /\d/.test(str[i + 1] ?? "") && !/[A-Za-z0-9_$.]/.test(str[i - 1] ?? "")) {
+      record(i, 1, "", "删除数字的前导零");
+      i++;
+      continue;
+    }
+
+    out.push(ch);
+    i++;
+  }
+
+  return { fixed: out.join(""), fixes };
+};
+
+// 字段区域类型
+interface JsonFieldRegion {
+  path: string; // 父路径（如 "$" 或 "$.malformed object"）
+  startOffset: number; // 该字段起始位置
+  endOffset: number; // 该字段结束位置
+  keyStart: number; // key 名起始
+  keyEnd: number; // key 名结束
+  keyName: string; // 提取到的 key 名
+  valueText: string; // 提取到的 value 原始文本
+  valueStart: number; // value 在源文本中的起始位置
+}
+
+/**
+ * 扫描 JSON 文本，识别所有字段（key:value）的区域位置
+ */
+const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
   const str = typeof text === "string" ? text : String(text ?? "");
   if (!str) return [];
 
@@ -602,42 +839,17 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
   let inStringChar = "";
   let escapeNext = false;
 
-  const beginObjectAt = (pos: number) => {
-    let parentPath: string;
-    if (stack.length === 0) {
-      parentPath = "$";
-    } else {
-      const top = stack[stack.length - 1];
-      parentPath = top.path;
-      if (top.kind === "object" && top.currentKey !== null) {
-        parentPath = `${top.path}.${top.currentKey}`;
-      }
-    }
-    stack.push({
-      kind: "object",
-      path: parentPath,
-      currentKey: null,
-      keyStart: -1,
-      keyEnd: -1,
-      fieldStart: pos + 1,
-      valueStart: -1,
-    });
+  const parentPathOf = (): string => {
+    if (stack.length === 0) return "$";
+    const top = stack[stack.length - 1];
+    if (top.kind === "object" && top.currentKey !== null) return `${top.path}.${top.currentKey}`;
+    return top.path;
   };
 
-  const beginArrayAt = (pos: number) => {
-    let parentPath: string;
-    if (stack.length === 0) {
-      parentPath = "$";
-    } else {
-      const top = stack[stack.length - 1];
-      parentPath = top.path;
-      if (top.kind === "object" && top.currentKey !== null) {
-        parentPath = `${top.path}.${top.currentKey}`;
-      }
-    }
+  const beginContainer = (kind: "object" | "array", pos: number) => {
     stack.push({
-      kind: "array",
-      path: parentPath,
+      kind,
+      path: parentPathOf(),
       currentKey: null,
       keyStart: -1,
       keyEnd: -1,
@@ -650,30 +862,31 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
     const ch = str[i];
 
     if (inString) {
-      if (escapeNext) { escapeNext = false; continue; }
-      if (ch === "\\") {
-        // 只对有效的 JSON 转义序列设置 escapeNext
-        // 有效转义: \" \\ \/ \b \f \n \r \t \u
-        const next = str[i + 1];
-        if (next === '"' || next === '\\' || next === '/' ||
-            next === 'b' || next === 'f' || next === 'n' ||
-            next === 'r' || next === 't' || next === 'u') {
-          escapeNext = true;
-        }
-        // 否则反斜杠作为普通字符，不跳过后面的字符
+      if (escapeNext) {
+        escapeNext = false;
         continue;
       }
-      if (ch === inStringChar) { inString = false; inStringChar = ""; }
+      if (ch === "\\") {
+        const next = str[i + 1];
+        if (next === '"' || next === "\\" || next === "/" ||
+            next === "b" || next === "f" || next === "n" ||
+            next === "r" || next === "t" || next === "u") {
+          escapeNext = true;
+        }
+        continue;
+      }
+      if (ch === inStringChar) {
+        inString = false;
+        inStringChar = "";
+      }
       continue;
     }
 
     // 跳过注释（非字符串状态下）
-    if (ch === '/' && i + 1 < str.length) {
-      if (str[i + 1] === '/') {
-        // 单行注释：跳过直到换行或 EOF
+    if (ch === "/" && i + 1 < str.length) {
+      if (str[i + 1] === "/") {
         const commentStart = i;
-        while (i < str.length && str[i] !== '\n') i++;
-        // 更新 fieldStart：如果当前在 object 中且还没找到 key，把字段起点挪到注释之后
+        while (i < str.length && str[i] !== "\n") i++;
         if (stack.length > 0) {
           const top = stack[stack.length - 1];
           if (top.kind === "object" && top.currentKey === null && top.fieldStart <= commentStart) {
@@ -681,12 +894,12 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
           }
         }
         continue;
-      } else if (str[i + 1] === '*') {
-        // 块注释：跳过直到 */
+      }
+      if (str[i + 1] === "*") {
         const commentStart = i;
         i += 2;
-        while (i < str.length - 1 && !(str[i] === '*' && str[i + 1] === '/')) i++;
-        i++; // 跳过 '/'
+        while (i < str.length - 1 && !(str[i] === "*" && str[i + 1] === "/")) i++;
+        i++;
         if (stack.length > 0) {
           const top = stack[stack.length - 1];
           if (top.kind === "object" && top.currentKey === null && top.fieldStart <= commentStart) {
@@ -697,20 +910,13 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
       }
     }
 
-    // 如果当前在 object 中且已有 currentKey/valueStart，遇到新的字符串/标识符意味着新字段开始
-    // 先结束当前字段（处理缺少逗号的情况）
+    // 缺少逗号时，新 key 的开头意味着上一个字段结束
     if (stack.length > 0) {
       const top = stack[stack.length - 1];
       if (top.kind === "object" && top.currentKey !== null && top.valueStart !== -1) {
-        // 只有当已经解析了值内容后，才判断是否为新 key
-        // 避免 NaN/Infinity/true/false/null 等值开头字母被误判为新 key
         const valueContent = str.slice(top.valueStart, i).trim();
-        const hasValue = valueContent.length > 0;
-        // 只有引号开头的才可能是新 key（无引号标识符在值位置可能是 NaN/Infinity 等）
-        const looksLikeNewKey = hasValue && (ch === '"' || ch === "'");
+        const looksLikeNewKey = valueContent.length > 0 && (ch === '"' || ch === "'");
         if (looksLikeNewKey) {
-          const valStart = top.valueStart;
-          const valText = str.slice(valStart, i).trim();
           regions.push({
             path: top.path,
             startOffset: top.fieldStart,
@@ -718,8 +924,8 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
             keyStart: top.keyStart,
             keyEnd: top.keyEnd,
             keyName: top.currentKey,
-            valueText: valText,
-            valueStart: valStart,
+            valueText: str.slice(top.valueStart, i).trim(),
+            valueStart: top.valueStart,
           });
           top.currentKey = null;
           top.keyStart = -1;
@@ -740,7 +946,7 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
     }
 
     if (ch === "{") {
-      beginObjectAt(i);
+      beginContainer("object", i);
       continue;
     }
     if (ch === "}") {
@@ -748,7 +954,6 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
         const top = stack.pop()!;
         if (top.currentKey !== null || top.keyStart !== -1) {
           const valStart = top.valueStart !== -1 ? top.valueStart : (top.keyEnd !== -1 ? top.keyEnd + 1 : i);
-          const valText = str.slice(valStart, i).trim();
           regions.push({
             path: top.path,
             startOffset: top.fieldStart,
@@ -756,7 +961,7 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
             keyStart: top.keyStart,
             keyEnd: top.keyEnd,
             keyName: top.currentKey || "",
-            valueText: valText,
+            valueText: str.slice(valStart, i).trim(),
             valueStart: valStart,
           });
         }
@@ -764,82 +969,76 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
       continue;
     }
     if (ch === "[") {
-      beginArrayAt(i);
+      beginContainer("array", i);
       continue;
     }
     if (ch === "]") {
-      if (stack.length > 0 && stack[stack.length - 1].kind === "array") {
-        stack.pop();
-      }
+      if (stack.length > 0 && stack[stack.length - 1].kind === "array") stack.pop();
       continue;
     }
 
     if (stack.length > 0) {
       const top = stack[stack.length - 1];
-      if (top.kind === "object") {
-        if (ch === ":" && top.currentKey === null) {
-          let ks = top.keyStart;
-          if (ks === -1) {
-            let j = i - 1;
-            while (j >= 0 && /\s/.test(str[j])) j--;
-            const ke = j + 1;
-            while (j >= 0 && !/[{},\[\]:"']/.test(str[j])) {
-              // 回溯时遇到注释要跳过，避免把注释内容当作 key
-              if (str[j] === '/' && j > 0 && str[j - 1] === '/') {
-                // 单行注释：跳过到行首，再继续回溯
-                j -= 2;
-                while (j >= 0 && str[j] !== '\n') j--;
-                while (j >= 0 && /\s/.test(str[j])) j--;
-                continue;
-              }
-              if (str[j] === '/' && j > 0 && str[j - 1] === '*') {
-                // 块注释结束：跳过到块注释开始
-                j -= 2;
-                while (j >= 1 && !(str[j] === '*' && str[j - 1] === '/')) j--;
-                j -= 2;
-                while (j >= 0 && /\s/.test(str[j])) j--;
-                continue;
-              }
-              j--;
+      if (top.kind !== "object") continue;
+
+      if (ch === ":" && top.currentKey === null) {
+        let ks = top.keyStart;
+        if (ks === -1) {
+          let j = i - 1;
+          while (j >= 0 && isWhitespace(str[j])) j--;
+          const ke = j + 1;
+          while (j >= 0 && !/[{},\[\]:"']/.test(str[j])) {
+            // 回溯时跳过注释
+            if (str[j] === "/" && j > 0 && str[j - 1] === "/") {
+              j -= 2;
+              while (j >= 0 && str[j] !== "\n") j--;
+              while (j >= 0 && isWhitespace(str[j])) j--;
+              continue;
             }
-            ks = j + 1;
-            // 确保不会把字段开头之前的内容（如注释、换行）卷进 key
-            if (ks < top.fieldStart) ks = top.fieldStart;
-            top.keyEnd = ke;
-          } else {
-            top.keyEnd = i;
+            if (str[j] === "/" && j > 0 && str[j - 1] === "*") {
+              j -= 2;
+              while (j >= 1 && !(str[j] === "*" && str[j - 1] === "/")) j--;
+              j -= 2;
+              while (j >= 0 && isWhitespace(str[j])) j--;
+              continue;
+            }
+            j--;
           }
-          if (ks >= 0 && ks < i) {
-            let raw = str.slice(ks, i).trim();
-            if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) raw = raw.slice(1, -1);
-            else if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) raw = raw.slice(1, -1);
-            top.currentKey = raw;
-            if (top.keyEnd === -1) top.keyEnd = i;
-          }
-          let vs = i + 1;
-          while (vs < str.length && /\s/.test(str[vs])) vs++;
-          top.valueStart = vs;
-        } else if (ch === ",") {
-          if (top.currentKey !== null) {
-            const valStart = top.valueStart !== -1 ? top.valueStart : (top.keyEnd !== -1 ? top.keyEnd + 1 : i);
-            const valText = str.slice(valStart, i).trim();
-            regions.push({
-              path: top.path,
-              startOffset: top.fieldStart,
-              endOffset: i,
-              keyStart: top.keyStart,
-              keyEnd: top.keyEnd,
-              keyName: top.currentKey,
-              valueText: valText,
-              valueStart: valStart,
-            });
-          }
-          top.currentKey = null;
-          top.keyStart = -1;
-          top.keyEnd = -1;
-          top.fieldStart = i + 1;
-          top.valueStart = -1;
+          ks = j + 1;
+          if (ks < top.fieldStart) ks = top.fieldStart;
+          top.keyEnd = ke;
+        } else {
+          top.keyEnd = i;
         }
+        if (ks >= 0 && ks < i) {
+          let raw = str.slice(ks, i).trim();
+          if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) raw = raw.slice(1, -1);
+          else if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) raw = raw.slice(1, -1);
+          top.currentKey = raw;
+          if (top.keyEnd === -1) top.keyEnd = i;
+        }
+        let vs = i + 1;
+        while (vs < str.length && isWhitespace(str[vs])) vs++;
+        top.valueStart = vs;
+      } else if (ch === ",") {
+        if (top.currentKey !== null) {
+          const valStart = top.valueStart !== -1 ? top.valueStart : (top.keyEnd !== -1 ? top.keyEnd + 1 : i);
+          regions.push({
+            path: top.path,
+            startOffset: top.fieldStart,
+            endOffset: i,
+            keyStart: top.keyStart,
+            keyEnd: top.keyEnd,
+            keyName: top.currentKey,
+            valueText: str.slice(valStart, i).trim(),
+            valueStart: valStart,
+          });
+        }
+        top.currentKey = null;
+        top.keyStart = -1;
+        top.keyEnd = -1;
+        top.fieldStart = i + 1;
+        top.valueStart = -1;
       }
     }
   }
@@ -848,7 +1047,6 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
     const top = stack.pop()!;
     if (top.kind === "object" && (top.currentKey !== null || top.keyStart !== -1)) {
       const valStart = top.valueStart !== -1 ? top.valueStart : (top.keyEnd !== -1 ? top.keyEnd + 1 : str.length);
-      const valText = str.slice(valStart, str.length).trim();
       regions.push({
         path: top.path,
         startOffset: top.fieldStart,
@@ -856,7 +1054,7 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
         keyStart: top.keyStart,
         keyEnd: top.keyEnd,
         keyName: top.currentKey || "",
-        valueText: valText,
+        valueText: str.slice(valStart, str.length).trim(),
         valueStart: valStart,
       });
     }
@@ -866,72 +1064,19 @@ export const scanJsonFieldRegions = (text: string): JsonFieldRegion[] => {
 };
 
 /**
- * 从 jsonc-parser 的 AST 提取所有解析节点的路径->偏移映射
- * 比 scanJsonFieldRegions 更可靠，key 名与 jsonc-parser 解析结果完全一致
- */
-export const getFieldNodeOffsets = (text: string): Record<string, number> => {
-  const str = typeof text === "string" ? text : String(text ?? "");
-  if (!str) return {};
-
-  const tree = parseTree(str);
-  const offsets: Record<string, number> = {};
-
-  const walk = (node: any, path: string) => {
-    if (!node) return;
-    if (node.type === "object") {
-      for (const child of node.children || []) {
-        if (child.type === "property" && child.children && child.children.length >= 2) {
-          const keyNode = child.children[0];
-          const valueNode = child.children[1];
-          const key = keyNode.value !== undefined ? String(keyNode.value) : "";
-          const childPath = path === "$" ? `$.${key}` : `${path}.${key}`;
-          // 使用 key 节点的 offset（更精确）
-          if (!(childPath in offsets) || keyNode.offset < offsets[childPath]) {
-            offsets[childPath] = keyNode.offset;
-          }
-          walk(valueNode, childPath);
-        }
-      }
-    } else if (node.type === "array") {
-      for (let i = 0; i < (node.children || []).length; i++) {
-        walk(node.children[i], `${path}[${i}]`);
-      }
-    }
-  };
-
-  if (tree) walk(tree, "$");
-  return offsets;
-};
-
-/**
  * 从诊断错误构建占位节点（用于在可视化树中展示无法解析的字段）
- * 将错误按"key:value区域"归组（以 , 或 { 分隔符识别字段边界）
  */
-// 致命错误类型：表明该字段的值从根本上无法正确解析
-// 解析结果不可靠，应展示为错误节点而非解析节点
-const CRITICAL_ERROR_TYPES = new Set([
-  "invalid_number",
-  "value_expected",
-  "property_name_unquoted",
-  "colon_expected",
-]);
-
 export const buildErrorNodesFromDiagnostics = (
   text: string,
-  diagnostics: JsonDiagnosticError[]
-): Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes: string[]; hasCriticalError: boolean; errors: JsonDiagnosticError[] }[]> => {
+  diagnostics: JsonDiagnosticError[],
+): JsonToolkitTypes.JsonErrorMap => {
   const str = typeof text === "string" ? text : String(text ?? "");
   if (!str || !diagnostics.length) return {};
 
   const regions = scanJsonFieldRegions(str);
-
-  // ==== 给每个诊断错误找所属的 FieldRegion ====
-  // 错误属于某 region，当且仅当它的 offset 落在 [region.startOffset, region.endOffset]
-  // 若找不到任何 region，则回退到按 offset 最近且 <=40 的对象层
   const sorted = [...diagnostics].sort((a, b) => a.position - b.position);
 
   type Group = {
-    path: string;
     parentPath: string;
     keyName: string;
     startOffset: number;
@@ -940,22 +1085,12 @@ export const buildErrorNodesFromDiagnostics = (
     errors: JsonDiagnosticError[];
     errorTypes: string[];
   };
-  const groupsMap = new Map<string, Group>(); // key: `${parentPath}|${keyName}|${start}`
+  const groupsMap = new Map<string, Group>();
 
   for (const diag of sorted) {
-    // 1. 先找最近的 region
-    let region: JsonFieldRegion | undefined;
-    // 使用半开区间 [startOffset, endOffset) 匹配
-    // 避免错误正好落在字段分隔符（逗号/括号）时，错误地归到前一个字段
-    for (const r of regions) {
-      if (diag.position >= r.startOffset && diag.position < r.endOffset) {
-        region = r;
-        break;
-      }
-    }
-    // 若没找到：找距离 diag.position 最近的 region.startOffset（阈值 <40）
-    // 只看 startOffset 距离：让字段边界处的错误（逗号处）自然归到下一个字段（startOffset更近）
-    // 而非错误地留在前一个字段的 endOffset 处
+    // 1) 优先用闭区间匹配字段区域（区域结束位置通常是逗号/括号，错误常定位在这里）
+    let region = regions.find((r) => diag.position >= r.startOffset && diag.position <= r.endOffset);
+    // 2) 未命中时取 startOffset 最近的字段
     if (!region) {
       let best: { r: JsonFieldRegion; dist: number } | undefined;
       for (const r of regions) {
@@ -977,60 +1112,40 @@ export const buildErrorNodesFromDiagnostics = (
       regionStart = region.startOffset;
       regionEnd = region.endOffset;
       regionValueText = region.valueText;
-      if (!keyName) {
-        const w = str.slice(
-          Math.max(0, diag.position - 40),
-          Math.min(str.length, diag.position + diag.length + 40)
-        );
-        const m = w.match(/[{,]\s*([^:]{1,60}?)\s*:/);
-        if (m) {
-          keyName = m[1].trim().replace(/^"|"$/g, "");
-        }
-      }
     } else {
-      try {
-        const loc = getLocation(str, diag.position);
-        if (loc && Array.isArray(loc.path)) {
-          if (loc.path.length === 0) {
-            parentPath = "$";
-          } else if (loc.path.length === 1 && loc.path[0] === "") {
-            parentPath = "$";
-          } else {
-            const segs = [...loc.path];
-            const last = segs.pop()!;
-            keyName = String(last);
-            parentPath =
-              segs.length === 0
-                ? "$"
-                : "$" + segs.map((s) => (typeof s === "number" ? `[${s}]` : `.${s}`)).join("");
-          }
+      const location = getLocation(str, diag.position);
+      if (location && Array.isArray(location.path) && location.path.length > 0) {
+        const segs = [...location.path];
+        const last = segs.pop();
+        if (last !== undefined) {
+          keyName = String(last);
+          parentPath =
+            segs.length === 0
+              ? "$"
+              : "$" + segs.map((s) => (typeof s === "number" ? `[${s}]` : `.${s}`)).join("");
         }
-      } catch { /* ignore */ }
-      if (!keyName) {
-        const w = str.slice(
-          Math.max(0, diag.position - 40),
-          Math.min(str.length, diag.position + diag.length + 40)
-        );
-        const m = w.match(/[{,]\s*(.{1,60}?)\s*:/);
-        if (m) keyName = m[1].trim().replace(/^"|"$/g, "");
       }
     }
 
     if (!keyName) {
-      keyName = `<错误@${diag.line}:${diag.column}>`;
+      const window = str.slice(
+        Math.max(0, diag.position - 40),
+        Math.min(str.length, diag.position + diag.length + 40),
+      );
+      const m = window.match(/[{,]\s*([^:]{1,60}?)\s*:/);
+      if (m) keyName = m[1].trim().replace(/^"|"$/g, "");
     }
+    if (!keyName) keyName = `<错误@${diag.line}:${diag.column}>`;
 
-    // 归并到组（同一 parentPath + keyName 合并，避免同一字段产生多个重复节点）
     const mapKey = `${parentPath}||${keyName}`;
-    if (groupsMap.has(mapKey)) {
-      const g = groupsMap.get(mapKey)!;
-      g.startOffset = Math.min(g.startOffset, regionStart);
-      g.endOffset = Math.max(g.endOffset, regionEnd);
-      g.errors.push(diag);
-      if (!g.errorTypes.includes(diag.type)) g.errorTypes.push(diag.type);
+    const existing = groupsMap.get(mapKey);
+    if (existing) {
+      existing.startOffset = Math.min(existing.startOffset, regionStart);
+      existing.endOffset = Math.max(existing.endOffset, regionEnd);
+      existing.errors.push(diag);
+      if (!existing.errorTypes.includes(diag.type)) existing.errorTypes.push(diag.type);
     } else {
       groupsMap.set(mapKey, {
-        path: `${parentPath}.${keyName}`,
         parentPath,
         keyName,
         startOffset: regionStart,
@@ -1042,33 +1157,35 @@ export const buildErrorNodesFromDiagnostics = (
     }
   }
 
-  // ==== 生成结果（合并每个组中的错误/修复提示）====
-  const result: Record<string, { keyName: string; errorMessage: string; errorSuggestion: string; valueText: string; startOffset: number; errorTypes: string[]; hasCriticalError: boolean; errors: JsonDiagnosticError[] }[]> = {};
+  const result: JsonToolkitTypes.JsonErrorMap = {};
   for (const g of groupsMap.values()) {
-    if (!result[g.parentPath]) result[g.parentPath] = [];
-
-    const seen = new Set<string>();
+    const seenMessage = new Set<string>();
     const messages: string[] = [];
+    const seenSuggestion = new Set<string>();
     const suggestions: string[] = [];
     for (const e of g.errors) {
-      if (!seen.has(e.message)) { seen.add(e.message); messages.push(e.message); }
-      if (!seen.has("__s__" + e.suggestion)) { seen.add("__s__" + e.suggestion); suggestions.push(e.suggestion); }
+      if (!seenMessage.has(e.message)) {
+        seenMessage.add(e.message);
+        messages.push(e.message);
+      }
+      if (!seenSuggestion.has(e.suggestion)) {
+        seenSuggestion.add(e.suggestion);
+        suggestions.push(e.suggestion);
+      }
     }
 
-    const summary = messages.length <= 2
-      ? messages.join("；")
-      : `${messages[0]} 等 ${messages.length} 处问题`;
+    const errorMessage =
+      messages.length <= 2 ? messages.join("；") : `${messages[0]} 等 ${messages.length} 处问题`;
 
-    const hasCriticalError = g.errorTypes.some((t) => CRITICAL_ERROR_TYPES.has(t));
-
-    result[g.parentPath].push({
+    (result[g.parentPath] ??= []).push({
       keyName: g.keyName,
-      errorMessage: summary,
+      errorMessage,
       errorSuggestion: suggestions.join("；"),
       valueText: g.valueText,
       startOffset: g.startOffset,
+      endOffset: g.endOffset,
       errorTypes: g.errorTypes,
-      hasCriticalError,
+      hasCriticalError: g.errorTypes.some((t) => CRITICAL_ERROR_TYPES.has(t)),
       errors: g.errors,
     });
   }
@@ -1077,105 +1194,11 @@ export const buildErrorNodesFromDiagnostics = (
 };
 
 /**
- * 自动修复：生成修复建议
- */
-export const generateFixes = (text: string): { fixed: string; fixes: JsonFix[] } => {
-  const fixes: JsonFix[] = [];
-  let fixed = text;
-
-  // 1. 删除注释
-  fixed = fixed.replace(/\/\/[^\n]*/g, (match) => {
-    fixes.push({ position: 0, length: match.length, replacement: "", description: "删除单行注释" });
-    return "";
-  });
-  fixed = fixed.replace(/\/\*[\s\S]*?\*\//g, (match) => {
-    fixes.push({ position: 0, length: match.length, replacement: "", description: "删除块注释" });
-    return "";
-  });
-
-  // 2. 单引号 → 双引号
-  fixed = fixed.replace(/'((?:[^'\\\n]|\\.)*)'/g, (_match, content) => {
-    fixes.push({ position: 0, length: _match.length, replacement: `"${content}"`, description: "单引号改为双引号" });
-    return `"${content}"`;
-  });
-
-  // 3. 无引号属性名加引号
-  fixed = fixed.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, (match, p1, p2, p3) => {
-    fixes.push({ position: 0, length: match.length, replacement: `${p1}"${p2}"${p3}`, description: "给属性名添加双引号" });
-    return `${p1}"${p2}"${p3}`;
-  });
-
-  // 4. 尾随逗号
-  fixed = fixed.replace(/,(\s*)([}\]])/g, (match, ws, bracket) => {
-    fixes.push({ position: 0, length: match.length, replacement: `${ws}${bracket}`, description: "删除尾随逗号" });
-    return `${ws}${bracket}`;
-  });
-
-  // 5. NaN / Infinity → null
-  fixed = fixed.replace(/\bNaN\b/g, (_match) => {
-    fixes.push({ position: 0, length: 3, replacement: "null", description: "NaN 改为 null" });
-    return "null";
-  });
-  fixed = fixed.replace(/(?<![-\w])Infinity\b/g, (_match) => {
-    fixes.push({ position: 0, length: 8, replacement: "null", description: "Infinity 改为 null" });
-    return "null";
-  });
-  fixed = fixed.replace(/-Infinity\b/g, (_match) => {
-    fixes.push({ position: 0, length: 9, replacement: "null", description: "-Infinity 改为 null" });
-    return "null";
-  });
-
-  return { fixed, fixes };
-};
-
-/**
- * 容错解析主函数
- */
-export const lenientParseJson = (text: string): LenientParseResult => {
-  const errors = diagnoseJson(text);
-
-  // 如果没有错误，直接解析
-  if (errors.length === 0) {
-    try {
-      return { success: true, parsed: JSON.parse(text), errors: [], fixes: [] };
-    } catch { /* fallback */ }
-  }
-
-  // 尝试自动修复
-  const { fixed, fixes } = generateFixes(text);
-
-  try {
-    const parsed = JSON.parse(fixed);
-    return {
-      success: true,
-      parsed,
-      errors,
-      fixes,
-      fixedText: fixed,
-    };
-  } catch {
-    return {
-      success: false,
-      errors,
-      fixes,
-      fixedText: fixed,
-    };
-  }
-};
-
-// 错误占位对象
-export const createErrorValue = (message: string, suggestion: string): unknown =>
-  ({ __jsonError: true as const, __errorMessage: message, __errorSuggestion: suggestion });
-
-export const isErrorValue = (v: unknown): v is { __jsonError: true; __errorMessage: string; __errorSuggestion: string } =>
-  typeof v === "object" && v !== null && "__jsonError" in v && (v as any).__jsonError === true;
-
-/**
  * 将 diagnostics 按 JSON 路径分组（用于在可视化树节点上显示错误）
  */
 export const mapDiagnosticsToPaths = (
   text: string,
-  diagnostics: JsonDiagnosticError[]
+  diagnostics: JsonDiagnosticError[],
 ): Record<string, JsonDiagnosticError[]> => {
   const map: Record<string, JsonDiagnosticError[]> = {};
   const str = typeof text === "string" ? text : String(text ?? "");
@@ -1184,27 +1207,19 @@ export const mapDiagnosticsToPaths = (
   for (const diag of diagnostics) {
     try {
       const location = getLocation(str, diag.position);
-      // getLocation 返回 { path: (string|number)[] }
-      if (location && Array.isArray(location.path) && location.path.length > 0) {
-        let path =
-          "$" +
-          location.path
-            .map((s: any) => (typeof s === "number" ? `[${s}]` : `.${s}`))
-            .join("");
-        // 容错解析会把无法解析的内容塞进空字符串 key，导致路径为 "$."
-        // 这类错误映射到根节点，提示整体语法问题
-        if (path === "$." || path === "$") {
-          path = "$";
-        }
-        if (!map[path]) map[path] = [];
-        map[path].push(diag);
-      } else if (location && Array.isArray(location.path) && location.path.length === 0) {
-        // 根路径 []
-        if (!map["$"]) map["$"] = [];
-        map["$"].push(diag);
+      if (!location || !Array.isArray(location.path)) continue;
+      if (location.path.length === 0) {
+        (map["$"] ??= []).push(diag);
+        continue;
       }
+      let path =
+        "$" +
+        location.path.map((s) => (typeof s === "number" ? `[${s}]` : `.${s}`)).join("");
+      // 容错解析会把无法解析的内容塞进空字符串 key，这类错误归到根节点
+      if (path === "$.") path = "$";
+      (map[path] ??= []).push(diag);
     } catch {
-      /* ignore */
+      /* 忽略单条错误的定位失败 */
     }
   }
   return map;
