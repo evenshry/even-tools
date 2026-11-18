@@ -13,11 +13,13 @@ const { Text } = Typography;
 const SYNTAX_COLORS: Record<CommandSyntax, string> = {
   hex: 'blue',
   plaintext: 'default',
+  mnemonic: 'purple',
 };
 
 const SYNTAX_LABELS: Record<CommandSyntax, string> = {
   hex: 'Hex',
   plaintext: '纯文本',
+  mnemonic: '助记符',
 };
 
 const SnippetLibrary: React.FC = () => {

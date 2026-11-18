@@ -58,10 +58,11 @@ const CommandToolbar: React.FC = () => {
         options={[
           { label: '纯文本', value: 'plaintext' },
           { label: 'Hex', value: 'hex' },
+          { label: '助记符', value: 'mnemonic' },
         ]}
       />
 
-      {commandInput.syntax === 'plaintext' && (
+      {(commandInput.syntax === 'plaintext' || commandInput.syntax === 'mnemonic') && (
         <Select
           size="small"
           value={commandInput.encoding}

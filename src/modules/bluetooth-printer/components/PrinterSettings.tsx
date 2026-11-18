@@ -2,11 +2,14 @@
 // 连接成功后，协议和纸宽会根据设备自动推断；这里允许用户手动微调。
 
 import React from "react";
-import { Card, Select, Form, Space, Typography } from "antd";
+import { Card, Select, Form, Space, Typography, Input } from "antd";
 import { SettingOutlined } from "@ant-design/icons";
 import { usePrinterStore } from "../store/usePrinterStore";
 
 const { Text } = Typography;
+
+// 纸宽字符数 -> 实际毫米宽度，保持 TSPL 排版与所选纸宽一致
+const PAPER_WIDTH_MM: Record<number, number> = { 32: 58, 48: 80, 72: 72 };
 
 const PrinterSettings: React.FC = () => {
   const profile = usePrinterStore((s) => s.profile);
@@ -49,7 +52,11 @@ const PrinterSettings: React.FC = () => {
           <Select
             value={profile.paperWidth}
             onChange={(paperWidth) => {
-              setProfile({ ...profile, paperWidth });
+              setProfile({
+                ...profile,
+                paperWidth,
+                widthMm: PAPER_WIDTH_MM[paperWidth] ?? profile.widthMm,
+              });
             }}
             options={[
               { value: 32, label: "58mm (32列)" },
@@ -94,6 +101,37 @@ const PrinterSettings: React.FC = () => {
             </Text>
           </Form.Item>
         )}
+
+        <Form.Item
+          label="服务 UUID（可选，留空自动发现）"
+          style={{ marginBottom: 5 }}
+          tooltip="设备无法自动发现可写特征时，手动指定打印服务"
+        >
+          <Input
+            value={profile.serviceUuid}
+            onChange={(e) => setProfile({ ...profile, serviceUuid: e.target.value.trim() })}
+            placeholder="000018f0-0000-1000-8000-00805f9b34fb"
+            style={{ fontSize: 12 }}
+          />
+        </Form.Item>
+
+        <Form.Item label="写特征 UUID（可选）" style={{ marginBottom: 5 }}>
+          <Input
+            value={profile.writeCharacteristicUuid}
+            onChange={(e) => setProfile({ ...profile, writeCharacteristicUuid: e.target.value.trim() })}
+            placeholder="00002af9-0000-1000-8000-00805f9b34fb"
+            style={{ fontSize: 12 }}
+          />
+        </Form.Item>
+
+        <Form.Item label="通知特征 UUID（可选）" style={{ marginBottom: 5 }}>
+          <Input
+            value={profile.notifyCharacteristicUuid}
+            onChange={(e) => setProfile({ ...profile, notifyCharacteristicUuid: e.target.value.trim() })}
+            placeholder="留空自动发现（用于状态推送）"
+            style={{ fontSize: 12 }}
+          />
+        </Form.Item>
       </Form>
     </Card>
   );

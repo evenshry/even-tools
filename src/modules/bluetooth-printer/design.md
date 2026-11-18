@@ -475,8 +475,9 @@ export class BluetoothAdapter {
 
   async requestDevice(profile: PrinterProfile): Promise<BluetoothDevice> { /* ... */ }
   async connect(device: BluetoothDevice): Promise<void> { /* ... */ }
-  async write(data: Uint8Array, mode: 'withResponse' | 'withoutResponse'): Promise<void> {
-    // 大数据分片：单包 MTU 内，默认 200 字节/包，间隔 20ms
+  async write(data: Uint8Array, mode: 'withResponse' | 'withoutResponse',
+              onProgress?: (sent: number, total: number) => void): Promise<void> {
+    // 大数据分片：有响应写 180 字节/包（5ms 间隔），无响应写 20 字节/包（10ms 间隔），首片失败自动降级
   }
   async subscribeStatus(callback: (status: PrinterStatus) => void): Promise<void> { /* ... */ }
   async disconnect(): Promise<void> { /* ... */ }
@@ -486,8 +487,8 @@ export class BluetoothAdapter {
 
 **关键设计**：
 
-- 大数据自动分片：BLE 单包最大约 185~244 字节，模块默认每包 200 字节 + 20ms 间隔，避免打印机缓冲区溢出
-- 断线监听：`device.addEventListener('gattserverdisconnected', ...)`
+- 大数据自动分片：`withResponse` 每包 180 字节（5ms 间隔），`withoutResponse` 每包 20 字节（10ms 间隔）；首片写入失败时自动降级到 20 字节重试
+- 断线监听：`device.addEventListener('gattserverdisconnected', ...)`，重连前先移除旧监听避免重复触发
 - 写模式可配置：`writeValueWithResponse`（可靠）或 `writeValueWithoutResponse`（快速）
 
 ### 7.2 ESC/POS Encoder
@@ -574,7 +575,7 @@ export interface MonochromeBitmap {
 
 export async function imageToMonochrome(
   src: string,              // dataURL
-  targetWidth: number,      // 通常等于 paperWidth * 8
+  targetWidth: number,      // 通常等于 paperWidth * 12（58mm=384 点、80mm=576 点）
   dither: 'threshold' | 'floydSteinberg' | 'ordered',
 ): Promise<MonochromeBitmap> {
   // 1. canvas 加载图片

@@ -6,7 +6,7 @@ import { usePrinterStore } from '../store/usePrinterStore';
 import { getSharedBluetoothAdapter, isBluetoothSupported } from '../utils/bluetoothAdapter';
 import type { ConnectedDevice, PrinterProfile } from '../data/interface';
 
-const DEBUG = false;
+const DEBUG = import.meta.env.DEV;
 
 function log(...args: unknown[]) {
   if (DEBUG) console.log('[useBluetoothPrinter]', ...args);
@@ -14,34 +14,36 @@ function log(...args: unknown[]) {
 
 function inferProfile(deviceName: string, serviceUuids: string[]): Partial<PrinterProfile> {
   const name = deviceName.toLowerCase();
+  // 用数字边界匹配，避免 "580" 之类的型号误命中 "80"
+  const hasNumber = (n: string) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(name);
 
   if (name.includes('tsc') || name.includes('label') || name.includes('标签')) {
-    return { protocol: 'tspl', paperWidth: 72, dpi: 203, writeMode: 'withoutResponse' };
+    return { protocol: 'tspl', paperWidth: 72, widthMm: 72, dpi: 203 };
   }
 
-  if (name.includes('80') || name.includes('p80') || name.includes('pos-80')) {
-    return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
+  if (hasNumber('80') || name.includes('p80') || name.includes('pos-80')) {
+    return { protocol: 'escpos', paperWidth: 48, widthMm: 80, dpi: 203 };
   }
 
-  if (name.includes('58') || name.includes('p58') || name.includes('mini') || name.includes('便携')) {
-    return { protocol: 'escpos', paperWidth: 32, dpi: 203, writeMode: 'withResponse' };
+  if (hasNumber('58') || name.includes('p58') || name.includes('mini') || name.includes('便携')) {
+    return { protocol: 'escpos', paperWidth: 32, widthMm: 58, dpi: 203 };
   }
 
-  const tsplServiceUuid = '000018f0-0000-1000-8000-00805f9b34fb';
-  if (serviceUuids.includes(tsplServiceUuid)) {
-    return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
-  }
-
-  return { protocol: 'escpos', paperWidth: 48, dpi: 203, writeMode: 'withoutResponse' };
+  // 仅靠服务 UUID 无法可靠判断协议，保留用户当前配置
+  void serviceUuids;
+  return {};
 }
 
 export function useBluetoothPrinter() {
   const adapterRef = useRef(getSharedBluetoothAdapter());
-  const {
-    profile, connectionState, connectedDevice,
-    setConnectionState, setConnectedDevice, setProfile, setPrinterStatus,
-    saveDevice,
-  } = usePrinterStore();
+  const profile = usePrinterStore((s) => s.profile);
+  const connectionState = usePrinterStore((s) => s.connectionState);
+  const connectedDevice = usePrinterStore((s) => s.connectedDevice);
+  const setConnectionState = usePrinterStore((s) => s.setConnectionState);
+  const setConnectedDevice = usePrinterStore((s) => s.setConnectedDevice);
+  const setProfile = usePrinterStore((s) => s.setProfile);
+  const setPrinterStatus = usePrinterStore((s) => s.setPrinterStatus);
+  const saveDevice = usePrinterStore((s) => s.saveDevice);
 
   log('render hook, connectionState:', connectionState, 'connectedDevice:', connectedDevice?.name);
 
@@ -122,6 +124,7 @@ export function useBluetoothPrinter() {
     try {
       setConnectionState('disconnecting');
       await adapterRef.current.disconnect();
+      adapterRef.current.onDisconnected = null;
       setConnectedDevice(null);
       setPrinterStatus(null);
       setConnectionState('idle');
@@ -150,15 +153,15 @@ export function useBluetoothPrinter() {
     }
   }, [profile.protocol, setPrinterStatus]);
 
-  const write = useCallback(async (data: Uint8Array) => {
-    log('write callback start, adapter:', adapterRef.current);
+  const write = useCallback(async (
+    data: Uint8Array,
+    onProgress?: (sent: number, total: number) => void,
+  ) => {
     const adapter = adapterRef.current;
-    log('adapter.isConnected():', adapter.isConnected());
     if (!adapter.isConnected()) {
       throw new Error('打印机未连接');
     }
-    log('calling adapter.write with mode:', profile.writeMode);
-    await adapter.write(data, profile.writeMode);
+    await adapter.write(data, profile.writeMode, onProgress);
   }, [profile.writeMode]);
 
   return {

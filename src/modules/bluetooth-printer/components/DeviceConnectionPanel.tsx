@@ -1,7 +1,7 @@
 // 设备连接面板
 
 import React from 'react';
-import { Button, Card, Tag, Space, Typography, Alert } from 'antd';
+import { Button, Card, Tag, Space, Typography, Alert, Progress } from 'antd';
 import {
   ApiOutlined, LinkOutlined, DisconnectOutlined, ReloadOutlined,
   FileTextOutlined, InfoCircleOutlined,
@@ -24,8 +24,8 @@ const STATE_LABELS: Record<string, { text: string; color: string }> = {
 
 const DeviceConnectionPanel: React.FC = () => {
   const { connectionState, connectedDevice, isSupported, connect, disconnect, queryStatus } = useBluetoothPrinter();
-  const { printTestPage } = usePrintQueue();
-  const { printerStatus } = usePrinterStore();
+  const { printTestPage, currentJob, queue, cancelJob } = usePrintQueue();
+  const printerStatus = usePrinterStore((s) => s.printerStatus);
 
   const stateInfo = STATE_LABELS[connectionState] || STATE_LABELS.idle;
   const isBusy = ['scanning', 'connecting', 'disconnecting'].includes(connectionState);
@@ -63,7 +63,7 @@ const DeviceConnectionPanel: React.FC = () => {
             <Text type="secondary"> | 纸宽: </Text>
             <Text>
               {profile.protocol === 'tspl'
-                ? `${profile.paperWidth}mm 标签`
+                ? `${profile.widthMm}mm 标签`
                 : profile.paperWidth === 32
                   ? '58mm'
                   : profile.paperWidth === 48
@@ -84,6 +84,35 @@ const DeviceConnectionPanel: React.FC = () => {
               {printerStatus.coverOpen && <Tag color="warning">开盖</Tag>}
               {printerStatus.overheated && <Tag color="error">过热</Tag>}
             </Space>
+          </div>
+        )}
+
+        {(currentJob || queue.length > 0) && (
+          <div>
+            <Space size={4} wrap>
+              <Text type="secondary">打印队列: </Text>
+              {currentJob ? (
+                <Tag color="processing">
+                  发送中 {currentJob.bytesSent ?? 0}/{currentJob.totalBytes ?? currentJob.compiledBytes?.length ?? 0} 字节
+                </Tag>
+              ) : (
+                <Tag color="default">待打印 {queue.length}</Tag>
+              )}
+              {queue.length > 0 && (
+                <Button
+                  size="small"
+                  type="link"
+                  danger
+                  style={{ padding: 0 }}
+                  onClick={() => queue.forEach(job => cancelJob(job.id))}
+                >
+                  取消待打印
+                </Button>
+              )}
+            </Space>
+            {currentJob && (
+              <Progress percent={currentJob.progress} size="small" showInfo={false} />
+            )}
           </div>
         )}
 

@@ -49,6 +49,10 @@ export const BARCODE_TYPE_MAP = {
   CODE128: 73,
 } as const;
 
+// Function A（UPC-A / EAN13）格式为 GS k m d1..dk NUL，不带长度字节；
+// Function B（CODE39 / ITF / CODE128）格式为 GS k m n d1..dn
+const BARCODE_FUNCTION_A = new Set<number>([BARCODE_TYPE_MAP.UPC_A, BARCODE_TYPE_MAP.EAN13]);
+
 // 条码高度 (点)
 export const cmdBarcodeHeight = (n: number): number[] => [GS, 0x68, n & 0xff];
 
@@ -59,7 +63,14 @@ export const cmdBarcodeWidth = (n: number): number[] => [GS, 0x77, n & 0xff];
 export const cmdBarcodeText = (n: 0 | 1): number[] => [GS, 0x48, n];
 
 // 打印条码
-export const cmdBarcode = (m: number, data: number[]): number[] => [GS, 0x6b, m, data.length, ...data];
+export const cmdBarcode = (m: number, data: number[]): number[] => {
+  if (!BARCODE_FUNCTION_A.has(m) && data.length > 255) {
+    throw new Error('条码内容超过 255 字节，无法用单条 ESC/POS 指令打印');
+  }
+  return BARCODE_FUNCTION_A.has(m)
+    ? [GS, 0x6b, m, ...data, 0x00]
+    : [GS, 0x6b, m, data.length, ...data];
+};
 
 // 二维码相关 (GS ( k)
 // 设置 QR 模型: 1=Model1 2=Model2
@@ -91,8 +102,9 @@ export const cmdImage = (width: number, height: number, data: number[]): number[
   const bytesPerLine = Math.ceil(width / 8);
   const expectedLength = bytesPerLine * height;
   if (data.length !== expectedLength) {
-    console.warn(
-      `[cmdImage] data length mismatch: expected ${expectedLength}, got ${data.length} ` +
+    // 数据长度不匹配会产生错位乱码，直接报错而不是发送畸形指令
+    throw new Error(
+      `位图数据长度不匹配: 期望 ${expectedLength}, 实际 ${data.length} ` +
       `(width=${width}, height=${height}, bytesPerLine=${bytesPerLine})`
     );
   }

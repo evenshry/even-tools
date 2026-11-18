@@ -4,7 +4,7 @@ import React from "react";
 import { Card, List, Tag, Button, Empty, Space, Typography } from "antd";
 import { HistoryOutlined, DeleteOutlined } from "@ant-design/icons";
 import { usePrinterStore } from "../store/usePrinterStore";
-import type { PrintElement } from "../data/interface";
+import type { PrintHistoryEntry } from "../data/interface";
 
 const { Text } = Typography;
 
@@ -31,44 +31,10 @@ const PrintHistory: React.FC = () => {
     });
   };
 
-  const decodeBytesToText = (bytes?: Uint8Array): string => {
-    if (!bytes) return "";
-    try {
-      return new TextDecoder("gbk", { fatal: false }).decode(bytes);
-    } catch {
-      try {
-        return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-      } catch {
-        return "[无法解码]";
-      }
-    }
-  };
-
-  const getDisplayContent = (entry: { job: { commandInput?: { raw: string; syntax: string }; compiledText?: string; elements?: PrintElement[]; compiledBytes?: Uint8Array } }) => {
-    if (entry.job.commandInput?.raw) {
-      return entry.job.commandInput.raw;
-    }
-    if (entry.job.compiledText) {
-      return entry.job.compiledText;
-    }
-    if (entry.job.compiledBytes) {
-      return decodeBytesToText(entry.job.compiledBytes);
-    }
-    if (entry.job.elements) {
-      return entry.job.elements.map(el => {
-        switch (el.type) {
-          case 'text': return el.content || '[文本]';
-          case 'barcode': return `[条码] ${el.content || ''}`;
-          case 'qrcode': return `[二维码] ${el.content || ''}`;
-          case 'divider': return `[分割线] ${el.char || '-'}`;
-          case 'table': return '[表格]';
-          case 'image': return '[图片]';
-          default: return `[${(el as { type: string }).type}]`;
-        }
-      }).join('\n');
-    }
-    return "[无内容]";
-  };
+  // 历史只保留预览文本，不再持久化二进制，避免刷新后解码失败
+  const getDisplayContent = (entry: PrintHistoryEntry): string => (
+    entry.preview || entry.job.compiledText || "[无内容]"
+  );
 
   return (
     <Card

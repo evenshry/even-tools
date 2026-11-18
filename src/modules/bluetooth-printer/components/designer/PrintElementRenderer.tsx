@@ -1,7 +1,7 @@
 // 打印元素渲染器 - 单个元素的预览渲染
 // 用于编辑画布和打印预览
 
-import React, { useMemo } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef } from 'react';
 import type {
   PrintElement, TextElement, BarcodeElement, QrCodeElement,
   DividerElement, TableElement, ImageElement, Alignment,
@@ -55,37 +55,55 @@ const DividerRenderer: React.FC<{ el: DividerElement; paperWidth: number }> = ({
 // ===== 二维码元素 =====
 const QrCodeRenderer: React.FC<{ el: QrCodeElement }> = ({ el }) => {
   const mode = useThemeStore((s) => s.mode);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // 输入时延后计算，避免每次按键阻塞编辑
+  const deferredContent = useDeferredValue(el.content);
+  const deferredLevel = useDeferredValue(el.errorLevel);
+
   const matrix = useMemo(() => {
     try {
-      return generateQrMatrix(el.content || ' ', el.errorLevel);
+      return generateQrMatrix(deferredContent || ' ', deferredLevel);
     } catch {
       return null;
     }
-  }, [el.content, el.errorLevel]);
+  }, [deferredContent, deferredLevel]);
 
-  if (!matrix || matrix.length === 0) {
-    return <div style={{ ...ALIGN_STYLE[el.alignment], color: semanticColors.gray999[mode], fontSize: 12 }}>(二维码生成失败)</div>;
-  }
-
-  const size = matrix.length;
+  const size = matrix?.length ?? 0;
   const cellSize = Math.max(2, Math.min(8, el.size));
   const px = size * cellSize;
 
+  // 用 canvas 一次性绘制，避免大版本号生成上万个 SVG 节点
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !matrix || size === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = px * dpr;
+    canvas.height = px * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, px, px);
+    ctx.fillStyle = '#000';
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (matrix[y][x]) ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      }
+    }
+  }, [matrix, size, cellSize, px]);
+
+  if (!matrix || size === 0) {
+    return <div style={{ ...ALIGN_STYLE[el.alignment], color: semanticColors.gray999[mode], fontSize: 12 }}>(二维码生成失败)</div>;
+  }
+
   return (
     <div style={{ ...ALIGN_STYLE[el.alignment] }}>
-      <svg
-        width={px}
-        height={px}
-        viewBox={`0 0 ${size} ${size}`}
-        style={{ imageRendering: 'pixelated' }}
-      >
-        <rect width={size} height={size} fill="#fff" />
-        {matrix.map((row, y) =>
-          row.map((on, x) =>
-            on ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill="#000" /> : null
-          )
-        )}
-      </svg>
+      <canvas
+        ref={canvasRef}
+        style={{ width: px, height: px, imageRendering: 'pixelated' }}
+        aria-label="二维码预览"
+      />
     </div>
   );
 };

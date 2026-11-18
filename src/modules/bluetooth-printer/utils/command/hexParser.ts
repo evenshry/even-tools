@@ -22,9 +22,9 @@ export function parseHex(input: string): HexParseResult {
     return { bytes: new Uint8Array(0), error: '包含非十六进制字符' };
   }
 
-  // 奇数长度补 0
+  // 奇数长度末尾补 0：'1B4' -> '1B 40'（符合用户直觉，而不是补成 '01 B4'）
   if (cleaned.length % 2 !== 0) {
-    cleaned = '0' + cleaned;
+    cleaned += '0';
   }
 
   // 解析为字节数组

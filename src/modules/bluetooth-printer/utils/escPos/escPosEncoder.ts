@@ -12,10 +12,11 @@ import {
   cmdLineSpacing, cmdFeed, cmdCut, cmdBuzzer,
   BARCODE_TYPE_MAP, cmdBarcodeHeight, cmdBarcodeWidth, cmdBarcodeText,
   cmdBarcode, cmdQrModel, QR_LEVEL_MAP, cmdQrLevel, cmdQrSize, cmdQrData,
-  CMD_QR_PRINT, cmdImage, LF,
+  CMD_QR_PRINT, CMD_DEFAULT_LINE_SPACING, cmdImage, LF,
 } from './escPosCommands';
 
 import { encodeText as gbkEncodeText } from '../gbkEncoder';
+import { displayWidth, padByWidth, wrapByWidth } from '../textWidth';
 
 function encodeText(text: string, encoding: 'gbk' | 'utf8'): number[] {
   return Array.from(gbkEncodeText(text, encoding));
@@ -62,7 +63,10 @@ export class EscPosEncoder {
 
   // ===== 分割线 =====
   divider(char: string = '-', width: number = 32): this {
-    const line = char.repeat(width);
+    // 按字符显示宽度计算重复次数：全角字符占 2 格
+    const charWidth = Math.max(1, displayWidth(char));
+    const count = Math.max(1, Math.floor(width / charWidth));
+    const line = char.repeat(count);
     this.buffer.push(...encodeText(line, this.encoding));
     this.buffer.push(LF);
     this.textBuffer.push(line + '\n');
@@ -144,18 +148,9 @@ export class EscPosEncoder {
 
   private async encodeImageElement(el: ImageElement): Promise<void> {
     if (!el.src) return;
-    // ESC/POS: 每字符 8 点宽，图片宽度 = 纸张宽度 × 8
-    const targetWidthPx = this.imagePaperWidth * 8;
+    // ESC/POS：Font A 字符单元为 12 点宽（203dpi），58mm 满幅 384 点、80mm 满幅 576 点
+    const targetWidthPx = this.imagePaperWidth * 12;
     const bitmap = await processImage(el.src, targetWidthPx, el.dither);
-    const bytesPerLine = Math.ceil(bitmap.width / 8);
-    console.log('[EscPosEncoder] image bitmap:', {
-      width: bitmap.width,
-      height: bitmap.height,
-      dataLength: bitmap.data.length,
-      bytesPerLine,
-      expectedLength: bytesPerLine * bitmap.height,
-      paperWidth: this.imagePaperWidth,
-    });
     this.buffer.push(...cmdAlign(el.alignment === 'left' ? 0 : el.alignment === 'center' ? 1 : 2));
     this.buffer.push(...cmdImage(bitmap.width, bitmap.height, Array.from(bitmap.data)));
     this.buffer.push(LF);
@@ -169,9 +164,9 @@ export class EscPosEncoder {
     this.fontSize(el.fontSize - 1, el.fontSize - 1);
     this.lineSpacing(el.lineSpacing);
     if (el.wrap) {
-      // 按纸张宽度自动换行
-      const charsPerLine = Math.floor(paperWidth / el.fontSize);
-      const lines = this.wrapText(el.content, charsPerLine);
+      // 按纸张字符宽度自动换行（中文按 2 格计算）
+      const charsPerLine = Math.max(1, Math.floor(paperWidth / el.fontSize));
+      const lines = wrapByWidth(el.content, charsPerLine);
       for (const line of lines) this.textLine(line);
     } else {
       this.textLine(el.content);
@@ -180,7 +175,8 @@ export class EscPosEncoder {
     this.bold(false);
     this.underline(0);
     this.fontSize(0, 0);
-    this.lineSpacing(30);
+    this.buffer.push(...CMD_DEFAULT_LINE_SPACING);
+    this.textBuffer.push('ESC 2');
   }
 
   private encodeBarcodeElement(el: BarcodeElement): void {
@@ -201,13 +197,13 @@ export class EscPosEncoder {
   }
 
   private encodeTableElement(el: TableElement, paperWidth: number): void {
-    const totalWidth = el.columns.reduce((s, c) => s + c.width, 0);
+    const totalWidth = el.columns.reduce((s, c) => s + c.width, 0) || 1;
     const scale = paperWidth / totalWidth;
-    // 表头
+    // 表头（按显示宽度补齐，中文占 2 格）
     let headerLine = '';
     el.columns.forEach(col => {
       const w = Math.floor(col.width * scale);
-      headerLine += this.padString(col.header, w);
+      headerLine += padByWidth(col.header, w);
     });
     this.textLine(headerLine);
     this.divider('-', paperWidth);
@@ -216,34 +212,10 @@ export class EscPosEncoder {
       let line = '';
       el.columns.forEach((col, i) => {
         const w = Math.floor(col.width * scale);
-        line += this.padString(row[i] || '', w);
+        line += padByWidth(row[i] || '', w);
       });
       this.textLine(line);
     }
-  }
-
-  // ===== 工具方法 =====
-  private wrapText(text: string, charsPerLine: number): string[] {
-    if (charsPerLine <= 0) return [text];
-    const lines: string[] = [];
-    const paragraphs = text.split('\n');
-    for (const para of paragraphs) {
-      let remaining = para;
-      while (remaining.length > charsPerLine) {
-        lines.push(remaining.slice(0, charsPerLine));
-        remaining = remaining.slice(charsPerLine);
-      }
-      if (remaining.length > 0 || lines.length === 0) {
-        lines.push(remaining);
-      }
-    }
-    return lines;
-  }
-
-  private padString(s: string, width: number): string {
-    const len = Array.from(s).length;
-    if (len >= width) return Array.from(s).slice(0, width).join('');
-    return s + ' '.repeat(width - len);
   }
 
   // ===== 输出 =====

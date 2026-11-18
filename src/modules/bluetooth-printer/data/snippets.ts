@@ -216,4 +216,35 @@ PRINT 1`,
     content: 'SELFTEST\r\n',
     category: 'tspl',
   },
+  {
+    id: 'snip-escpos-mnemonic',
+    name: '小票模板 (助记符)',
+    description: '助记符写法：居中标题 + 二维码 + 切纸',
+    syntax: 'mnemonic',
+    content: `@init
+@align center
+@bold on
+@size 2x2
+热敏打印测试
+@bold off
+@size 1x1
+@qr https://example.com size=6 level=M
+@align left
+订单号: 20260101-001
+@feed 3
+@cut`,
+    category: 'escpos',
+  },
+  {
+    id: 'snip-tspl-mnemonic',
+    name: '标签模板 (助记符)',
+    description: '助记符写法：按坐标绘制文本/二维码/条码后打印',
+    syntax: 'mnemonic',
+    content: `@cls
+@text 20,20 "Product Name"
+@qr 20,50 https://example.com size=6 level=M
+@barcode CODE128 20,200 "1234567890"
+@print 1`,
+    category: 'tspl',
+  },
 ];

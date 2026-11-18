@@ -4,7 +4,7 @@
 export type AppMode = 'command' | 'designer';
 
 // ===== 指令模式 =====
-export type CommandSyntax = 'hex' | 'plaintext';
+export type CommandSyntax = 'hex' | 'mnemonic' | 'plaintext';
 
 export interface CommandInput {
   syntax: CommandSyntax;
@@ -14,20 +14,22 @@ export interface CommandInput {
   repeat: number;
 }
 
-export type MnemonicInstruction =
+export type MnemonicInstruction = { line: number } & (
   | { kind: 'init' }
   | { kind: 'align'; value: Alignment }
   | { kind: 'bold'; value: boolean }
   | { kind: 'underline'; value: 0 | 1 | 2 }
   | { kind: 'size'; w: number; h: number }
   | { kind: 'lineSpacing'; value: number }
-  | { kind: 'text'; content: string }
+  | { kind: 'text'; content: string; x?: number; y?: number }
   | { kind: 'feed'; lines: number }
   | { kind: 'cut'; full: boolean }
   | { kind: 'buzzer'; times: number; duration: number }
-  | { kind: 'qr'; content: string; size?: number; level?: QrErrorLevel }
-  | { kind: 'barcode'; type: BarcodeType; content: string; height?: number }
-  | { kind: 'raw'; hex: string };
+  | { kind: 'qr'; content: string; size?: number; level?: QrErrorLevel; x?: number; y?: number }
+  | { kind: 'barcode'; type: BarcodeType; content: string; height?: number; x?: number; y?: number }
+  | { kind: 'print'; copies: number }
+  | { kind: 'raw'; hex: string }
+);
 
 // ===== 编辑模式 - 打印元素 =====
 export type ElementType = 'text' | 'barcode' | 'qrcode' | 'image' | 'table' | 'divider';

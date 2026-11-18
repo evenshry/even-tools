@@ -15,6 +15,9 @@ const STORAGE_KEY_COMMAND = 'bluetooth-printer-command';
 const STORAGE_KEY_PROFILE = 'bluetooth-printer-profile';
 const STORAGE_KEY_HISTORY = 'bluetooth-printer-history';
 const STORAGE_KEY_SAVED_DEVICES = 'bluetooth-printer-saved-devices';
+const STORAGE_KEY_ELEMENTS = 'bluetooth-printer-elements';
+const STORAGE_KEY_TEMPLATES = 'bluetooth-printer-templates';
+const STORAGE_KEY_SNIPPETS = 'bluetooth-printer-snippets';
 
 function loadMode(): AppMode {
   try {
@@ -62,12 +65,103 @@ function loadProfile(): PrinterProfile {
   return DEFAULT_PROFILE;
 }
 
+// 历史条目裁剪：去掉二进制与图片等大字段，避免 localStorage 爆量
+function sanitizeHistoryEntry(entry: PrintHistoryEntry): PrintHistoryEntry | null {
+  if (!entry || typeof entry !== 'object' || !entry.job) return null;
+  const job = entry.job;
+  return {
+    id: String(entry.id),
+    preview: entry.preview ?? job.compiledText?.slice(0, 200),
+    job: {
+      id: String(job.id),
+      mode: job.mode === 'designer' ? 'designer' : 'command',
+      status: ['pending', 'sending', 'success', 'failed', 'canceled'].includes(job.status) ? job.status : 'failed',
+      progress: Number.isFinite(job.progress) ? job.progress : 0,
+      createdAt: Number.isFinite(job.createdAt) ? job.createdAt : Date.now(),
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      bytesSent: job.bytesSent,
+      totalBytes: job.totalBytes,
+      error: job.error,
+      deviceId: job.deviceId,
+      deviceName: job.deviceName,
+      compiledText: job.compiledText?.slice(0, 400),
+    },
+  };
+}
+
 function loadHistory(): PrintHistoryEntry[] {
   try {
     const v = localStorage.getItem(STORAGE_KEY_HISTORY);
-    if (v) return JSON.parse(v);
+    if (v) {
+      const parsed = JSON.parse(v);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((entry) => sanitizeHistoryEntry(entry as PrintHistoryEntry))
+        .filter((entry): entry is PrintHistoryEntry => entry !== null);
+    }
   } catch { /* ignore */ }
   return [];
+}
+
+function loadElements(): PrintElement[] {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_ELEMENTS);
+    if (v) {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed as PrintElement[];
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function loadCustomTemplates(): Template[] {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_TEMPLATES);
+    if (v) {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed as Template[];
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function loadCustomSnippets(): CommandSnippet[] {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_SNIPPETS);
+    if (v) {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed as CommandSnippet[];
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+// 编辑区元素体积较大（含图片 base64），做防抖落盘
+let elementsTimer: ReturnType<typeof setTimeout> | null = null;
+function schedulePersistElements(elements: PrintElement[]) {
+  if (elementsTimer) clearTimeout(elementsTimer);
+  elementsTimer = setTimeout(() => {
+    try { localStorage.setItem(STORAGE_KEY_ELEMENTS, JSON.stringify(elements)); } catch { /* ignore */ }
+  }, 300);
+}
+
+function persistCustomTemplates(templates: Template[]) {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY_TEMPLATES,
+      JSON.stringify(templates.filter((t) => t.category === 'custom')),
+    );
+  } catch { /* ignore */ }
+}
+
+function persistCustomSnippets(snippets: CommandSnippet[]) {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY_SNIPPETS,
+      JSON.stringify(snippets.filter((s) => s.id.startsWith('snip-custom-'))),
+    );
+  } catch { /* ignore */ }
 }
 
 function loadSavedDevices(): SavedDevice[] {
@@ -163,25 +257,42 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   },
 
   // 编辑模式
-  elements: [],
+  elements: loadElements(),
   selectedElementId: null,
-  addElement: (element) => set((s) => ({ elements: [...s.elements, element] })),
-  updateElement: (id, patch) => set((s) => ({
-    elements: s.elements.map((el) =>
+  addElement: (element) => set((s) => {
+    const elements = [...s.elements, element];
+    schedulePersistElements(elements);
+    return { elements };
+  }),
+  updateElement: (id, patch) => set((s) => {
+    const elements = s.elements.map((el) =>
       el.id === id ? { ...el, ...patch } as PrintElement : el
-    ),
-  })),
-  removeElement: (id) => set((s) => ({
-    elements: s.elements.filter((el) => el.id !== id),
-    selectedElementId: s.selectedElementId === id ? null : s.selectedElementId,
-  })),
+    );
+    schedulePersistElements(elements);
+    return { elements };
+  }),
+  removeElement: (id) => set((s) => {
+    const elements = s.elements.filter((el) => el.id !== id);
+    schedulePersistElements(elements);
+    return {
+      elements,
+      selectedElementId: s.selectedElementId === id ? null : s.selectedElementId,
+    };
+  }),
   reorderElements: (from, to) => set((s) => {
+    if (from < 0 || from >= s.elements.length || to < 0 || to >= s.elements.length || from === to) {
+      return s;
+    }
     const elements = [...s.elements];
     const [moved] = elements.splice(from, 1);
     elements.splice(to, 0, moved);
+    schedulePersistElements(elements);
     return { elements };
   }),
-  setElements: (elements) => set({ elements }),
+  setElements: (elements) => {
+    schedulePersistElements(elements);
+    set({ elements });
+  },
   selectElement: (id) => set({ selectedElementId: id }),
 
   // 队列
@@ -209,7 +320,8 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   addHistory: (entry) => set((s) => {
     // 防止重复添加
     if (s.history.some(h => h.id === entry.id)) return s;
-    const newHistory = [entry, ...s.history].slice(0, 100);
+    const sanitized = sanitizeHistoryEntry(entry);
+    const newHistory = (sanitized ? [sanitized, ...s.history] : s.history).slice(0, 100);
     try { localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(newHistory)); } catch { /* ignore */ }
     return { history: newHistory };
   }),
@@ -219,8 +331,8 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
   },
 
   // 模板与片段
-  templates: BUILTIN_TEMPLATES,
-  snippets: BUILTIN_SNIPPETS,
+  templates: [...BUILTIN_TEMPLATES, ...loadCustomTemplates()],
+  snippets: [...BUILTIN_SNIPPETS, ...loadCustomSnippets()],
   saveAsTemplate: (name, elements) => set((s) => {
     const tpl: Template = {
       id: `tpl-custom-${Date.now()}`,
@@ -232,7 +344,9 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    return { templates: [...s.templates, tpl] };
+    const templates = [...s.templates, tpl];
+    persistCustomTemplates(templates);
+    return { templates };
   }),
   loadTemplate: (id) => {
     const tpl = get().templates.find((t) => t.id === id);
@@ -247,7 +361,9 @@ export const usePrinterStore = create<PrinterStore>((set, get) => ({
       content: input.raw,
       category: 'common',
     };
-    return { snippets: [...s.snippets, snip] };
+    const snippets = [...s.snippets, snip];
+    persistCustomSnippets(snippets);
+    return { snippets };
   }),
 
   // 已保存设备

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {
-  Card, Form, Input, InputNumber, Select, Switch, Radio, Space, Empty, Typography, Upload, Button,
+  Card, Form, Input, InputNumber, Select, Switch, Radio, Space, Empty, Typography, Upload, Button, message,
 } from 'antd';
 import { SettingOutlined, UploadOutlined, ClearOutlined } from '@ant-design/icons';
 import { usePrinterStore } from '../../store/usePrinterStore';
@@ -25,6 +25,7 @@ const ALIGN_OPTIONS = [
 
 const BARCODE_TYPES: BarcodeType[] = ['UPC_A', 'EAN13', 'CODE128', 'CODE39', 'ITF'];
 const QR_LEVELS: QrErrorLevel[] = ['L', 'M', 'Q', 'H'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const PropertyPanel: React.FC = () => {
   const elements = usePrinterStore(s => s.elements);
@@ -248,6 +249,68 @@ const BarcodeProps: React.FC<{
 );
 
 // ===== 表格属性 =====
+// 支持逗号、引号转义，输入过程中保留原始草稿避免光标跳动
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ',') {
+      cells.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+function formatCsvCell(cell: string): string {
+  return /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+}
+
+const TableDataEditor: React.FC<{
+  el: TableElement;
+  update: (patch: Partial<PrintElement>) => void;
+}> = ({ el, update }) => {
+  const [draft, setDraft] = React.useState(
+    () => el.rows.map(r => r.map(formatCsvCell).join(',')).join('\n'),
+  );
+
+  // 切换元素时重新载入对应数据
+  React.useEffect(() => {
+    setDraft(el.rows.map(r => r.map(formatCsvCell).join(',')).join('\n'));
+    // 只在切换元素时同步，避免覆盖正在输入的内容
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [el.id]);
+
+  return (
+    <TextArea
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const rows = e.target.value.split('\n').map(parseCsvLine);
+        update({ rows });
+      }}
+      autoSize={{ minRows: 3, maxRows: 10 }}
+      style={{ fontFamily: 'monospace', marginTop: 4 }}
+    />
+  );
+};
+
 const TableProps: React.FC<{
   el: TableElement;
   update: (patch: Partial<PrintElement>) => void;
@@ -294,17 +357,9 @@ const TableProps: React.FC<{
     </Form.Item>
     <Form.Item label={`数据行 (${el.rows.length} 行)`}>
         <Text type="secondary" style={{ fontSize: 11 }}>
-          表格数据编辑：直接修改 CSV 文本，每行用换行分隔，单元格用逗号分隔
+          每行一条数据，单元格用逗号分隔；含逗号的内容可用双引号包裹
         </Text>
-        <TextArea
-          value={el.rows.map(r => r.join(',')).join('\n')}
-          onChange={(e) => {
-            const rows = e.target.value.split('\n').map(line => line.split(',').map(c => c.trim()));
-            update({ rows });
-          }}
-          autoSize={{ minRows: 3, maxRows: 10 }}
-          style={{ fontFamily: 'monospace', marginTop: 4 }}
-        />
+        <TableDataEditor el={el} update={update} />
       </Form.Item>
     </>
   );
@@ -328,7 +383,8 @@ const ImageProps: React.FC<{
     let cancelled = false;
     const load = async () => {
       try {
-        const targetWidthPx = profile.paperWidth * 8;
+        // ESC/POS 满幅宽度：58mm=384 点、80mm=576 点
+        const targetWidthPx = profile.paperWidth * 12;
         const bitmap = await processImage(el.src, targetWidthPx, el.dither);
         if (cancelled) return;
         const previewUrl = bitmapToDataUrl(bitmap);
@@ -344,13 +400,22 @@ const ImageProps: React.FC<{
   }, [el.src, el.dither, profile.paperWidth]);
 
   const handleUpload = async (file: File) => {
+    if (file.size > MAX_IMAGE_BYTES) {
+      message.error('图片不能超过 5MB');
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = () => message.error('图片读取失败');
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
-      // 用纸张宽度作为压缩目标宽度
-      const targetWidthPx = profile.paperWidth * 8;
-      const compressed = await compressImage(dataUrl, targetWidthPx);
-      update({ src: compressed });
+      try {
+        // 用纸张宽度作为压缩目标宽度
+        const targetWidthPx = profile.paperWidth * 12;
+        const compressed = await compressImage(dataUrl, targetWidthPx);
+        update({ src: compressed });
+      } catch (err) {
+        message.error(`图片处理失败: ${(err as Error).message}`);
+      }
     };
     reader.readAsDataURL(file);
   };

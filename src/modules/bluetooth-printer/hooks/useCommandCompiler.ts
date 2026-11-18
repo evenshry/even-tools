@@ -5,6 +5,9 @@ import type { CommandInput } from '../data/interface';
 import { parseHex } from '../utils/command/hexParser';
 import { encodePlainText } from '../utils/command/plainTextEncoder';
 import { formatHexSimple } from '../utils/command/hexDump';
+import { compileMnemonic } from '../utils/command/mnemonicCompiler';
+import { DEFAULT_LABEL_CONFIG } from '../utils/tspl/tsplEncoder';
+import { usePrinterStore } from '../store/usePrinterStore';
 
 export interface CompileResult {
   bytes: Uint8Array | null;
@@ -14,6 +17,8 @@ export interface CompileResult {
 }
 
 export function useCommandCompiler(input: CommandInput): CompileResult {
+  const profile = usePrinterStore((s) => s.profile);
+
   return useMemo(() => {
     if (!input.raw.trim()) {
       return { bytes: null, hexPreview: '', error: null, byteCount: 0 };
@@ -42,6 +47,23 @@ export function useCommandCompiler(input: CommandInput): CompileResult {
           }
           break;
         }
+        case 'mnemonic': {
+          const result = compileMnemonic(input.raw, input.encoding, profile.protocol, {
+            ...DEFAULT_LABEL_CONFIG,
+            widthMm: profile.widthMm,
+            dpi: profile.dpi,
+          });
+          if (result.lineErrors.length > 0) {
+            return {
+              bytes: null,
+              hexPreview: '',
+              error: result.lineErrors.map((e) => `第 ${e.line} 行: ${e.message}`).join('\n'),
+              byteCount: 0,
+            };
+          }
+          bytes = result.bytes;
+          break;
+        }
         default:
           return { bytes: null, hexPreview: '', error: '未知语法', byteCount: 0 };
       }
@@ -63,5 +85,5 @@ export function useCommandCompiler(input: CommandInput): CompileResult {
     } catch (e) {
       return { bytes: null, hexPreview: '', error: (e as Error).message, byteCount: 0 };
     }
-  }, [input.raw, input.syntax, input.encoding, input.appendNewline, input.repeat]);
+  }, [input.raw, input.syntax, input.encoding, input.appendNewline, input.repeat, profile.protocol, profile.widthMm, profile.dpi]);
 }

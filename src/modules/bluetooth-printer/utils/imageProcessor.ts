@@ -108,17 +108,20 @@ function pixelsToBitmapData(pixels: Uint8ClampedArray, width: number, height: nu
   return data;
 }
 
+const MAX_BITMAP_HEIGHT = 2048;
+
 export async function processImage(
   src: string,
   targetWidthPx: number = 384,
   dither: ImageElement['dither'] = 'threshold',
 ): Promise<MonochromeBitmap> {
   const img = await loadImage(src);
-  // 缩放到目标宽度，高度按比例计算
-  const rawWidth = Math.min(targetWidthPx, img.width);
+  if (!img.width || !img.height) throw new Error('图片尺寸无效');
+  // 同时限制宽度与高度，避免超长图片生成超大位图
+  const scale = Math.min(1, targetWidthPx / img.width, MAX_BITMAP_HEIGHT / img.height);
   // 确保宽度是 8 的倍数（ESC/POS 位图每行字节数 = width/8，必须是整数）
-  const width = Math.max(8, Math.floor(rawWidth / 8) * 8);
-  const height = Math.floor(img.height * (width / img.width));
+  const width = Math.max(8, Math.floor((img.width * scale) / 8) * 8);
+  const height = Math.max(1, Math.round(img.height * (width / img.width)));
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get canvas context');
@@ -162,10 +165,6 @@ export async function processImage(
   return { width, height, data };
 }
 
-export function dataUrlToBase64(src: string): string {
-  return src.split(',')[1] || '';
-}
-
 // 将单色位图转换为 DataURL，用于预览处理后效果
 export function bitmapToDataUrl(bitmap: MonochromeBitmap): string {
   const { width, height, data } = bitmap;
@@ -195,13 +194,14 @@ export function bitmapToDataUrl(bitmap: MonochromeBitmap): string {
   return canvas.toDataURL('image/png');
 }
 
-export function compressImage(src: string, maxWidth: number = 400): Promise<string> {
+// 压缩图片用于存储：限制最长边 2048，输出 JPEG 控制体积
+export function compressImage(src: string, maxWidth: number = 400, maxHeight: number = 2048): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width);
-      const width = Math.floor(img.width * scale);
-      const height = Math.floor(img.height * scale);
+      const scale = Math.min(1, maxWidth / img.width, maxHeight / img.height);
+      const width = Math.max(1, Math.floor(img.width * scale));
+      const height = Math.max(1, Math.floor(img.height * scale));
       const canvas = createCanvas(width, height);
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -211,7 +211,8 @@ export function compressImage(src: string, maxWidth: number = 400): Promise<stri
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
-      const compressed = canvas.toDataURL('image/png', 0.8);
+      // PNG 会忽略 quality 参数，改用 JPEG 才能有效压缩
+      const compressed = canvas.toDataURL('image/jpeg', 0.85);
       resolve(compressed);
     };
     img.onerror = reject;

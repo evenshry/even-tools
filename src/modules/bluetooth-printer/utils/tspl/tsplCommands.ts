@@ -52,7 +52,7 @@ export const CMD_CLS = `CLS${TSPL_NEWLINE}`;
 // 打印标签 PRINT m[,n]
 // m=打印张数, n=每张份数
 export function cmdPrint(copies: number = 1, quantity: number = 1): string {
-  return `PRINT ${copies},${quantity}${TSPL_NEWLINE}\r\n`;
+  return `PRINT ${copies},${quantity}${TSPL_NEWLINE}`;
 }
 
 // 蜂鸣 SOUND level,duration
@@ -135,7 +135,7 @@ export function cmdBarcode(
   const n = opts?.narrow ?? 2;
   const w = opts?.wide ?? 4;
   const t = BARCODE_TYPE_MAP[type];
-  const escaped = content.replace(/"/g, '\\"');
+  const escaped = content.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   return `BARCODE ${x},${y},"${t}",${h},${r},${rot},${n},${w},"${escaped}"${TSPL_NEWLINE}`;
 }
 
@@ -167,7 +167,7 @@ export function cmdQrcode(
   const cw = opts?.cellWidth ?? 6;
   const mode = opts?.mode ?? 0;
   const rot = opts?.rotation ?? 0;
-  const escaped = content.replace(/"/g, '\\"');
+  const escaped = content.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   return `QRCODE ${x},${y},"${lvl}",${cw},${mode},${rot},"${escaped}"${TSPL_NEWLINE}`;
 }
 
@@ -235,10 +235,3 @@ export function cmdCountry(name: string): string {
 }
 
 // ===== 工具函数 =====
-
-import { textByteLength } from '../gbkEncoder';
-
-// 计算字符串字节长度（用于 TSPL 字符串参数）
-export function byteLength(s: string, encoding: 'utf8' | 'gbk'): number {
-  return textByteLength(s, encoding);
-}

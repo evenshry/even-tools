@@ -6,15 +6,16 @@
 // TSPL 需要维护一个"游标"概念，因为元素需要绝对坐标
 
 import { encodeText as gbkEncodeText } from '../gbkEncoder';
+import { displayWidth } from '../textWidth';
+import { getQrModuleSize } from '../escPos/qrEncoder';
 import type {
-  PrintElement, QrErrorLevel, BarcodeType,
+  PrintElement, QrErrorLevel, BarcodeType, Alignment,
   TextElement, BarcodeElement, QrCodeElement, DividerElement, TableElement, ImageElement,
 } from '../../data/interface';
 import { processImage } from '../imageProcessor';
 import {
   TSPL_NEWLINE, CMD_CLS, cmdSize, cmdGap, cmdDirection, cmdCodepage,
   cmdText, cmdBarcode, cmdQrcode, cmdBar, cmdBox, cmdPrint, cmdSound, cmdCut, cmdBitmap,
-  byteLength,
 } from './tsplCommands';
 
 // 标签默认配置
@@ -127,45 +128,85 @@ export class TsplEncoder {
     return this;
   }
 
-  bar(x: number, y: number, width: number, height: number): this {
-    this.buffer.push(cmdBar(x, y, width, height));
-    return this;
-  }
-
-  box(x1: number, y1: number, x2: number, y2: number, thickness?: number): this {
-    this.buffer.push(cmdBox(x1, y1, x2, y2, thickness));
-    return this;
-  }
-
   // ===== 流式布局元素 (维护游标 y) =====
+
+  // 流式文本：按当前游标绘制并在每行后推进 y（供助记符模式使用）
+  streamText(content: string, alignment: Alignment = 'left', fontSize: number = 1): this {
+    const fontInfo = FONT_MAP[fontSize] || FONT_MAP[1];
+    const charWidthDots = 8 * fontInfo.xMul;
+    const lineHeight = 8 * fontInfo.yMul + 2;
+    for (const line of content.split('\n')) {
+      const lineWidthDots = this.measureLine(line, charWidthDots);
+      this.buffer.push(cmdText(
+        this.alignX(lineWidthDots, alignment),
+        this.cursorY,
+        fontInfo.font,
+        line,
+        { xMul: fontInfo.xMul, yMul: fontInfo.yMul },
+      ));
+      this.cursorY += lineHeight;
+    }
+    return this;
+  }
+
+  // 流式一维条码
+  streamBarcode(type: BarcodeType, content: string, opts?: {
+    height?: number; showText?: boolean; width?: number; alignment?: Alignment;
+  }): this {
+    const width = Math.max(1, Math.min(4, opts?.width ?? 2));
+    const height = Math.max(8, opts?.height ?? 60);
+    const showText = opts?.showText ?? true;
+    const barWidthDots = (content.length * 8 + 20) * width;
+    this.buffer.push(cmdBarcode(this.alignX(barWidthDots, opts?.alignment ?? 'left'), this.cursorY, type, content, {
+      height, readable: showText ? 1 : 0, narrow: width, wide: width * 2,
+    }));
+    this.cursorY += height + (showText ? 16 : 4);
+    return this;
+  }
+
+  // 流式二维码（按真实模块数计算占用高度）
+  streamQrCode(content: string, opts?: {
+    level?: QrErrorLevel; cellWidth?: number; alignment?: Alignment;
+  }): this {
+    const cell = Math.max(1, Math.min(10, opts?.cellWidth ?? 6));
+    const level = opts?.level ?? 'M';
+    const qrSizeDots = getQrModuleSize(content, level) * cell;
+    this.buffer.push(cmdQrcode(this.alignX(qrSizeDots, opts?.alignment ?? 'left'), this.cursorY, content, {
+      level, cellWidth: cell,
+    }));
+    this.cursorY += qrSizeDots + 4;
+    return this;
+  }
+
+  // 仅推进游标（空行/换行）
+  advance(lines: number = 1): this {
+    this.cursorY += Math.max(0, lines) * 12;
+    return this;
+  }
+
+  private measureLine(line: string, charWidthDots: number): number {
+    // 按显示宽度计算：中文占 2 个字符位
+    return displayWidth(line) * charWidthDots;
+  }
+
+  private alignX(contentWidthDots: number, alignment: Alignment): number {
+    if (alignment === 'center') {
+      return Math.max(0, Math.floor((this.labelWidthDots - contentWidthDots) / 2));
+    }
+    if (alignment === 'right') {
+      return Math.max(0, this.labelWidthDots - contentWidthDots);
+    }
+    return 0;
+  }
 
   // 添加文本元素并推进游标
   private addTextElement(el: TextElement): void {
     const fontInfo = FONT_MAP[el.fontSize] || FONT_MAP[1];
-    // 估算文本宽度（点）：字符数 × 字符宽度 × 放大倍数
-    const charWidthDots = 8 * fontInfo.xMul; // 简化：每字符约 8 点
-    const textWidthDots = byteLength(el.content.split('\n')[0] || '', this.encoding) * charWidthDots;
-    // 根据对齐计算 x 坐标
-    let x = 0;
-    if (el.alignment === 'center') {
-      x = Math.max(0, Math.floor((this.labelWidthDots - textWidthDots) / 2));
-    } else if (el.alignment === 'right') {
-      x = Math.max(0, this.labelWidthDots - textWidthDots);
-    }
-    // 多行文本：每行推进 y
-    const lines = el.content.split('\n');
+    const charWidthDots = 8 * fontInfo.xMul;
     const lineHeight = 8 * fontInfo.yMul + Math.floor(el.lineSpacing / 4);
-    for (const line of lines) {
-      let lineX = x;
-      if (el.alignment === 'center' || el.alignment === 'right') {
-        const lineWidthDots = byteLength(line, this.encoding) * charWidthDots;
-        if (el.alignment === 'center') {
-          lineX = Math.max(0, Math.floor((this.labelWidthDots - lineWidthDots) / 2));
-        } else {
-          lineX = Math.max(0, this.labelWidthDots - lineWidthDots);
-        }
-      }
-      this.buffer.push(cmdText(lineX, this.cursorY, fontInfo.font, line, {
+    for (const line of el.content.split('\n')) {
+      const lineWidthDots = this.measureLine(line, charWidthDots);
+      this.buffer.push(cmdText(this.alignX(lineWidthDots, el.alignment), this.cursorY, fontInfo.font, line, {
         xMul: fontInfo.xMul, yMul: fontInfo.yMul,
       }));
       this.cursorY += lineHeight;
@@ -174,28 +215,18 @@ export class TsplEncoder {
 
   private addBarcodeElement(el: BarcodeElement): void {
     const barWidthDots = (el.content.length * 8 + 20) * el.width;
-    let x = 0;
-    if (el.alignment === 'center') {
-      x = Math.max(0, Math.floor((this.labelWidthDots - barWidthDots) / 2));
-    } else if (el.alignment === 'right') {
-      x = Math.max(0, this.labelWidthDots - barWidthDots);
-    }
-    this.buffer.push(cmdBarcode(x, this.cursorY, el.barcodeType, el.content, {
+    this.buffer.push(cmdBarcode(this.alignX(barWidthDots, el.alignment), this.cursorY, el.barcodeType, el.content, {
       height: el.height, readable: el.showText ? 1 : 0, narrow: el.width, wide: el.width * 2,
     }));
     this.cursorY += el.height + (el.showText ? 16 : 4);
   }
 
   private addQrElement(el: QrCodeElement): void {
-    const qrSizeDots = el.size * 8; // 估算 QR 边长
-    let x = 0;
-    if (el.alignment === 'center') {
-      x = Math.max(0, Math.floor((this.labelWidthDots - qrSizeDots) / 2));
-    } else if (el.alignment === 'right') {
-      x = Math.max(0, this.labelWidthDots - qrSizeDots);
-    }
-    this.buffer.push(cmdQrcode(x, this.cursorY, el.content, {
-      level: el.errorLevel, cellWidth: Math.max(1, Math.min(10, el.size)),
+    // 用真实模块数估算边长，避免预留高度偏小导致后续元素重叠
+    const cellWidth = Math.max(1, Math.min(10, el.size));
+    const qrSizeDots = getQrModuleSize(el.content, el.errorLevel) * cellWidth;
+    this.buffer.push(cmdQrcode(this.alignX(qrSizeDots, el.alignment), this.cursorY, el.content, {
+      level: el.errorLevel, cellWidth,
     }));
     this.cursorY += qrSizeDots + 4;
   }
