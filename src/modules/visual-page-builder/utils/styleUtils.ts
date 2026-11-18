@@ -1,3 +1,54 @@
+import type { CSSProperties, PageNode } from '../types';
+
+/** 画布容器内边距（与 CanvasArea.scss 中 .canvas-container 的 padding 保持一致） */
+export const CANVAS_PADDING = 16;
+
+/**
+ * 可在画布、预览、导出之间共享的节点样式属性白名单
+ * 三处渲染统一消费该列表，避免各自维护导致视觉不一致
+ */
+export const NODE_STYLE_KEYS = [
+  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+  'left', 'top', 'right', 'bottom',
+  'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily',
+  'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+  'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+  'border', 'borderRadius', 'boxShadow', 'opacity',
+  'gap', 'rowGap', 'columnGap',
+  'textAlign', 'lineHeight', 'letterSpacing', 'textDecoration', 'whiteSpace',
+  'overflow', 'cursor', 'objectFit', 'zIndex', 'transform', 'transition',
+  'verticalAlign', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'justifySelf', 'order',
+] as const;
+
+export type NodeStyleKey = typeof NODE_STYLE_KEYS[number];
+
+/**
+ * 将 PageNode 的 style + layout 合并为统一的 CSSProperties
+ * - 仅输出白名单内的样式属性
+ * - layout 中的布局属性优先级高于 style
+ */
+export const buildNodeStyle = (node: PageNode): CSSProperties => {
+  const { style, layout } = node;
+  const result: Record<string, unknown> = {};
+
+  for (const key of NODE_STYLE_KEYS) {
+    const value = style[key];
+    if (value !== undefined && value !== '') {
+      result[key] = value;
+    }
+  }
+
+  // 布局属性：以 layout 为准（覆盖 style 中的同名值）
+  if (layout.display) result.display = layout.display;
+  if (layout.position) result.position = layout.position;
+  if (layout.flexDirection) result.flexDirection = layout.flexDirection;
+  if (layout.flexWrap) result.flexWrap = layout.flexWrap;
+  if (layout.gridTemplateColumns) result.gridTemplateColumns = layout.gridTemplateColumns;
+  if (layout.gridTemplateRows) result.gridTemplateRows = layout.gridTemplateRows;
+
+  return result as CSSProperties;
+};
+
 /**
  * 解析像素值（支持 "100px" / 100 / undefined / null / "" → number）
  *

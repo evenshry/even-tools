@@ -1,5 +1,7 @@
 import type { PageNode, NodeType } from '../types';
 import { NodeType as NodeTypeEnum } from '../types';
+import { NODE_STYLE_KEYS } from './styleUtils';
+import { validateNodeGraph } from './nodeValidation';
 
 /**
  * HTML 转义：防止 XSS，转义 & < > " '
@@ -15,11 +17,18 @@ const escapeHtml = (str: string): string => {
 };
 
 /**
- * JSX 字符串字面量转义：转义单引号和反斜杠，防止破坏 JSX 语法
+ * JSX 字符串字面量转义：转义反斜杠、引号、换行等，防止破坏 JSX 语法
  */
 const escapeJsxString = (str: string): string => {
   if (typeof str !== 'string') return '';
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/\t/g, '\\t')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+    .replace(/'/g, "\\'");
 };
 
 /**
@@ -31,35 +40,22 @@ const hasValue = (value: unknown): boolean => {
 
 /**
  * 将 PageNode.style + layout 合并为单个 CSSProperties 对象
- * 用于代码生成时输出完整的 style
+ * 与画布/预览共用 NODE_STYLE_KEYS 白名单，保证导出视觉一致
  */
 const mergeStyleAndLayout = (node: PageNode): Record<string, string | number> => {
   const { style, layout } = node;
   const merged: Record<string, string | number> = {};
 
-  // 基础样式（用 hasValue 兼容 0 值）
-  if (hasValue(style.width)) merged.width = String(style.width);
-  if (hasValue(style.height)) merged.height = String(style.height);
-  if (hasValue(style.minWidth)) merged.minWidth = String(style.minWidth);
-  if (hasValue(style.minHeight)) merged.minHeight = String(style.minHeight);
-  if (hasValue(style.backgroundColor)) merged.backgroundColor = String(style.backgroundColor);
-  if (hasValue(style.color)) merged.color = String(style.color);
-  if (hasValue(style.fontSize)) merged.fontSize = String(style.fontSize);
-  if (hasValue(style.fontWeight)) merged.fontWeight = String(style.fontWeight);
-  if (hasValue(style.padding)) merged.padding = String(style.padding);
-  if (hasValue(style.margin)) merged.margin = String(style.margin);
-  if (hasValue(style.border)) merged.border = String(style.border);
-  if (hasValue(style.borderRadius)) merged.borderRadius = String(style.borderRadius);
-  if (hasValue(style.boxShadow)) merged.boxShadow = String(style.boxShadow);
-  if (style.opacity !== undefined) merged.opacity = String(style.opacity);
+  for (const key of NODE_STYLE_KEYS) {
+    const value = style[key];
+    if (hasValue(value)) {
+      merged[key] = typeof value === 'number' ? value : String(value);
+    }
+  }
 
-  // 布局样式
+  // 布局属性：以 layout 为准（覆盖 style 中的同名值）
   if (layout.display) merged.display = layout.display;
   if (layout.position) merged.position = layout.position;
-  if (hasValue(style.left)) merged.left = String(style.left);
-  if (hasValue(style.top)) merged.top = String(style.top);
-  if (hasValue(style.right)) merged.right = String(style.right);
-  if (hasValue(style.bottom)) merged.bottom = String(style.bottom);
   if (layout.flexDirection) merged.flexDirection = layout.flexDirection;
   if (layout.flexWrap) merged.flexWrap = layout.flexWrap;
   if (layout.gridTemplateColumns) merged.gridTemplateColumns = layout.gridTemplateColumns;
@@ -78,7 +74,7 @@ const getHtmlTag = (type: NodeType): string => {
     case NodeTypeEnum.INPUT: return 'input';
     case NodeTypeEnum.FORM: return 'form';
     case NodeTypeEnum.SPAN: return 'span';
-    case NodeTypeEnum.TEXT: return 'span';
+    case NodeTypeEnum.TEXT: return 'div';
     case NodeTypeEnum.SELECT: return 'select';
     case NodeTypeEnum.CHECKBOX: return 'input';
     case NodeTypeEnum.VIDEO: return 'video';
@@ -117,6 +113,8 @@ export const generateHTML = (nodes: Record<string, PageNode>, rootId?: string): 
     const styleStr = Object.entries(style)
       .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())}: ${v}`)
       .join('; ');
+    // style 内容可能来自用户输入，写入属性前统一转义
+    const safeStyle = escapeHtml(styleStr);
 
     const childIds = node.content.children || [];
     const children = childIds
@@ -127,29 +125,37 @@ export const generateHTML = (nodes: Record<string, PageNode>, rootId?: string): 
     if (node.type === NodeTypeEnum.IMAGE) {
       const src = escapeHtml(node.content.src || '');
       const alt = escapeHtml(node.name);
-      return `${indent(depth)}<img src="${src}" alt="${alt}" style="${styleStr}" />`;
+      return `${indent(depth)}<img src="${src}" alt="${alt}" style="${safeStyle}" />`;
     }
     if (node.type === NodeTypeEnum.INPUT) {
       const placeholder = escapeHtml(node.content.text || '');
-      return `${indent(depth)}<input type="text" placeholder="${placeholder}" style="${styleStr}" />`;
+      return `${indent(depth)}<input type="text" placeholder="${placeholder}" style="${safeStyle}" />`;
     }
     if (node.type === NodeTypeEnum.CHECKBOX) {
       const label = escapeHtml(node.content.text || '');
-      return `${indent(depth)}<label style="${styleStr}"><input type="checkbox" />${label}</label>`;
+      return `${indent(depth)}<label style="${safeStyle}"><input type="checkbox" />${label}</label>`;
+    }
+    if (node.type === NodeTypeEnum.SELECT) {
+      const option = escapeHtml(node.content.text || '请选择');
+      return `${indent(depth)}<select style="${safeStyle}"><option>${option}</option></select>`;
+    }
+    if (node.type === NodeTypeEnum.VIDEO) {
+      const src = escapeHtml(node.content.src || '');
+      return `${indent(depth)}<video src="${src}" style="${safeStyle}" controls></video>`;
     }
 
     // 文本内容（转义防止 XSS）
     const textContent = escapeHtml(node.content.text || '');
 
     if (children.length === 0 && textContent) {
-      return `${indent(depth)}<${tag} style="${styleStr}">${textContent}</${tag}>`;
+      return `${indent(depth)}<${tag} style="${safeStyle}">${textContent}</${tag}>`;
     }
     if (children.length === 0) {
-      return `${indent(depth)}<${tag} style="${styleStr}"></${tag}>`;
+      return `${indent(depth)}<${tag} style="${safeStyle}"></${tag}>`;
     }
 
     const inner = children.map((c) => renderNode(c, depth + 1)).join('\n');
-    return `${indent(depth)}<${tag} style="${styleStr}">\n${inner}\n${indent(depth)}</${tag}>`;
+    return `${indent(depth)}<${tag} style="${safeStyle}">\n${inner}\n${indent(depth)}</${tag}>`;
   };
 
   const body = rootNodes.map((n) => renderNode(n, 1)).join('\n');
@@ -200,6 +206,14 @@ export const generateReact = (nodes: Record<string, PageNode>, rootId?: string):
     if (node.type === NodeTypeEnum.CHECKBOX) {
       const label = escapeJsxString(node.content.text || '');
       return `${indent(depth)}<label style={${styleStr}}><input type="checkbox" />${label}</label>`;
+    }
+    if (node.type === NodeTypeEnum.SELECT) {
+      const option = escapeJsxString(node.content.text || '请选择');
+      return `${indent(depth)}<select style={${styleStr}}><option>{'${option}'}</option></select>`;
+    }
+    if (node.type === NodeTypeEnum.VIDEO) {
+      const src = escapeJsxString(node.content.src || '');
+      return `${indent(depth)}<video src={'${src}'} style={${styleStr}} controls />`;
     }
 
     const textContent = node.content.text || '';
@@ -338,7 +352,14 @@ export const parseSchema = (raw: string): SchemaParseResult => {
   }
 
   const sourceNodes = schema.nodes as Record<string, unknown>;
-  const result: Record<string, PageNode> = {};
+
+  // 结构安全校验：类型白名单、id 一致性、children 引用、循环引用、危险键
+  const validation = validateNodeGraph(sourceNodes);
+  if (!validation.ok) {
+    return { ok: false, error: validation.error || '节点结构无效' };
+  }
+
+  const result: Record<string, PageNode> = Object.create(null);
 
   for (const [id, rawNode] of Object.entries(sourceNodes)) {
     if (!rawNode || typeof rawNode !== 'object' || Array.isArray(rawNode)) {

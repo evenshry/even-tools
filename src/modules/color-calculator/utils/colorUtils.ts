@@ -107,12 +107,34 @@ export function getLuminance(r: number, g: number, b: number): number {
   return 0.2126 * R + 0.7152 * G + 0.0722 * B;
 }
 
-export function getContrastRatio(color1: string, color2: string): number {
-  const rgb1 = hexToRgb(color1);
-  const rgb2 = hexToRgb(color2);
+function compositeOver(foreground: ColorCalculator.RGB, background: ColorCalculator.RGB): ColorCalculator.RGB {
+  const alpha = foreground.a === undefined ? 1 : Math.min(1, Math.max(0, foreground.a));
+  if (alpha >= 1) {
+    return foreground;
+  }
+  const blend = (fg: number, bg: number) => Math.round(fg * alpha + bg * (1 - alpha));
+  return {
+    r: blend(foreground.r, background.r),
+    g: blend(foreground.g, background.g),
+    b: blend(foreground.b, background.b),
+  };
+}
 
-  const l1 = getLuminance(rgb1.r, rgb1.g, rgb1.b);
-  const l2 = getLuminance(rgb2.r, rgb2.g, rgb2.b);
+export function getContrastRatio(color1: string, color2: string): number {
+  if (!isValidHex(color1) || !isValidHex(color2)) {
+    return 0;
+  }
+
+  const rawBackground = hexToRgb(color2);
+  // 背景若半透明，先按白色底合成，避免计算亮度时忽略透明度
+  const background =
+    rawBackground.a !== undefined && rawBackground.a < 1
+      ? compositeOver(rawBackground, { r: 255, g: 255, b: 255 })
+      : rawBackground;
+  const foreground = compositeOver(hexToRgb(color1), background);
+
+  const l1 = getLuminance(foreground.r, foreground.g, foreground.b);
+  const l2 = getLuminance(background.r, background.g, background.b);
 
   const lighter = Math.max(l1, l2);
   const darker = Math.min(l1, l2);
@@ -219,11 +241,14 @@ export function generateMonochromaticColors(hex: string): string[] {
     colors.push(rgbToHex(color.r, color.g, color.b));
   }
 
-  return colors;
+  // 亮度被截断到 0/100 时会产生重复色，去重并排除原色本身
+  const originalHex = hex.startsWith("#") ? hex.toLowerCase() : `#${hex.toLowerCase()}`;
+  return Array.from(new Set(colors)).filter((color) => color.toLowerCase() !== originalHex);
 }
 
 export function isValidHex(hex: string): boolean {
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8}|[A-Fa-f0-9]{3}|[A-Fa-f0-9]{4})$/.test(hex);
+  // 允许省略 #，兼容从本应用复制出来的无前缀 HEX
+  return /^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8}|[A-Fa-f0-9]{3}|[A-Fa-f0-9]{4})$/.test(hex.trim());
 }
 
 export function getContrastLevel(ratio: number): string {
@@ -234,9 +259,10 @@ export function getContrastLevel(ratio: number): string {
 }
 
 export function getContrastColor(backgroundColor: string): string {
-  const rgb = hexToRgb(backgroundColor);
-  const luminance = getLuminance(rgb.r, rgb.g, rgb.b);
-  return luminance > 0.5 ? "#000000" : "#FFFFFF";
+  // 分别计算黑白两色的对比度，返回可读性更高的那个
+  const blackContrast = getContrastRatio(backgroundColor, "#000000");
+  const whiteContrast = getContrastRatio(backgroundColor, "#FFFFFF");
+  return whiteContrast >= blackContrast ? "#FFFFFF" : "#000000";
 }
 
 export function hexToRgbaString(hex: string): string {
@@ -255,17 +281,21 @@ export interface ParseColorResult {
 }
 
 export function parseRgb(rgbString: string): ColorCalculator.RGB | null {
-  const rgbaRegex = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i;
+  const rgbaRegex = /^rgba?\(\s*(\d*\.?\d+)\s*,\s*(\d*\.?\d+)\s*,\s*(\d*\.?\d+)(?:\s*,\s*(\d*\.?\d+))?\s*\)$/i;
   const match = rgbaRegex.exec(rgbString);
   
   if (match) {
-    const r = parseInt(match[1], 10);
-    const g = parseInt(match[2], 10);
-    const b = parseInt(match[3], 10);
-    const a = match[4] ? parseFloat(match[4]) : undefined;
+    const r = parseFloat(match[1]);
+    const g = parseFloat(match[2]);
+    const b = parseFloat(match[3]);
+    const a = match[4] !== undefined ? parseFloat(match[4]) : undefined;
     
-    if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
-      if (a !== undefined && (a < 0 || a > 1)) {
+    if (
+      Number.isFinite(r) && r >= 0 && r <= 255 &&
+      Number.isFinite(g) && g >= 0 && g <= 255 &&
+      Number.isFinite(b) && b >= 0 && b <= 255
+    ) {
+      if (a !== undefined && (!Number.isFinite(a) || a < 0 || a > 1)) {
         return null;
       }
       return { r, g, b, a };
@@ -276,17 +306,22 @@ export function parseRgb(rgbString: string): ColorCalculator.RGB | null {
 }
 
 export function parseHsl(hslString: string): ColorCalculator.HSL | null {
-  const hslaRegex = /^hsla?\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%(?:\s*,\s*([\d.]+))?\s*\)$/i;
+  const hslaRegex = /^hsla?\(\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)%\s*,\s*(-?\d*\.?\d+)%(?:\s*,\s*(\d*\.?\d+))?\s*\)$/i;
   const match = hslaRegex.exec(hslString);
   
   if (match) {
-    const h = parseInt(match[1], 10);
-    const s = parseInt(match[2], 10);
-    const l = parseInt(match[3], 10);
-    const a = match[4] ? parseFloat(match[4]) : undefined;
+    const s = parseFloat(match[2]);
+    const l = parseFloat(match[3]);
+    const a = match[4] !== undefined ? parseFloat(match[4]) : undefined;
+    // 色相支持负数与小数，统一归一化到 [0, 360)
+    const h = ((parseFloat(match[1]) % 360) + 360) % 360;
     
-    if (h >= 0 && h <= 360 && s >= 0 && s <= 100 && l >= 0 && l <= 100) {
-      if (a !== undefined && (a < 0 || a > 1)) {
+    if (
+      Number.isFinite(h) &&
+      Number.isFinite(s) && s >= 0 && s <= 100 &&
+      Number.isFinite(l) && l >= 0 && l <= 100
+    ) {
+      if (a !== undefined && (!Number.isFinite(a) || a < 0 || a > 1)) {
         return null;
       }
       return { h, s, l, a };
@@ -300,7 +335,7 @@ export function parseColor(colorString: string): string | null {
   const trimmed = colorString.trim();
   
   if (isValidHex(trimmed)) {
-    return trimmed;
+    return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
   }
   
   const rgb = parseRgb(trimmed);
@@ -330,7 +365,7 @@ export function parseColorWithDetails(colorString: string): ParseColorResult {
   if (isValidHex(trimmed)) {
     return {
       success: true,
-      color: trimmed,
+      color: trimmed.startsWith("#") ? trimmed : `#${trimmed}`,
       format: "HEX"
     };
   }

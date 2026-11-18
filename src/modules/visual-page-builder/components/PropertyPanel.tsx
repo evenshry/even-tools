@@ -483,7 +483,7 @@ const MultiSelectToolbar: React.FC = () => {
       <Card
         size="small"
         style={{ marginBottom: '12px' }}
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div className="multi-select-header">
           <Space align="center" style={{ width: '100%' }}>
@@ -507,7 +507,7 @@ const MultiSelectToolbar: React.FC = () => {
       </Card>
 
       {/* 批量操作 */}
-      <Card size="small" style={{ marginBottom: '12px' }} bodyStyle={{ padding: '12px' }}>
+      <Card size="small" style={{ marginBottom: '12px' }} styles={{ body: { padding: '12px' } }}>
         <div className="batch-section">
           <Text strong style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>
             批量对齐
@@ -561,7 +561,7 @@ const MultiSelectToolbar: React.FC = () => {
       <Card
         size="small"
         title={<Text strong style={{ fontSize: '12px' }}>选中节点列表</Text>}
-        bodyStyle={{ padding: '8px', maxHeight: '300px', overflow: 'auto' }}
+        styles={{ body: { padding: '8px', maxHeight: '300px', overflow: 'auto' } }}
       >
         <div className="selected-node-list">
           {selectedNodeIds.map((id) => {
@@ -686,7 +686,7 @@ const PropertyPanel: React.FC = () => {
       <Card 
         size="small" 
         style={{ marginBottom: '16px' }}
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div className="node-info">
           <Space align="start" style={{ width: '100%' }}>

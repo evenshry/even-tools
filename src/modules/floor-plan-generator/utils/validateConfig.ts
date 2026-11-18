@@ -12,7 +12,8 @@ const FURNITURE_TYPES = ['bed', 'sofa', 'table', 'chair', 'cabinet', 'desk', 'wa
 const POSITIONS = ['left', 'right', 'top', 'bottom'] as const;
 
 const isString = (v: unknown): v is string => typeof v === 'string';
-const isNumber = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v);
+const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isPositiveNumber = (v: unknown): v is number => isNumber(v) && v > 0;
 const isOneOf = <T extends string>(v: unknown, list: readonly T[]): v is T =>
   isString(v) && (list as readonly string[]).includes(v);
 
@@ -29,14 +30,22 @@ export const validateHouseConfig = (data: unknown): ValidationResult => {
   if (!isString(data.name)) return { valid: false, error: '缺少有效的 name 字段' };
   if (!Array.isArray(data.rooms)) return { valid: false, error: 'rooms 必须为数组' };
 
+  // ID 必须唯一，否则更新/删除会误伤多个元素
+  const roomIds = new Set<string>();
+  const doorIds = new Set<string>();
+  const windowIds = new Set<string>();
+  const furnitureIds = new Set<string>();
+
   for (let i = 0; i < data.rooms.length; i += 1) {
     const r = data.rooms[i];
     const ctx = `rooms[${i}]`;
     if (!isPlainObject(r)) return { valid: false, error: `${ctx} 必须是对象` };
     if (!isString(r.id)) return { valid: false, error: `${ctx} 缺少 id` };
+    if (roomIds.has(r.id)) return { valid: false, error: `${ctx} id 重复：${r.id}` };
+    roomIds.add(r.id);
     if (!isOneOf(r.type, ROOM_TYPES)) return { valid: false, error: `${ctx} 房间类型无效` };
     if (!isString(r.name)) return { valid: false, error: `${ctx} 缺少 name` };
-    if (!isNumber(r.width) || !isNumber(r.height)) return { valid: false, error: `${ctx} 缺少有效的 width/height` };
+    if (!isPositiveNumber(r.width) || !isPositiveNumber(r.height)) return { valid: false, error: `${ctx} 缺少有效的 width/height` };
     if (!isNumber(r.x) || !isNumber(r.y)) return { valid: false, error: `${ctx} 缺少有效的 x/y` };
     if (!Array.isArray(r.doors)) return { valid: false, error: `${ctx} doors 必须为数组` };
     if (!Array.isArray(r.windows)) return { valid: false, error: `${ctx} windows 必须为数组` };
@@ -47,10 +56,16 @@ export const validateHouseConfig = (data: unknown): ValidationResult => {
       const dctx = `${ctx}.doors[${j}]`;
       if (!isPlainObject(d)) return { valid: false, error: `${dctx} 必须是对象` };
       if (!isString(d.id)) return { valid: false, error: `${dctx} 缺少 id` };
+      if (doorIds.has(d.id)) return { valid: false, error: `${dctx} id 重复：${d.id}` };
+      doorIds.add(d.id);
       if (!isOneOf(d.type, DOOR_TYPES)) return { valid: false, error: `${dctx} 门类型无效` };
-      if (!isNumber(d.width)) return { valid: false, error: `${dctx} 缺少 width` };
+      if (!isPositiveNumber(d.width)) return { valid: false, error: `${dctx} 缺少 width` };
       if (!isOneOf(d.position, POSITIONS)) return { valid: false, error: `${dctx} position 无效` };
       if (!isNumber(d.offset)) return { valid: false, error: `${dctx} 缺少 offset` };
+      if (d.x !== undefined && !isNumber(d.x)) return { valid: false, error: `${dctx} x 无效` };
+      if (d.y !== undefined && !isNumber(d.y)) return { valid: false, error: `${dctx} y 无效` };
+      if (d.height !== undefined && !isPositiveNumber(d.height)) return { valid: false, error: `${dctx} height 无效` };
+      if (d.rotation !== undefined && !isNumber(d.rotation)) return { valid: false, error: `${dctx} rotation 无效` };
     }
 
     for (let j = 0; j < r.windows.length; j += 1) {
@@ -58,10 +73,16 @@ export const validateHouseConfig = (data: unknown): ValidationResult => {
       const wctx = `${ctx}.windows[${j}]`;
       if (!isPlainObject(w)) return { valid: false, error: `${wctx} 必须是对象` };
       if (!isString(w.id)) return { valid: false, error: `${wctx} 缺少 id` };
+      if (windowIds.has(w.id)) return { valid: false, error: `${wctx} id 重复：${w.id}` };
+      windowIds.add(w.id);
       if (!isOneOf(w.type, WINDOW_TYPES)) return { valid: false, error: `${wctx} 窗户类型无效` };
-      if (!isNumber(w.width)) return { valid: false, error: `${wctx} 缺少 width` };
+      if (!isPositiveNumber(w.width)) return { valid: false, error: `${wctx} 缺少 width` };
       if (!isOneOf(w.position, POSITIONS)) return { valid: false, error: `${wctx} position 无效` };
       if (!isNumber(w.offset)) return { valid: false, error: `${wctx} 缺少 offset` };
+      if (w.x !== undefined && !isNumber(w.x)) return { valid: false, error: `${wctx} x 无效` };
+      if (w.y !== undefined && !isNumber(w.y)) return { valid: false, error: `${wctx} y 无效` };
+      if (w.height !== undefined && !isPositiveNumber(w.height)) return { valid: false, error: `${wctx} height 无效` };
+      if (w.rotation !== undefined && !isNumber(w.rotation)) return { valid: false, error: `${wctx} rotation 无效` };
     }
 
     for (let j = 0; j < r.furniture.length; j += 1) {
@@ -69,10 +90,13 @@ export const validateHouseConfig = (data: unknown): ValidationResult => {
       const fctx = `${ctx}.furniture[${j}]`;
       if (!isPlainObject(f)) return { valid: false, error: `${fctx} 必须是对象` };
       if (!isString(f.id)) return { valid: false, error: `${fctx} 缺少 id` };
+      if (furnitureIds.has(f.id)) return { valid: false, error: `${fctx} id 重复：${f.id}` };
+      furnitureIds.add(f.id);
       if (!isOneOf(f.type, FURNITURE_TYPES)) return { valid: false, error: `${fctx} 家具类型无效` };
       if (!isString(f.name)) return { valid: false, error: `${fctx} 缺少 name` };
-      if (!isNumber(f.width) || !isNumber(f.height)) return { valid: false, error: `${fctx} 缺少有效的 width/height` };
+      if (!isPositiveNumber(f.width) || !isPositiveNumber(f.height)) return { valid: false, error: `${fctx} 缺少有效的 width/height` };
       if (!isNumber(f.x) || !isNumber(f.y)) return { valid: false, error: `${fctx} 缺少有效的 x/y` };
+      if (f.rotation !== undefined && !isNumber(f.rotation)) return { valid: false, error: `${fctx} rotation 无效` };
     }
   }
 

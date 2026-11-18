@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import { NodeType } from '../types';
 import { useCanvasStore } from '../store/useCanvasStore';
-import type { DragManager } from '../hooks/useDragManager';
 import type { PageNode } from '../types';
+import { buildNodeStyle } from '../utils/styleUtils';
 import NodeContextMenu from './NodeContextMenu';
 import ResizeHandles from './ResizeHandles';
 
@@ -13,7 +13,10 @@ const Z_INDEX_DEFAULT = 100;
 interface CanvasNodeProps {
   nodeId: string;
   zoom: number;
-  dragManager: DragManager;
+  /** 当前正在拖拽的节点 ID（用于 dragging 样式） */
+  dragNodeId: string | null;
+  /** 稳定的拖拽开始回调 */
+  onNodeDragStart: (e: React.MouseEvent, nodeId: string) => void;
 }
 
 /** 空容器提示文字映射 */
@@ -35,75 +38,45 @@ const CONTAINER_TYPES = new Set<string>([
 ]);
 
 /**
- * 构建节点样式：将 PageNode.style 转为 React.CSSProperties
- * 编辑模式下同时应用 layout 属性（display/position 等），保证所见即所得
+ * 文本类样式：颜色/字体等可继承属性
+ * 只应用到内容元素，避免与 wrapper 上的 padding/border/margin 重复计算
  */
-const buildNodeStyle = (node: PageNode): React.CSSProperties => {
-  const { style, layout } = node;
-  return {
-    display: layout.display,
-    position: layout.position,
-    flexDirection: layout.flexDirection,
-    flexWrap: layout.flexWrap,
-    gridTemplateColumns: layout.gridTemplateColumns,
-    gridTemplateRows: layout.gridTemplateRows,
-    left: style.left,
-    top: style.top,
-    width: style.width,
-    height: style.height,
-    backgroundColor: style.backgroundColor,
-    border: style.border,
-    borderRadius: style.borderRadius,
-    padding: style.padding,
-    margin: style.margin,
-    gap: style.gap,
-    color: style.color,
-    fontSize: style.fontSize,
-    fontWeight: style.fontWeight,
-    boxShadow: style.boxShadow,
-    opacity: style.opacity,
-  };
-};
+const getTextStyle = (node: PageNode): React.CSSProperties => ({
+  color: node.style.color,
+  fontSize: node.style.fontSize,
+  fontWeight: node.style.fontWeight,
+  fontFamily: node.style.fontFamily,
+  lineHeight: node.style.lineHeight,
+  letterSpacing: node.style.letterSpacing,
+  textDecoration: node.style.textDecoration,
+  whiteSpace: node.style.whiteSpace,
+  textAlign: node.style.textAlign,
+});
 
 /**
- * 节点内容渲染：对齐 PreviewRenderer 的渲染逻辑
- * - 容器节点：渲染子节点 + 空状态提示
- * - 内容节点：直接渲染语义元素 + 应用节点样式
+ * 节点内容渲染
+ * - 布局（display/flex/grid）与盒模型（padding/border/margin）统一由 wrapper 承担
+ * - 内容元素只负责文本语义与字体颜色，避免样式重复应用
  */
 const renderNodeContent = (node: PageNode, renderChildren: () => React.ReactNode): React.ReactNode => {
-  const { type, content, style, layout } = node;
+  const { type, content, style } = node;
   const children = content.children || [];
   const hasChildren = children.length > 0;
-  const styleObj: React.CSSProperties = {
-    backgroundColor: style.backgroundColor,
-    color: style.color,
-    fontSize: style.fontSize,
-    fontWeight: style.fontWeight,
-    border: style.border,
-    borderRadius: style.borderRadius,
-    padding: style.padding,
-    margin: style.margin,
-    boxShadow: style.boxShadow,
-    opacity: style.opacity,
-  };
+  const textStyle = getTextStyle(node);
 
-  // 容器类型：渲染子节点
+  // DIV 既可包含子节点，也可直接承载文本
+  if (type === NodeType.DIV) {
+    return (
+      <>
+        {content.text ? <div style={textStyle}>{content.text}</div> : null}
+        {renderChildren()}
+        {!hasChildren && !content.text && <span className="empty-hint">{EMPTY_HINT[type]}</span>}
+      </>
+    );
+  }
+
+  // 容器类型：wrapper 已是 flex/grid 容器，直接渲染子节点
   if (CONTAINER_TYPES.has(type)) {
-    if (type === NodeType.FLEX) {
-      return (
-        <div style={{ display: 'flex', flexDirection: layout.flexDirection || 'row', flexWrap: layout.flexWrap || 'nowrap', gap: style.gap }}>
-          {hasChildren ? renderChildren() : <span className="empty-hint">{EMPTY_HINT[type]}</span>}
-        </div>
-      );
-    }
-    if (type === NodeType.GRID) {
-      return (
-        <div style={{ display: 'grid', gridTemplateColumns: layout.gridTemplateColumns, gridTemplateRows: layout.gridTemplateRows, gap: style.gap }}>
-          {hasChildren ? renderChildren() : <span className="empty-hint">{EMPTY_HINT[type]}</span>}
-        </div>
-      );
-    }
-    // 普通容器
     return (
       <>
         {renderChildren()}
@@ -115,50 +88,54 @@ const renderNodeContent = (node: PageNode, renderChildren: () => React.ReactNode
   // 内容节点
   switch (type) {
     case NodeType.BUTTON:
-      return <button style={styleObj}>{content.text || '按钮'}</button>;
+      return <button style={textStyle}>{content.text || '按钮'}</button>;
     case NodeType.TEXT:
-      return <div style={styleObj}>{content.text || '文本'}</div>;
+      return <div style={textStyle}>{content.text || '文本'}</div>;
     case NodeType.HEADING:
-      return <h2 style={styleObj}>{content.text || '标题'}</h2>;
+      return <h2 style={textStyle}>{content.text || '标题'}</h2>;
     case NodeType.SPAN:
-      return <span style={styleObj}>{content.text || '行内文本'}</span>;
+      return <span style={textStyle}>{content.text || '行内文本'}</span>;
     case NodeType.INPUT:
-      return <input style={styleObj} placeholder={content.text || '输入框'} readOnly />;
+      return <input style={textStyle} placeholder={content.text || '输入框'} readOnly />;
     case NodeType.SELECT:
       return (
-        <select style={styleObj} disabled>
+        <select style={textStyle} disabled>
           <option>{content.text || '下拉选择'}</option>
         </select>
       );
     case NodeType.CHECKBOX:
       return (
-        <label style={styleObj}>
+        <label style={textStyle}>
           <input type="checkbox" disabled />
           <span>{content.text || '复选框'}</span>
         </label>
       );
     case NodeType.IMAGE:
       return content.src ? (
-        <img src={content.src} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        <img
+          src={content.src}
+          alt=""
+          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: style.objectFit ?? 'contain' }}
+        />
       ) : (
         <div className="image-empty-hint">🖼️ 图片</div>
       );
     case NodeType.VIDEO:
       return content.src ? (
-        <video src={content.src} style={{ maxWidth: '100%', maxHeight: '100%' }} controls />
+        <video src={content.src} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: style.objectFit }} controls />
       ) : (
         <div className="image-empty-hint">🎬 视频</div>
       );
     case NodeType.ICON:
-      return <div className="image-empty-hint">⭐ 图标</div>;
+      return <div className="image-empty-hint">{content.text || '⭐ 图标'}</div>;
     default:
       return <span className="empty-hint">{type}</span>;
   }
 };
 
-const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragManager }) => {
+const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragNodeId, onNodeDragStart }) => {
   const node = useCanvasStore(s => s.nodes[nodeId]);
-  const isSelected = useCanvasStore(s => s.selectedNodeIds.includes(nodeId) || s.selectedNodeId === nodeId);
+  const isSelected = useCanvasStore(s => s.selectedNodeIds.includes(nodeId));
   const isHovered = useCanvasStore(s => s.hoveredNodeId === nodeId);
   const isDragTarget = useCanvasStore(s => s.dragTargetNodeId === nodeId);
 
@@ -171,31 +148,38 @@ const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragManager 
     const childIds = node.content.children || [];
     if (childIds.length === 0) return null;
     return childIds.map((cid) => (
-      <CanvasNode key={cid} nodeId={cid} zoom={zoom} dragManager={dragManager} />
+      <CanvasNode key={cid} nodeId={cid} zoom={zoom} dragNodeId={dragNodeId} onNodeDragStart={onNodeDragStart} />
     ));
   };
 
   const zIndex = isSelected ? Z_INDEX_SELECTED : isHovered ? Z_INDEX_HOVERED : Z_INDEX_DEFAULT;
 
+  /** 选择逻辑统一放在 mousedown，避免拖拽开始时空多选 */
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const store = useCanvasStore.getState();
+    if (e.shiftKey) {
+      store.addToSelection(nodeId);
+    } else if (e.ctrlKey || e.metaKey) {
+      store.toggleNodeSelection(nodeId);
+    } else {
+      store.selectNode(nodeId);
+    }
+    if (supportsDrag) {
+      onNodeDragStart(e, nodeId);
+    }
+  };
+
   return (
     <NodeContextMenu nodeId={nodeId}>
       <div
         data-node-id={nodeId}
-        className={`canvas-node ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""} ${dragManager.dragNodeId === nodeId ? "dragging" : ""} ${
+        className={`canvas-node ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""} ${dragNodeId === nodeId ? "dragging" : ""} ${
           supportsDrag ? "draggable" : "flow-layout"
         } ${isDragTarget ? "drag-target" : ""}`}
         style={{ ...nodeStyle, zIndex }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (e.shiftKey) {
-            useCanvasStore.getState().addToSelection(nodeId);
-          } else if (e.ctrlKey || e.metaKey) {
-            useCanvasStore.getState().toggleNodeSelection(nodeId);
-          } else {
-            useCanvasStore.getState().selectNode(nodeId);
-          }
-        }}
-        onMouseDown={supportsDrag ? (e) => dragManager.handleNodeDragStart(e, nodeId) : undefined}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={handleMouseDown}
         onMouseEnter={() => useCanvasStore.getState().hoverNode(nodeId)}
         onMouseLeave={() => useCanvasStore.getState().hoverNode(null)}
       >
@@ -210,7 +194,10 @@ const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragManager 
 };
 
 const CanvasNode = memo(CanvasNodeInner, (prev, next) => {
-  return prev.nodeId === next.nodeId && prev.dragManager === next.dragManager && prev.zoom === next.zoom;
+  return prev.nodeId === next.nodeId
+    && prev.dragNodeId === next.dragNodeId
+    && prev.zoom === next.zoom
+    && prev.onNodeDragStart === next.onNodeDragStart;
 });
 
 export default CanvasNode;

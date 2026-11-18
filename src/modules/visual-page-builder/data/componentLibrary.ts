@@ -294,7 +294,7 @@ export const componentLibrary: ComponentLibraryItem[] = [
         borderRadius: "4px",
       },
       content: {
-        src: "https://via.placeholder.com/200x150",
+        src: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150'%3E%3Crect width='200' height='150' fill='%23e5e7eb'/%3E%3Ctext x='100' y='80' font-size='14' text-anchor='middle' fill='%23999999'%3E%E5%9B%BE%E7%89%87%3C/text%3E%3C/svg%3E",
       },
       constraints: {
         canDelete: true,

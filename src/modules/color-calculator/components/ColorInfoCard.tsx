@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, Typography, Space, Button } from "antd";
 import { CopyOutlined, CheckOutlined } from "@ant-design/icons";
 import { hexToRgb, rgbToHsl, hexToRgbaString } from "@/modules/color-calculator/utils/colorUtils";
@@ -14,6 +15,8 @@ interface ColorInfoCardProps {
 const ColorInfoCard = ({ color, label, copied, onCopy }: ColorInfoCardProps) => {
   const rgb = hexToRgb(color);
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b, rgb.a);
+  // 状态中可能不带 #，展示与复制时统一补全
+  const hexValue = color.startsWith("#") ? color : `#${color}`;
 
   const rgbString = rgb.a !== undefined ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${rgb.a.toFixed(2)})` : `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
 
@@ -32,12 +35,12 @@ const ColorInfoCard = ({ color, label, copied, onCopy }: ColorInfoCardProps) => 
         <div className="color-value">
           <Text type="secondary">HEX:</Text>
           <Space>
-            <Text code>{color}</Text>
+            <Text code>{hexValue}</Text>
             <Button
               type="text"
               size="small"
-              icon={copied === color ? <CheckOutlined /> : <CopyOutlined />}
-              onClick={() => onCopy(color)}
+              icon={copied === hexValue ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={() => onCopy(hexValue)}
             />
           </Space>
         </div>
@@ -70,4 +73,4 @@ const ColorInfoCard = ({ color, label, copied, onCopy }: ColorInfoCardProps) => 
   );
 };
 
-export default ColorInfoCard;
+export default memo(ColorInfoCard);

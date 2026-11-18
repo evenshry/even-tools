@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Card, Typography, Row, Col } from "antd";
 import {
   generateComplementaryColors,
@@ -15,10 +16,16 @@ interface ColorHarmoniesProps {
 }
 
 const ColorHarmonies = ({ foregroundColor, onCopy }: ColorHarmoniesProps) => {
-  const complementary = generateComplementaryColors(foregroundColor);
-  const analogous = generateAnalogousColors(foregroundColor);
-  const triadic = generateTriadicColors(foregroundColor);
-  const monochromatic = generateMonochromaticColors(foregroundColor);
+  // 仅在颜色变化时重新计算，避免切换 Tab 时重复计算
+  const { complementary, analogous, triadic, monochromatic } = useMemo(
+    () => ({
+      complementary: generateComplementaryColors(foregroundColor),
+      analogous: generateAnalogousColors(foregroundColor),
+      triadic: generateTriadicColors(foregroundColor),
+      monochromatic: generateMonochromaticColors(foregroundColor),
+    }),
+    [foregroundColor]
+  );
 
   const renderColorPalette = (title: string, colors: string[]) => (
     <Card size="small" className="harmony-card">
@@ -58,4 +65,4 @@ const ColorHarmonies = ({ foregroundColor, onCopy }: ColorHarmoniesProps) => {
   );
 };
 
-export default ColorHarmonies;
+export default memo(ColorHarmonies);

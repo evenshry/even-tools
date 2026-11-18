@@ -80,6 +80,8 @@ export interface PageNode {
   layout: {
     type: LayoutType;
     display: string;
+    /** 隐藏前的 display 值，用于图层/事件恢复可见性 */
+    hiddenDisplay?: string;
     position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
     flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
     flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
@@ -164,7 +166,6 @@ export interface CanvasState {
   selectedNodeId: string | null;
   hoveredNodeId: string | null;
   dragTargetNodeId: string | null;
-  zoom: number;
   gridVisible: boolean;
   alignmentGuidesVisible: boolean;
   /** 当前显示的对齐参考线（拖动结束自动清空） */

@@ -12,6 +12,8 @@ import "./FloorPlanGenerator.scss";
 
 const { Content } = Layout;
 
+type ExportType = "svg" | "png" | "json" | "copySvg";
+
 const FloorPlanGenerator: React.FC = () => {
   const {
     previewMode,
@@ -37,15 +39,20 @@ const FloorPlanGenerator: React.FC = () => {
     </div>
   );
 
-  // 渲染预览模式
+  // 渲染预览模式（保留退出入口，避免无法返回编辑）
   const renderPreviewMode = () => (
     <div className="preview-layout">
+      <div className="preview-controls">
+        <Button size="small" type="primary" icon={<EyeOutlined />} onClick={togglePreview}>
+          退出预览
+        </Button>
+      </div>
       <CanvasArea previewMode={true} />
     </div>
   );
 
   // 导出功能
-  const handleExport = async (type: "svg" | "png" | "json" | "copySvg") => {
+  const handleExport = async (type: ExportType) => {
     if (houseConfig.rooms.length === 0) {
       message.warning("请先添加房间");
       return;
@@ -66,7 +73,7 @@ const FloorPlanGenerator: React.FC = () => {
         message.success("已复制 SVG 到剪贴板");
       }
     } catch {
-      message.error("导出失败");
+      message.error(type === "copySvg" ? "复制失败" : "导出失败");
     }
   };
 
@@ -147,7 +154,7 @@ const FloorPlanGenerator: React.FC = () => {
               { key: "json", label: "导出 JSON" },
               { key: "copySvg", label: "复制 SVG" }
             ],
-            onClick: ({ key }) => handleExport(key as any)
+            onClick: ({ key }) => handleExport(key as ExportType)
           }}
         >
           <Button size="small" icon={<ExportOutlined />}>

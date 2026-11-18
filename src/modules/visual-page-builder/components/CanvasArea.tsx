@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react';
 import { Button, Tooltip, Space } from 'antd';
 import {
   BorderOuterOutlined,
@@ -9,7 +9,6 @@ import {
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { useDragManager } from '../hooks/useDragManager';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import CanvasNode from './CanvasNode';
 import AlignmentGuides from './AlignmentGuides';
 import Ruler from './Ruler';
@@ -22,7 +21,10 @@ interface CanvasAreaProps {
 const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
   // 画布引用和状态
   const canvasRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  // 节点树未缩放高度：用于放大时撑开滚动区域
+  const [treeHeight, setTreeHeight] = useState(0);
 
   // 网格与对齐参考线开关统一来自 store，避免本地状态与 store 不同步
   const gridVisible = useCanvasStore((s) => s.gridVisible);
@@ -35,21 +37,30 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
     enableDebounce: true,
     debounceDelay: 16,
     enableBoundaryCheck: true,
-    enableDragConstraints: true
   });
 
   // 仅订阅 nodes 引用（用于根节点列表）
   const nodes = useCanvasStore(s => s.nodes);
 
-  // 启用键盘快捷键
-  useKeyboardShortcuts(true);
-
-  // 合并refs - 将拖拽管理器的drop引用与canvas引用合并
-  // 用 useCallback 稳定引用，避免每次渲染触发 ref null 重新挂载
+  // 合并 refs - 通过 ref 读取最新 drop，避免 ref 回调每次拖拽都重新挂载
+  const dropRef = useRef(dragManager.drop);
+  dropRef.current = dragManager.drop;
   const setCanvasRef = useCallback((element: HTMLDivElement | null) => {
     canvasRef.current = element;
-    dragManager.drop(element);
-  }, [dragManager]);
+    dropRef.current(element);
+  }, []);
+
+  // 监听节点树尺寸，缩放后同步滚动高度
+  useLayoutEffect(() => {
+    const element = treeRef.current;
+    if (!element) return;
+    const updateHeight = () => setTreeHeight(element.offsetHeight);
+    updateHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // O(n) 过滤根节点（通过 parentId 字段）
   const rootNodes = useMemo(
@@ -62,7 +73,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
     transform: `scale(${zoom})`,
     transformOrigin: 'top left',
     width: `${100 / zoom}%`,
-  }), [zoom]);
+    // transform 不改变布局尺寸，补充 margin 让滚动区域覆盖缩放后的内容
+    marginBottom: `${treeHeight * (zoom - 1)}px`,
+  }), [zoom, treeHeight]);
 
   return (
     <div className="canvas-area">
@@ -139,9 +152,15 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
 
           {/* 节点树（缩放放在容器上，子节点不再单独 transform） */}
           {rootNodes.length > 0 ? (
-            <div className="node-tree" style={nodeTreeStyle}>
+            <div className="node-tree" ref={treeRef} style={nodeTreeStyle}>
               {rootNodes.map((node) => (
-                <CanvasNode key={node.id} nodeId={node.id} zoom={zoom} dragManager={dragManager} />
+                <CanvasNode
+                  key={node.id}
+                  nodeId={node.id}
+                  zoom={zoom}
+                  dragNodeId={dragManager.dragNodeId}
+                  onNodeDragStart={dragManager.handleNodeDragStart}
+                />
               ))}
               {/* 对齐参考线 overlay（画布坐标系，跟随 .node-tree 的 scale） */}
               <AlignmentGuides />

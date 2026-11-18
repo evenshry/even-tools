@@ -12,6 +12,7 @@ import PropertyPanel from "./components/PropertyPanel";
 import PreviewArea from "./components/PreviewArea";
 import CodeExportModal from "./components/CodeExportModal";
 import { useCanvasStore } from "./store/useCanvasStore";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { PreviewMode } from "./types";
 import { useThemeStore } from "@/store/useThemeStore";
 import { semanticColors } from "@/styles/themeColors";
@@ -46,6 +47,9 @@ const VisualPageBuilder: React.FC = () => {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 快捷键挂载在模块根组件：编辑/预览模式均可响应
+  useKeyboardShortcuts();
+
   // 初始化：加载最近一次保存的页面
   useEffect(() => {
     loadPage().catch(() => {
@@ -57,7 +61,7 @@ const VisualPageBuilder: React.FC = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       const state = useCanvasStore.getState();
-      if (state.isDirty && !state.isSaving && Object.keys(state.nodes).length > 0) {
+      if (state.isDirty && !state.isSaving) {
         state.saveCurrentPage().catch(() => {
           // 静默失败
         });
@@ -72,7 +76,7 @@ const VisualPageBuilder: React.FC = () => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       const state = useCanvasStore.getState();
-      if (Object.keys(state.nodes).length > 0 && !state.isSaving) {
+      if (!state.isSaving) {
         state.saveCurrentPage().catch(() => {});
       }
     }, AUTO_SAVE_DEBOUNCE);
@@ -81,13 +85,14 @@ const VisualPageBuilder: React.FC = () => {
     };
   }, [nodes, isDirty, isSaving]);
 
-  // 页面卸载前保存
+  // 页面卸载前提示未保存
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const state = useCanvasStore.getState();
-      if (state.isDirty && Object.keys(state.nodes).length > 0) {
-        // beforeunload 中无法可靠执行 async，用 sendBeacon 不适用 IndexedDB
-        // 仅作提示，实际保存依赖定时/debounce
+      if (state.isDirty) {
+        // 浏览器只允许通过 preventDefault 触发原生确认弹窗
+        e.preventDefault();
+        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -97,16 +102,13 @@ const VisualPageBuilder: React.FC = () => {
   // 保存画布
   const handleSave = useCallback(async () => {
     const nodeCount = Object.keys(nodes).length;
-    if (nodeCount === 0) {
-      message.warning("画布为空，无需保存");
-      return;
-    }
     message.loading({ content: "正在保存...", key: "vpb-save", duration: 0 });
     try {
       await saveCurrentPage();
       message.success({ content: `已保存 ${nodeCount} 个节点`, key: "vpb-save" });
-    } catch (error: any) {
-      message.error({ content: "保存失败（浏览器可能不支持 IndexedDB）"+ error.message, key: "vpb-save" });
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      message.error({ content: `保存失败（浏览器可能不支持 IndexedDB）：${detail}`, key: "vpb-save" });
     }
   }, [nodes, saveCurrentPage]);
 
@@ -145,7 +147,7 @@ const VisualPageBuilder: React.FC = () => {
         className="component-panel-container"
         size="small"
         style={{ height: "100%", overflow: "hidden" }}
-        bodyStyle={{ height: "calc(100% - 40px)", padding: 0 }}
+        styles={{ body: { height: "calc(100% - 40px)", padding: 0 } }}
       >
         <Tabs
           activeKey={leftPanelTab}

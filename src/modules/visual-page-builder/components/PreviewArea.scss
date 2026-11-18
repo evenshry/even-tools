@@ -106,6 +106,7 @@
     border-color var(--et-transition), box-shadow var(--et-transition);
 
   .device-content {
+    position: relative;
     padding: 20px;
     min-height: 600px;
     width: 100%;

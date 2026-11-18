@@ -152,6 +152,7 @@
 // 画布节点
 .canvas-node {
   border: 2px solid transparent;
+  user-select: none;
   transition: border-color var(--et-transition-fast),
     box-shadow var(--et-transition-fast),
     background-color var(--et-transition-fast);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Button, Tooltip, Divider } from 'antd';
+import { Card, Tabs, Button, Tooltip, Divider, message, Modal } from 'antd';
 import {
   HomeOutlined,
   TableOutlined,
@@ -14,8 +14,6 @@ import { roomTemplates } from '../data/templates';
 import { findNonOverlappingPosition } from '../utils/roomPlacement';
 import { useThemeStore } from "@/store/useThemeStore";
 import { semanticColors } from "@/styles/themeColors";
-
-const { TabPane } = Tabs;
 
 // 组件类型定义
 interface ComponentItem {
@@ -34,46 +32,44 @@ interface ComponentItem {
   windowType?: FloorPlan.Window['type'];
 }
 
+// 组件库数据为静态内容，放到组件外避免每次渲染重建
+const roomComponents: ComponentItem[] = [
+  { id: 'room-living', name: '客厅', type: 'room', icon: <HomeOutlined />, width: 400, height: 300, color: '#f0f0f0', category: 'rooms', roomType: 'living' },
+  { id: 'room-bedroom', name: '卧室', type: 'room', icon: <BellOutlined />, width: 350, height: 300, color: '#e6f7ff', category: 'rooms', roomType: 'bedroom' },
+  { id: 'room-kitchen', name: '厨房', type: 'room', icon: <CoffeeOutlined />, width: 300, height: 250, color: '#f6ffed', category: 'rooms', roomType: 'kitchen' },
+  { id: 'room-bathroom', name: '卫生间', type: 'room', icon: <SettingOutlined />, width: 200, height: 200, color: '#fff2e8', category: 'rooms', roomType: 'bathroom' },
+  { id: 'room-dining', name: '餐厅', type: 'room', icon: <TableOutlined />, width: 300, height: 250, color: '#f9f0ff', category: 'rooms', roomType: 'dining' },
+  { id: 'room-study', name: '书房', type: 'room', icon: <CarOutlined />, width: 250, height: 250, color: '#e8f5ff', category: 'rooms', roomType: 'study' },
+  { id: 'room-balcony', name: '阳台', type: 'room', icon: <HomeOutlined />, width: 150, height: 300, color: '#fff7e6', category: 'rooms', roomType: 'balcony' },
+  { id: 'room-storage', name: '储藏室', type: 'room', icon: <SettingOutlined />, width: 150, height: 200, color: '#f0f0f0', category: 'rooms', roomType: 'storage' },
+];
+
+const furnitureComponents: ComponentItem[] = [
+  { id: 'furniture-bed', name: '床', type: 'furniture', icon: <BellOutlined />, width: 150, height: 200, color: '#d9d9d9', category: 'bedroom', furnitureType: 'bed' },
+  { id: 'furniture-sofa', name: '沙发', type: 'furniture', icon: <HomeOutlined />, width: 180, height: 80, color: '#d9d9d9', category: 'living', furnitureType: 'sofa' },
+  { id: 'furniture-table', name: '餐桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 80, color: '#d9d9d9', category: 'dining', furnitureType: 'table' },
+  { id: 'furniture-chair', name: '椅子', type: 'furniture', icon: <TableOutlined />, width: 40, height: 40, color: '#d9d9d9', category: 'dining', furnitureType: 'chair' },
+  { id: 'furniture-cabinet', name: '柜子', type: 'furniture', icon: <CarOutlined />, width: 60, height: 120, color: '#d9d9d9', category: 'storage', furnitureType: 'cabinet' },
+  { id: 'furniture-desk', name: '书桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 60, color: '#d9d9d9', category: 'study', furnitureType: 'desk' },
+  { id: 'furniture-wardrobe', name: '衣柜', type: 'furniture', icon: <CarOutlined />, width: 100, height: 200, color: '#d9d9d9', category: 'bedroom', furnitureType: 'wardrobe' },
+  { id: 'furniture-tv', name: '电视', type: 'furniture', icon: <HomeOutlined />, width: 100, height: 60, color: '#d9d9d9', category: 'living', furnitureType: 'tv' },
+  { id: 'furniture-refrigerator', name: '冰箱', type: 'furniture', icon: <CoffeeOutlined />, width: 60, height: 180, color: '#d9d9d9', category: 'kitchen', furnitureType: 'refrigerator' },
+  { id: 'furniture-stove', name: '灶台', type: 'furniture', icon: <CoffeeOutlined />, width: 80, height: 60, color: '#d9d9d9', category: 'kitchen', furnitureType: 'stove' },
+];
+
+const doorWindowComponents: ComponentItem[] = [
+  { id: 'door-single', name: '单开门', type: 'door', icon: <DragOutlined />, width: 80, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'single' },
+  { id: 'door-double', name: '双开门', type: 'door', icon: <DragOutlined />, width: 120, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'double' },
+  { id: 'door-sliding', name: '推拉门', type: 'door', icon: <DragOutlined />, width: 100, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'sliding' },
+  { id: 'window-single', name: '单窗', type: 'window', icon: <DragOutlined />, width: 100, height: 15, color: '#91d5ff', category: 'windows', windowType: 'regular' },
+  { id: 'window-double', name: '双窗', type: 'window', icon: <DragOutlined />, width: 180, height: 15, color: '#91d5ff', category: 'windows', windowType: 'regular' },
+  { id: 'window-bay', name: '飘窗', type: 'window', icon: <DragOutlined />, width: 150, height: 15, color: '#91d5ff', category: 'windows', windowType: 'bay' },
+];
+
 const ComponentPanel: React.FC = () => {
   const mode = useThemeStore((s) => s.mode);
   const { addRoom, applyTemplate, houseConfig } = useFloorPlanStore();
   const [draggingItem, setDraggingItem] = useState<ComponentItem | null>(null);
-
-  // 房间组件库
-  const roomComponents: ComponentItem[] = [
-    { id: 'room-living', name: '客厅', type: 'room', icon: <HomeOutlined />, width: 400, height: 300, color: '#f0f0f0', category: 'rooms', roomType: 'living' },
-    { id: 'room-bedroom', name: '卧室', type: 'room', icon: <BellOutlined />, width: 350, height: 300, color: '#e6f7ff', category: 'rooms', roomType: 'bedroom' },
-    { id: 'room-kitchen', name: '厨房', type: 'room', icon: <CoffeeOutlined />, width: 300, height: 250, color: '#f6ffed', category: 'rooms', roomType: 'kitchen' },
-    { id: 'room-bathroom', name: '卫生间', type: 'room', icon: <SettingOutlined />, width: 200, height: 200, color: '#fff2e8', category: 'rooms', roomType: 'bathroom' },
-    { id: 'room-dining', name: '餐厅', type: 'room', icon: <TableOutlined />, width: 300, height: 250, color: '#f9f0ff', category: 'rooms', roomType: 'dining' },
-    { id: 'room-study', name: '书房', type: 'room', icon: <CarOutlined />, width: 250, height: 250, color: '#e8f5ff', category: 'rooms', roomType: 'study' },
-    { id: 'room-balcony', name: '阳台', type: 'room', icon: <HomeOutlined />, width: 150, height: 300, color: '#fff7e6', category: 'rooms', roomType: 'balcony' },
-    { id: 'room-storage', name: '储藏室', type: 'room', icon: <SettingOutlined />, width: 150, height: 200, color: '#f0f0f0', category: 'rooms', roomType: 'storage' },
-  ];
-
-  // 家具组件库
-  const furnitureComponents: ComponentItem[] = [
-    { id: 'furniture-bed', name: '床', type: 'furniture', icon: <BellOutlined />, width: 150, height: 200, color: '#d9d9d9', category: 'bedroom', furnitureType: 'bed' },
-    { id: 'furniture-sofa', name: '沙发', type: 'furniture', icon: <HomeOutlined />, width: 180, height: 80, color: '#d9d9d9', category: 'living', furnitureType: 'sofa' },
-    { id: 'furniture-table', name: '餐桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 80, color: '#d9d9d9', category: 'dining', furnitureType: 'table' },
-    { id: 'furniture-chair', name: '椅子', type: 'furniture', icon: <TableOutlined />, width: 40, height: 40, color: '#d9d9d9', category: 'dining', furnitureType: 'chair' },
-    { id: 'furniture-cabinet', name: '柜子', type: 'furniture', icon: <CarOutlined />, width: 60, height: 120, color: '#d9d9d9', category: 'storage', furnitureType: 'cabinet' },
-    { id: 'furniture-desk', name: '书桌', type: 'furniture', icon: <TableOutlined />, width: 120, height: 60, color: '#d9d9d9', category: 'study', furnitureType: 'desk' },
-    { id: 'furniture-wardrobe', name: '衣柜', type: 'furniture', icon: <CarOutlined />, width: 100, height: 200, color: '#d9d9d9', category: 'bedroom', furnitureType: 'wardrobe' },
-    { id: 'furniture-tv', name: '电视', type: 'furniture', icon: <HomeOutlined />, width: 100, height: 60, color: '#d9d9d9', category: 'living', furnitureType: 'tv' },
-    { id: 'furniture-refrigerator', name: '冰箱', type: 'furniture', icon: <CoffeeOutlined />, width: 60, height: 180, color: '#d9d9d9', category: 'kitchen', furnitureType: 'refrigerator' },
-    { id: 'furniture-stove', name: '灶台', type: 'furniture', icon: <CoffeeOutlined />, width: 80, height: 60, color: '#d9d9d9', category: 'kitchen', furnitureType: 'stove' },
-  ];
-
-  // 门窗组件库
-  const doorWindowComponents: ComponentItem[] = [
-    { id: 'door-single', name: '单开门', type: 'door', icon: <DragOutlined />, width: 80, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'single' },
-    { id: 'door-double', name: '双开门', type: 'door', icon: <DragOutlined />, width: 120, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'double' },
-    { id: 'door-sliding', name: '推拉门', type: 'door', icon: <DragOutlined />, width: 100, height: 20, color: '#8c8c8c', category: 'doors', doorType: 'sliding' },
-    { id: 'window-single', name: '单窗', type: 'window', icon: <DragOutlined />, width: 100, height: 15, color: '#91d5ff', category: 'windows', windowType: 'regular' },
-    { id: 'window-double', name: '双窗', type: 'window', icon: <DragOutlined />, width: 180, height: 15, color: '#91d5ff', category: 'windows', windowType: 'regular' },
-    { id: 'window-bay', name: '飘窗', type: 'window', icon: <DragOutlined />, width: 150, height: 15, color: '#91d5ff', category: 'windows', windowType: 'bay' },
-  ];
 
   // 处理组件拖拽开始
   const handleDragStart = (e: React.DragEvent, component: ComponentItem) => {
@@ -114,8 +110,13 @@ const ComponentPanel: React.FC = () => {
   const handleQuickAddRoom = (component: ComponentItem) => {
     const pos = findNonOverlappingPosition(
       { x: 100, y: 100, width: component.width, height: component.height },
-      houseConfig.rooms
+      houseConfig.rooms,
+      { step: Math.max(1, houseConfig.gridSize || 40) }
     );
+    if (!pos) {
+      message.warning('画布空间不足，无法添加新房间');
+      return;
+    }
     const newRoom: FloorPlan.Room = {
       id: genId('room'),
       type: component.roomType ?? 'living',
@@ -130,6 +131,17 @@ const ComponentPanel: React.FC = () => {
       furniture: [],
     };
     addRoom(newRoom);
+  };
+
+  // 应用模板前确认，避免误点覆盖当前设计
+  const handleApplyTemplate = (tpl: (typeof roomTemplates)[number]) => {
+    Modal.confirm({
+      title: '应用模板',
+      content: `应用「${tpl.name}」会覆盖当前设计，确定继续吗？`,
+      okText: '应用',
+      cancelText: '取消',
+      onOk: () => applyTemplate(tpl.config),
+    });
   };
 
   // 渲染组件列表
@@ -200,49 +212,62 @@ const ComponentPanel: React.FC = () => {
         }
         size="small"
         style={{ height: '100%' }}
-        bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
+        styles={{ body: { padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' } }}
       >
-        <Tabs defaultActiveKey="rooms" size="small" style={{ height: '100%' }}>
-          <TabPane tab="模板" key="templates">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
-              {roomTemplates.map((tpl) => (
-                <div
-                  key={tpl.id}
-                  style={{
-                    border: '1px solid var(--et-border)',
-                    borderRadius: 6,
-                    padding: 10,
-                    background: 'var(--et-bg-card)'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{tpl.name}</div>
-                    <Button size="small" type="primary" onClick={() => applyTemplate(tpl.config)}>
-                      应用
-                    </Button>
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 12, color: semanticColors.gray666[mode], lineHeight: 1.4 }}>
-                    {tpl.description}
-                  </div>
+        <Tabs
+          defaultActiveKey="rooms"
+          size="small"
+          style={{ height: '100%' }}
+          items={[
+            {
+              key: 'templates',
+              label: '模板',
+              children: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
+                  {roomTemplates.map((tpl) => (
+                    <div
+                      key={tpl.id}
+                      style={{
+                        border: '1px solid var(--et-border)',
+                        borderRadius: 6,
+                        padding: 10,
+                        background: 'var(--et-bg-card)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{tpl.name}</div>
+                        <Button size="small" type="primary" onClick={() => handleApplyTemplate(tpl)}>
+                          应用
+                        </Button>
+                      </div>
+                      <div style={{ marginTop: 6, fontSize: 12, color: semanticColors.gray666[mode], lineHeight: 1.4 }}>
+                        {tpl.description}
+                      </div>
+                    </div>
+                  ))}
+                  {roomTemplates.length === 0 && (
+                    <div style={{ textAlign: 'center', color: semanticColors.gray999[mode], padding: '20px 0' }}>暂无模板</div>
+                  )}
                 </div>
-              ))}
-              {roomTemplates.length === 0 && (
-                <div style={{ textAlign: 'center', color: semanticColors.gray999[mode], padding: '20px 0' }}>暂无模板</div>
-              )}
-            </div>
-          </TabPane>
-          <TabPane tab="房间" key="rooms">
-            {renderComponentList(roomComponents)}
-          </TabPane>
-          
-          <TabPane tab="家具" key="furniture">
-            {renderComponentList(furnitureComponents)}
-          </TabPane>
-          
-          <TabPane tab="门窗" key="doors-windows">
-            {renderComponentList(doorWindowComponents)}
-          </TabPane>
-        </Tabs>
+              )
+            },
+            {
+              key: 'rooms',
+              label: '房间',
+              children: renderComponentList(roomComponents)
+            },
+            {
+              key: 'furniture',
+              label: '家具',
+              children: renderComponentList(furnitureComponents)
+            },
+            {
+              key: 'doors-windows',
+              label: '门窗',
+              children: renderComponentList(doorWindowComponents)
+            }
+          ]}
+        />
         
         <Divider style={{ margin: '12px 0' }} />
         

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Tree, Empty, Dropdown, Tooltip, message } from 'antd';
 import type { TreeDataNode, TreeProps } from 'antd';
 import {
@@ -30,6 +30,17 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
   const duplicateNode = useCanvasStore((s) => s.duplicateNode);
   const moveNode = useCanvasStore((s) => s.moveNode);
 
+  // 展开状态：首次加载展开全部，新增节点自动展开，同时保留用户的折叠操作
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  useEffect(() => {
+    setExpandedKeys((prev) => {
+      const allKeys = Object.keys(nodes);
+      if (prev.length === 0) return allKeys;
+      const newKeys = allKeys.filter((key) => !prev.includes(key));
+      return newKeys.length > 0 ? [...prev, ...newKeys] : prev;
+    });
+  }, [nodes]);
+
   // 计算同层兄弟节点（用于上移/下移 disable 判断）
   const getSiblingIds = (node: PageNode): string[] => {
     if (node.parentId) {
@@ -59,7 +70,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
         label: '下移一层',
         icon: <ArrowDownOutlined />,
         disabled: index >= siblings.length - 1,
-        onClick: () => moveNode(nodeId, node.parentId, index + 2),
+        onClick: () => moveNode(nodeId, node.parentId, index + 1),
       },
       { type: 'divider' as const },
       {
@@ -113,7 +124,8 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
                   updateNode(node.id, {
                     layout: {
                       ...node.layout,
-                      display: isHidden ? 'block' : 'none',
+                      display: isHidden ? (node.layout.hiddenDisplay || 'block') : 'none',
+                      hiddenDisplay: isHidden ? undefined : node.layout.display,
                     },
                   });
                 }}
@@ -156,14 +168,21 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
 
       const dropIndex = parentChildren.indexOf(dropNodeId);
       // dropPosition 是相对 dropNode 的位置，正数表示下方，负数表示上方
-      const insertIndex = info.dropPosition > dropIndex ? dropIndex + 1 : dropIndex;
+      let insertIndex = info.dropPosition > dropIndex ? dropIndex + 1 : dropIndex;
+
+      // 同父级且从上方拖到下方：移除原节点后索引会前移一位
+      const dragNode = nodes[dragNodeId];
+      const dragOldIndex = parentChildren.indexOf(dragNodeId);
+      if (dragNode && dragNode.parentId === newParentId && dragOldIndex >= 0 && dragOldIndex < insertIndex) {
+        insertIndex -= 1;
+      }
       moveNode(dragNodeId, newParentId, insertIndex);
     } else {
       // 拖到节点上：作为 dropNode 的子节点
-      // 校验：dropNode 必须是容器类型（有 allowedChildren）
+      // allowedChildren === undefined 表示允许任意类型；空数组表示叶子节点
       const allowed = dropNode.constraints.allowedChildren;
       const dragNode = nodes[dragNodeId];
-      if (allowed && allowed.length > 0 && dragNode && !allowed.includes(dragNode.type)) {
+      if (allowed !== undefined && dragNode && !allowed.includes(dragNode.type)) {
         message.warning(`目标节点不允许放置该类型子节点`);
         return;
       }
@@ -193,10 +212,11 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
             selectNode(key ? String(key) : null);
           }}
           onDrop={onDrop}
+          expandedKeys={expandedKeys}
+          onExpand={(keys) => setExpandedKeys(keys)}
           draggable
           blockNode
           showLine
-          defaultExpandAll
         />
       </div>
     </div>

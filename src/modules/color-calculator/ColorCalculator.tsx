@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Layout, Space, Tabs, message } from "antd";
 import { EyeOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import type { Color } from "antd/es/color-picker";
 import ModuleHeader from "@/components/ModuleHeader";
 import GradientGenerator from "@/modules/color-calculator/components/GradientGenerator";
 import ColorSelectionCard from "@/modules/color-calculator/components/ColorSelectionCard";
@@ -23,6 +24,9 @@ const ColorCalculator = () => {
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const lastDetectedColor = useRef<string | null>(null);
   const promptedColorsRef = useRef<Set<string>>(new Set());
+  // 记录本应用最近写入剪贴板的内容，避免轮询重复弹出检测框
+  const lastCopiedTextRef = useRef<string | null>(null);
+  const clipboardErrorReportedRef = useRef(false);
 
   useEffect(() => {
     const loadPromptedColors = () => {
@@ -32,15 +36,27 @@ const ColorCalculator = () => {
           promptedColorsRef.current = new Set(JSON.parse(saved));
         }
       } catch {
-        console.log("无法加载已提示的颜色记录");
+        // 本地记录损坏时忽略即可
       }
     };
 
     loadPromptedColors();
 
     const checkClipboardPeriodically = async () => {
+      // 页面不可见时不读取剪贴板
+      if (document.hidden) {
+        return;
+      }
+
       try {
         const text = await navigator.clipboard.readText();
+        clipboardErrorReportedRef.current = false;
+
+        // 应用内复制的内容不再提示
+        if (lastCopiedTextRef.current !== null && text === lastCopiedTextRef.current) {
+          return;
+        }
+
         const result: ParseColorResult = parseColorWithDetails(text);
 
         if (result.success && result.color) {
@@ -52,10 +68,18 @@ const ColorCalculator = () => {
             if (!promptedColorsRef.current.has(normalizedColor)) {
               promptedColorsRef.current.add(normalizedColor);
 
+              // 限制记录数量，避免无限增长
+              if (promptedColorsRef.current.size > 200) {
+                const oldest = promptedColorsRef.current.values().next().value;
+                if (oldest !== undefined) {
+                  promptedColorsRef.current.delete(oldest);
+                }
+              }
+
               try {
                 localStorage.setItem("color-calculator-prompted-colors", JSON.stringify(Array.from(promptedColorsRef.current)));
               } catch {
-                console.log("无法保存已提示的颜色记录");
+                // 存储失败不影响颜色检测
               }
 
               setDetectedColor(result.color);
@@ -64,8 +88,12 @@ const ColorCalculator = () => {
             }
           }
         }
-      } catch (error) {
-        console.log("无法读取剪贴板", error);
+      } catch {
+        // 无权限或读取失败只记录一次，避免控制台刷屏
+        if (!clipboardErrorReportedRef.current) {
+          clipboardErrorReportedRef.current = true;
+          console.warn("无法读取剪贴板，颜色自动检测已暂停");
+        }
       }
     };
 
@@ -89,8 +117,9 @@ const ColorCalculator = () => {
     }
   };
 
-  const handleColorChange = (color: { toHexString: () => string; toHex: () => string }, type: "foreground" | "background") => {
-    const hex = color.toHex();
+  const handleColorChange = (color: Color, type: "foreground" | "background") => {
+    // toHexString 会在透明时输出 8 位 HEX，避免丢失 alpha
+    const hex = color.toHexString().replace("#", "");
     if (type === "foreground") {
       setForegroundColor(hex);
     } else {
@@ -99,10 +128,6 @@ const ColorCalculator = () => {
   };
 
   const handleHexInput = (value: string, type: "foreground" | "background") => {
-    if (!value.trim()) {
-      return;
-    }
-
     const result: ParseColorResult = parseColorWithDetails(value);
 
     if (result.success && result.color) {
@@ -113,9 +138,8 @@ const ColorCalculator = () => {
         setBackgroundColor(hex);
       }
       message.success(`已应用${result.format}颜色`);
-    } else {
-      message.error(result.error || "无效的颜色格式");
     }
+    // 非法输入由输入框自身标红提示，这里不再重复弹窗
   };
 
   const handleSwapColors = () => {
@@ -124,11 +148,16 @@ const ColorCalculator = () => {
     setBackgroundColor(temp);
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(text);
-    message.success("已复制到剪贴板");
-    setTimeout(() => setCopied(null), 2000);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      lastCopiedTextRef.current = text;
+      setCopied(text);
+      message.success("已复制到剪贴板");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      message.error("复制失败，请手动复制");
+    }
   };
 
   return (

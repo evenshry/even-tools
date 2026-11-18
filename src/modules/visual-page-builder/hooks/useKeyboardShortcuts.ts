@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { createElement } from 'react';
 import { message, Modal } from 'antd';
 import { useCanvasStore } from '../store/useCanvasStore';
-import { NodeType } from '../types';
-import { parsePx } from '../utils/styleUtils';
+import { NodeType, PreviewMode } from '../types';
+import { parsePxStrict } from '../utils/styleUtils';
 
 /** 快捷键说明表（用于弹出 Modal 展示） */
 export const SHORTCUT_TABLE: Array<{ keys: string; action: string }> = [
@@ -27,7 +27,7 @@ export const SHORTCUT_TABLE: Array<{ keys: string; action: string }> = [
  * 完整快捷键体系
  *
  * 集中注册所有快捷键，避免分散在多个组件
- * 当焦点在 input/textarea/contentEditable 中时，除 Esc 外不触发节点操作
+ * 当焦点在 input/textarea/contentEditable 中时不触发任何快捷键
  *
  * 性能：依赖数组仅保留 enabled，handler 内通过 useCanvasStore.getState() 读取
  * 动态状态（nodes/selectedNodeId 等），避免拖动时每帧重绑 keydown 监听器
@@ -48,8 +48,22 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
       // 实时读取 store 状态，避免闭包陷阱
       const state = useCanvasStore.getState();
       const { selectedNodeId, selectedNodeIds, nodes, canUndo, canRedo } = state;
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const isPreview = state.previewMode === PreviewMode.PREVIEW;
 
-      // Esc 始终生效（取消选中）
+      // 可编辑元素中不触发节点快捷键（Esc 也不清空选中，避免打断输入）
+      if (isEditable) return;
+
+      // 预览模式仅保留切换预览的快捷键
+      if (isPreview) {
+        if (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'p') {
+          e.preventDefault();
+          state.togglePreview();
+        }
+        return;
+      }
+
+      // Esc 取消选中
       if (e.key === 'Escape') {
         if (selectedNodeId || selectedNodeIds.length > 0) {
           state.clearSelection();
@@ -58,16 +72,11 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         return;
       }
 
-      // 以下快捷键在可编辑元素中不触发
-      if (isEditable) return;
-
-      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-
       // Ctrl+S：保存
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (Object.keys(nodes).length === 0) {
-          message.warning('画布为空，无需保存');
+        if (state.isSaving) {
+          message.info('正在保存，请稍候');
           return;
         }
         message.loading({ content: '正在保存...', key: 'vpb-shortcut-save', duration: 0 });
@@ -121,10 +130,12 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         return;
       }
 
-      // 粘贴 Ctrl+V
+      // 粘贴 Ctrl+V（无剪贴板内容时不拦截，保留浏览器默认行为）
       if (isCtrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'v') {
-        state.pasteNode();
-        e.preventDefault();
+        if (state.clipboardNodes && Object.keys(state.clipboardNodes).length > 0) {
+          state.pasteNode();
+          e.preventDefault();
+        }
         return;
       }
 
@@ -145,15 +156,14 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
 
       // 删除节点 Delete / Backspace（支持批量）
       if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedNodeId || selectedNodeIds.length > 0)) {
+        // 无论能否删除都阻止浏览器默认行为（Backspace 后退）
+        e.preventDefault();
         if (selectedNodeIds.length > 1) {
           state.deleteSelected();
-          e.preventDefault();
         } else if (selectedNodeId) {
           const node = nodes[selectedNodeId];
-          if (node && node.constraints.canDelete) {
-            if (node.type === NodeType.PAGE) return; // PAGE 特殊保护
+          if (node && node.constraints.canDelete && node.type !== NodeType.PAGE) {
             state.deleteNode(selectedNodeId);
-            e.preventDefault();
           }
         }
         return;
@@ -166,8 +176,9 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         if (node.layout.position !== 'absolute' && node.layout.position !== 'fixed') return;
 
         const step = e.shiftKey ? 10 : 1;
-        const curLeft = parsePx(node.style.left);
-        const curTop = parsePx(node.style.top);
+        // 百分比/auto 无法换算为像素，回退到 0，避免方向键跳变
+        const curLeft = parsePxStrict(node.style.left) ?? 0;
+        const curTop = parsePxStrict(node.style.top) ?? 0;
         let newLeft = curLeft;
         let newTop = curTop;
         if (e.key === 'ArrowUp') newTop -= step;
@@ -178,8 +189,8 @@ export const useKeyboardShortcuts = (enabled: boolean = true) => {
         state.updateNode(selectedNodeId, {
           style: {
             ...node.style,
-            left: `${newLeft}px`,
-            top: `${newTop}px`,
+            left: `${Math.max(0, newLeft)}px`,
+            top: `${Math.max(0, newTop)}px`,
           },
         });
         e.preventDefault();

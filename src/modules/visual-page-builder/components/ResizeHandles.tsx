@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
 import type { PageNode } from '../types';
-import { parsePx } from '../utils/styleUtils';
+import { parsePxStrict } from '../utils/styleUtils';
 import './ResizeHandles.scss';
 
 /** 默认节点尺寸（parsePx 失败时回退） */
@@ -32,7 +32,8 @@ interface ResizeState {
  * - 选中节点时渲染 8 个手柄
  * - 仅绝对/固定定位节点支持全部 8 个方向
  * - 流布局节点（static/relative）只支持 'e'（右边）宽度调整
- * - mouseup 时通过 updateNode 提交一次变更，依赖 T1.2 的历史合并机制
+ * - 缩放过程按一次拖拽会话合并历史（beginHistoryBatch / commitHistoryBatch）
+ * - 百分比/auto 尺寸首次缩放时回退到实际渲染尺寸，避免跳到 100px
  *
  * 性能：useEffect 仅依赖 resizing（仅在 mousedown/mouseup 时变化），
  * 通过 nodeRef 读取最新节点，避免 resize 时每帧重绑 document 事件
@@ -62,18 +63,24 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
       e.preventDefault();
       if (!node) return;
 
+      // 百分比/auto 无法直接得到像素值，回退到 DOM 实际渲染尺寸
+      const element = document.querySelector<HTMLElement>(`[data-node-id="${node.id}"]`);
+      const rect = element?.getBoundingClientRect();
+
       const start: ResizeState = {
         dir,
         startClientX: e.clientX,
         startClientY: e.clientY,
-        startLeft: parsePx(node.style.left),
-        startTop: parsePx(node.style.top),
-        startWidth: parsePx(node.style.width) || DEFAULT_NODE_SIZE,
-        startHeight: parsePx(node.style.height) || DEFAULT_NODE_SIZE,
+        startLeft: parsePxStrict(node.style.left) ?? 0,
+        startTop: parsePxStrict(node.style.top) ?? 0,
+        startWidth: parsePxStrict(node.style.width) ?? (rect ? rect.width / zoom : DEFAULT_NODE_SIZE),
+        startHeight: parsePxStrict(node.style.height) ?? (rect ? rect.height / zoom : DEFAULT_NODE_SIZE),
       };
+      // 一次缩放会话只产生一条历史记录
+      useCanvasStore.getState().beginHistoryBatch();
       setResizing(start);
     },
-    [node]
+    [node, zoom]
   );
 
   // 全局 mousemove / mouseup
@@ -142,14 +149,14 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
         }
       }
 
-      // 流布局节点不写 left/top/height
+      // 流布局节点不写 left/top/height；绝对定位节点不允许被拖出画布左上边界
       const styleUpdate: Partial<PageNode['style']> = {
         ...currentNode.style,
         width: `${newWidth}px`,
       };
       if (!curIsFlow) {
-        styleUpdate.left = `${newLeft}px`;
-        styleUpdate.top = `${newTop}px`;
+        styleUpdate.left = `${Math.max(0, newLeft)}px`;
+        styleUpdate.top = `${Math.max(0, newTop)}px`;
         styleUpdate.height = `${newHeight}px`;
       }
 
@@ -158,6 +165,7 @@ const ResizeHandles: React.FC<ResizeHandlesProps> = ({ nodeId, zoom }) => {
 
     const onMouseUp = () => {
       setResizing(null);
+      useCanvasStore.getState().commitHistoryBatch();
     };
 
     document.addEventListener('mousemove', onMouseMove);

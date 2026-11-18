@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { CanvasState, PageNode, DragItem, AlignmentGuides } from '../types';
+import type { CanvasState, PageNode, AlignmentGuides } from '../types';
 import { NodeType, PreviewMode, LayoutType } from '../types';
 import { componentLibrary } from '../data/componentLibrary';
 import { cloneTemplateNodes } from '../data/templates';
 import { pageDB, DEFAULT_PAGE_ID, DEFAULT_PAGE_NAME, type SavedPage, type SavedTemplate } from './usePagePersistence';
 import { parsePx, parsePxStrict } from '../utils/styleUtils';
+import { validateNodeGraph } from '../utils/nodeValidation';
 
 /**
  * 生成唯一节点 ID
@@ -34,6 +35,13 @@ const HISTORY_LIMIT = 50;
  * 拖拽期间连续 style 变更的合并窗口（ms）
  */
 const HISTORY_MERGE_WINDOW = 500;
+
+/**
+ * 显式历史批次状态
+ * 拖拽/缩放开始时开启，期间无论持续多久都只记录一条快照
+ */
+let historyBatchActive = false;
+let historyBatchPushed = false;
 
 /**
  * 复制/粘贴节点时绝对定位节点的偏移量（px）
@@ -73,14 +81,10 @@ interface CanvasStore extends CanvasState {
   setDragTargetNodeId: (id: string | null) => void;
   
   // 画布操作
-  setZoom: (zoom: number) => void;
   toggleGrid: () => void;
   toggleAlignmentGuides: () => void;
   /** 设置当前对齐参考线（拖动中实时调用，传 null 清空） */
   setAlignmentGuides: (guides: AlignmentGuides | null) => void;
-  
-  // 拖拽操作
-  setDragItem: (item: DragItem | null) => void;
   
   // 预览操作
   setPreviewMode: (mode: PreviewMode) => void;
@@ -100,8 +104,6 @@ interface CanvasStore extends CanvasState {
   isSaving: boolean;
   loadPage: (id?: string) => Promise<void>;
   saveCurrentPage: () => Promise<void>;
-  listPages: () => Promise<SavedPage[]>;
-  deletePage: (id: string) => Promise<void>;
   loadNodes: (nodes: Record<string, PageNode>) => void;
   markDirty: () => void;
 
@@ -127,6 +129,8 @@ interface CanvasStore extends CanvasState {
 
   // 剪贴板（用于 Ctrl+C / Ctrl+V）
   clipboardNodeId: string | null;
+  /** 复制时保存的子树快照，粘贴时从快照克隆，避免源节点被修改或删除后粘贴出错 */
+  clipboardNodes: Record<string, PageNode> | null;
   copyNode: (id: string) => void;
   pasteNode: () => void;
 
@@ -219,7 +223,6 @@ const createInitialState = (): CanvasState => {
     selectedNodeId: null,
     hoveredNodeId: null,
     dragTargetNodeId: null,
-    zoom: 1,
     gridVisible: true,
     alignmentGuidesVisible: true,
     alignmentGuides: null,
@@ -250,6 +253,7 @@ const persistenceInitialState = {
   canUndo: false,
   canRedo: false,
   clipboardNodeId: null as string | null,
+  clipboardNodes: null as Record<string, PageNode> | null,
 };
 
 /**
@@ -272,6 +276,60 @@ const serializeNodes = (nodes: Record<string, PageNode>): Record<string, PageNod
   return result;
 };
 
+/**
+ * 加载前的基本结构校验与默认值补齐
+ * 结构安全由 validateNodeGraph 统一校验（与 Schema 导入共用）
+ */
+const sanitizeLoadedNodes = (nodes: Record<string, PageNode>): Record<string, PageNode> | null => {
+  const validation = validateNodeGraph(nodes as unknown as Record<string, unknown>);
+  if (!validation.ok) {
+    console.error('节点结构校验失败：', validation.error);
+    return null;
+  }
+
+  const result: Record<string, PageNode> = Object.create(null);
+
+  for (const [id, raw] of Object.entries(nodes)) {
+    const node = raw as Partial<PageNode>;
+
+    result[id] = {
+      ...(raw as PageNode),
+      id,
+      style: node.style ?? {},
+      layout: node.layout ?? { type: LayoutType.BLOCK, display: 'block', position: 'relative' },
+      content: {
+        text: '',
+        html: '',
+        ...(node.content ?? {}),
+        children: [...(node.content?.children ?? [])],
+      },
+      constraints: {
+        canDelete: true,
+        canDuplicate: true,
+        canResize: true,
+        ...(node.constraints ?? {}),
+      },
+      meta: {
+        ...(node.meta ?? {}),
+        createdAt: node.meta?.createdAt ?? new Date(),
+        updatedAt: node.meta?.updatedAt ?? new Date(),
+        creator: node.meta?.creator ?? 'user',
+        tags: Array.isArray(node.meta?.tags) ? node.meta.tags : [],
+        version: node.meta?.version ?? 1,
+      },
+    };
+  }
+
+  // 清理失效的 parentId（父节点可能已被删除）
+  for (const node of Object.values(result)) {
+    if (node.parentId && !result[node.parentId]) {
+      node.parentId = undefined;
+    }
+  }
+
+  return result;
+};
+
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
   ...createInitialState(),
   ...persistenceInitialState,
@@ -286,9 +344,25 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const newNode = createDefaultNode(type, id, name);
 
       const supportsDrag = newNode.layout.position === 'absolute' || newNode.layout.position === 'fixed';
+      const parentNode = parentId ? state.nodes[parentId] : undefined;
+      const parentIsFlowLayout = parentNode
+        ? parentNode.layout.position === 'static' || parentNode.layout.position === 'relative'
+        : false;
+
       if (supportsDrag) {
-        newNode.style.left = `${x}px`;
-        newNode.style.top = `${y}px`;
+        // 画布坐标 → 父容器相对坐标：累加所有绝对定位祖先的 left/top
+        let offsetLeft = 0;
+        let offsetTop = 0;
+        let ancestor: PageNode | undefined = parentNode;
+        while (ancestor) {
+          if (ancestor.layout.position === 'absolute' || ancestor.layout.position === 'fixed') {
+            offsetLeft += parsePxStrict(ancestor.style.left) ?? 0;
+            offsetTop += parsePxStrict(ancestor.style.top) ?? 0;
+          }
+          ancestor = ancestor.parentId ? state.nodes[ancestor.parentId] : undefined;
+        }
+        newNode.style.left = `${x - offsetLeft}px`;
+        newNode.style.top = `${y - offsetTop}px`;
       } else {
         delete newNode.style.left;
         delete newNode.style.top;
@@ -297,25 +371,26 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const updatedNodes = { ...state.nodes };
 
       if (parentId && updatedNodes[parentId]) {
-        const parentNode = updatedNodes[parentId];
-        const children = parentNode.content.children || [];
+        const targetParent = updatedNodes[parentId];
+        const children = targetParent.content.children || [];
 
-        const parentIsFlowLayout = parentNode.layout.position === 'static' || parentNode.layout.position === 'relative';
         if (parentIsFlowLayout) {
           delete newNode.style.left;
           delete newNode.style.top;
           delete newNode.style.position;
-          newNode.style.width = '100%';
-          newNode.style.marginBottom = '10px';
+          // 块级容器中撑满宽度；flex/grid 容器保持自适应，避免破坏多列布局
+          if (targetParent.layout.display !== 'flex' && targetParent.layout.display !== 'grid') {
+            newNode.style.width = '100%';
+          }
         }
 
         // 维护 parentId
         newNode.parentId = parentId;
 
         updatedNodes[parentId] = {
-          ...parentNode,
+          ...targetParent,
           content: {
-            ...parentNode.content,
+            ...targetParent.content,
             children: [...children, id]
           }
         };
@@ -352,18 +427,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         meta: {
           ...node.meta,
           updatedAt: new Date(),
-          version: node.meta.version + 1
+          version: (Number.isFinite(node.meta.version) ? node.meta.version : 0) + 1
         }
       };
 
-      // 历史合并：若上次快照在合并窗口内且同为 updateNode，则不新增快照
-      // 注意：合并时仍需清空 future，因为当前状态已被修改，redo 回旧 future 会丢失合并的修改
+      // 历史合并：显式批次内只记录一次；否则按时间窗口合并
       const now = Date.now();
       const lastSnapshot = state.past[state.past.length - 1];
-      const shouldMerge = lastSnapshot && (now - lastSnapshot.timestamp) < HISTORY_MERGE_WINDOW;
-      const past = shouldMerge
-        ? state.past
-        : [...state.past, createSnapshot(state.nodes, state.selectedNodeId)].slice(-HISTORY_LIMIT);
+      const shouldMerge = !historyBatchActive && !!lastSnapshot && (now - lastSnapshot.timestamp) < HISTORY_MERGE_WINDOW;
+      const shouldPush = historyBatchActive ? !historyBatchPushed : !shouldMerge;
+      const past = shouldPush
+        ? [...state.past, createSnapshot(state.nodes, state.selectedNodeId)].slice(-HISTORY_LIMIT)
+        : state.past;
+      if (historyBatchActive) historyBatchPushed = true;
 
       return {
         nodes: updatedNodes,
@@ -445,8 +521,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         // 计算偏移：绝对定位节点偏移 DUPLICATE_OFFSET_PX，流布局节点不设置 left/top
         const style = { ...source.style };
         if (isAbsolute) {
-          style.left = `${parsePx(source.style.left) + DUPLICATE_OFFSET_PX}px`;
-          style.top = `${parsePx(source.style.top) + DUPLICATE_OFFSET_PX}px`;
+          // 百分比/auto 无法精确偏移，回退到 0，避免把 "50%" 解析成 50px
+          style.left = `${(parsePxStrict(source.style.left) ?? 0) + DUPLICATE_OFFSET_PX}px`;
+          style.top = `${(parsePxStrict(source.style.top) ?? 0) + DUPLICATE_OFFSET_PX}px`;
         } else {
           delete style.left;
           delete style.top;
@@ -478,7 +555,20 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         return newId;
       };
 
-      const newRootId = cloneNode(id, undefined);
+      const originalParentId = node.parentId;
+      const newRootId = cloneNode(id, originalParentId);
+
+      // 复制后的根节点挂回原父级，保持层级与相对坐标
+      if (originalParentId && updatedNodes[originalParentId]) {
+        const parentNode = updatedNodes[originalParentId];
+        updatedNodes[originalParentId] = {
+          ...parentNode,
+          content: {
+            ...parentNode.content,
+            children: [...(parentNode.content.children || []), newRootId],
+          },
+        };
+      }
 
       return {
         nodes: updatedNodes,
@@ -512,12 +602,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       };
       if (newParentId && isDescendant(id, newParentId)) return state;
 
-      // 校验目标父节点是否允许该类型子节点
+      // 校验目标父节点是否允许该类型子节点（undefined = 允许任意，[] = 叶子节点）
       if (newParentId) {
         const targetParent = state.nodes[newParentId];
         if (!targetParent) return state;
         const allowed = targetParent.constraints.allowedChildren;
-        if (allowed && allowed.length > 0 && !allowed.includes(node.type)) return state;
+        if (allowed !== undefined && !allowed.includes(node.type)) return state;
       }
 
       const updatedNodes = { ...state.nodes };
@@ -535,8 +625,38 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         };
       }
 
-      // 2. 更新被移动节点的 parentId
-      updatedNodes[id] = { ...node, parentId: newParentId };
+      // 2. 更新被移动节点的 parentId，并在换父级时换算绝对定位坐标
+      const isAbsoluteNode = node.layout.position === 'absolute' || node.layout.position === 'fixed';
+      if (isAbsoluteNode && oldParentId !== newParentId) {
+        const getParentOffset = (pid: string | undefined): { left: number; top: number } => {
+          let left = 0;
+          let top = 0;
+          let ancestor = pid ? state.nodes[pid] : undefined;
+          while (ancestor) {
+            if (ancestor.layout.position === 'absolute' || ancestor.layout.position === 'fixed') {
+              left += parsePxStrict(ancestor.style.left) ?? 0;
+              top += parsePxStrict(ancestor.style.top) ?? 0;
+            }
+            ancestor = ancestor.parentId ? state.nodes[ancestor.parentId] : undefined;
+          }
+          return { left, top };
+        };
+        const oldOffset = getParentOffset(oldParentId);
+        const newOffset = getParentOffset(newParentId);
+        const absoluteLeft = (parsePxStrict(node.style.left) ?? 0) + oldOffset.left;
+        const absoluteTop = (parsePxStrict(node.style.top) ?? 0) + oldOffset.top;
+        updatedNodes[id] = {
+          ...node,
+          parentId: newParentId,
+          style: {
+            ...node.style,
+            left: `${absoluteLeft - newOffset.left}px`,
+            top: `${absoluteTop - newOffset.top}px`,
+          },
+        };
+      } else {
+        updatedNodes[id] = { ...node, parentId: newParentId };
+      }
 
       // 3. 插入到新父节点 children 的指定位置
       if (newParentId) {
@@ -580,11 +700,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set({ dragTargetNodeId: id });
   },
   
-  // 设置缩放
-  setZoom: (zoom: number) => {
-    set({ zoom: Math.max(0.1, Math.min(3, zoom)) });
-  },
-  
   // 切换网格显示
   toggleGrid: () => {
     set((state) => ({ gridVisible: !state.gridVisible }));
@@ -598,11 +713,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // 设置当前对齐参考线（拖动中实时调用，传 null 清空）
   setAlignmentGuides: (guides: AlignmentGuides | null) => {
     set({ alignmentGuides: guides });
-  },
-  
-  // 设置拖拽项（预留接口，暂无使用）
-  setDragItem: (_item: DragItem | null) => {
-    // 预留：未来用于跨画布拖拽或剪贴板
   },
   
   // 重置画布
@@ -706,13 +816,24 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   // 加载节点到画布（替换当前画布）
   loadNodes: (nodes: Record<string, PageNode>) => {
+    const sanitized = sanitizeLoadedNodes(nodes);
+    if (!sanitized) {
+      console.error('加载失败：节点结构无效');
+      return;
+    }
     set({
-      nodes,
+      nodes: sanitized,
       selectedNodeId: null,
       selectedNodeIds: [],
       hoveredNodeId: null,
       dragTargetNodeId: null,
-      isDirty: false
+      // 导入的内容尚未写入 IndexedDB，标记为脏数据以触发自动保存
+      isDirty: true,
+      // 切换画布后旧历史不再适用，清空避免撤销回上一份内容
+      past: [],
+      future: [],
+      canUndo: false,
+      canRedo: false,
     });
   },
 
@@ -727,16 +848,26 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       }
 
       if (page) {
+        const sanitized = sanitizeLoadedNodes(page.nodes);
+        if (!sanitized) {
+          console.error('加载失败：页面节点结构无效');
+          return;
+        }
         set({
           pageId: page.id,
           pageName: page.name,
           pageCreatedAt: page.createdAt,
-          nodes: page.nodes,
+          nodes: sanitized,
           selectedNodeId: null,
           selectedNodeIds: [],
           hoveredNodeId: null,
           dragTargetNodeId: null,
-          isDirty: false
+          isDirty: false,
+          // 切换页面后清空历史，防止 Ctrl+Z 恢复到上一个页面的节点
+          past: [],
+          future: [],
+          canUndo: false,
+          canRedo: false,
         });
       }
     } catch (error) {
@@ -749,6 +880,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get();
     if (state.isSaving) return;
 
+    // 记录本次保存的节点引用，保存完成后用于判断期间是否又有新编辑
+    const nodesAtSave = state.nodes;
     set({ isSaving: true });
     try {
       const now = Date.now();
@@ -761,30 +894,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         updatedAt: now
       };
       await pageDB.savePage(page);
-      set({ isDirty: false, isSaving: false });
+      set((current) => ({
+        // 保存期间节点发生变化时保持 dirty，避免新编辑被误判为已保存
+        isDirty: current.nodes === nodesAtSave ? false : current.isDirty,
+        isSaving: false,
+      }));
     } catch (error) {
       console.error('Failed to save page:', error);
       set({ isSaving: false });
-      throw error;
-    }
-  },
-
-  // 列出所有页面
-  listPages: async () => {
-    try {
-      return await pageDB.listPages();
-    } catch (error) {
-      console.error('Failed to list pages:', error);
-      return [];
-    }
-  },
-
-  // 删除页面
-  deletePage: async (id: string) => {
-    try {
-      await pageDB.deletePage(id);
-    } catch (error) {
-      console.error('Failed to delete page:', error);
       throw error;
     }
   },
@@ -843,32 +960,101 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
-  // 显式开启历史批次（预留：拖拽开始时调用，标记时间戳用于合并）
+  // 显式开启历史批次（拖拽/缩放开始时调用）
   beginHistoryBatch: () => {
-    // 当前实现：updateNode 已通过时间窗口自动合并
-    // 此接口预留给未来显式批次控制
+    historyBatchActive = true;
+    historyBatchPushed = false;
   },
 
-  // 提交历史批次（预留）
+  // 提交历史批次（拖拽/缩放结束时调用）
   commitHistoryBatch: () => {
-    // 同上
+    historyBatchActive = false;
+    historyBatchPushed = false;
   },
 
-  // 复制节点到剪贴板（仅记录 nodeId，不复制数据）
+  // 复制节点到剪贴板（保存子树快照）
   copyNode: (id: string) => {
-    set({ clipboardNodeId: id });
+    const { nodes } = get();
+    if (!nodes[id]) return;
+
+    const snapshot: Record<string, PageNode> = {};
+    const walk = (nodeId: string) => {
+      const node = nodes[nodeId];
+      if (!node) return;
+      snapshot[nodeId] = {
+        ...node,
+        style: { ...node.style },
+        layout: { ...node.layout },
+        content: { ...node.content, children: [...(node.content.children || [])] },
+        constraints: { ...node.constraints },
+        meta: { ...node.meta, tags: [...node.meta.tags] },
+      };
+      (node.content.children || []).forEach(walk);
+    };
+    walk(id);
+
+    set({ clipboardNodeId: id, clipboardNodes: snapshot });
   },
 
-  // 粘贴节点（基于剪贴板中的 nodeId 调用 duplicateNode）
+  // 粘贴节点（从剪贴板快照克隆，重新生成 ID）
   pasteNode: () => {
-    const { clipboardNodeId, nodes, duplicateNode } = get();
-    if (!clipboardNodeId) return;
-    if (!nodes[clipboardNodeId]) {
-      // 源节点已被删除，清空剪贴板
-      set({ clipboardNodeId: null });
-      return;
-    }
-    duplicateNode(clipboardNodeId);
+    set((state) => {
+      const { clipboardNodes, clipboardNodeId } = state;
+      if (!clipboardNodes || !clipboardNodeId) return state;
+      if (!clipboardNodes[clipboardNodeId]) {
+        return { clipboardNodeId: null, clipboardNodes: null };
+      }
+
+      const cloned: Record<string, PageNode> = {};
+
+      const cloneNode = (oldId: string, parentNewId?: string): string => {
+        const source = clipboardNodes[oldId];
+        if (!source) return '';
+
+        const newId = generateNodeId();
+        const isAbsolute = source.layout.position === 'absolute' || source.layout.position === 'fixed';
+        const style = { ...source.style };
+
+        // 仅根节点做偏移，子节点保持相对父节点的位置
+        if (parentNewId === undefined && isAbsolute) {
+          style.left = `${(parsePxStrict(source.style.left) ?? 0) + DUPLICATE_OFFSET_PX}px`;
+          style.top = `${(parsePxStrict(source.style.top) ?? 0) + DUPLICATE_OFFSET_PX}px`;
+        }
+
+        const newChildren = (source.content.children || [])
+          .map((cid) => cloneNode(cid, newId))
+          .filter(Boolean);
+
+        cloned[newId] = {
+          ...source,
+          id: newId,
+          parentId: parentNewId,
+          style,
+          content: { ...source.content, children: newChildren },
+          meta: {
+            ...source.meta,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            version: 1,
+          },
+        };
+        return newId;
+      };
+
+      const newRootId = cloneNode(clipboardNodeId);
+      if (!newRootId) return state;
+
+      return {
+        nodes: { ...state.nodes, ...cloned },
+        selectedNodeId: newRootId,
+        selectedNodeIds: [newRootId],
+        isDirty: true,
+        past: [...state.past, createSnapshot(state.nodes, state.selectedNodeId)].slice(-HISTORY_LIMIT),
+        future: [],
+        canUndo: true,
+        canRedo: false,
+      };
+    });
   },
 
   // ===== 多选与批量操作（T4.3） =====
@@ -983,7 +1169,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // 批量复制选中节点
   duplicateSelected: () => {
     const state = get();
-    const ids = state.selectedNodeIds;
+    // 祖先也在选中集合时跳过，避免同一子树被重复克隆
+    const ids = state.selectedNodeIds.filter((id) => {
+      const node = state.nodes[id];
+      if (!node) return false;
+      let parentId = node.parentId;
+      while (parentId) {
+        if (state.selectedNodeIds.includes(parentId)) return false;
+        parentId = state.nodes[parentId]?.parentId;
+      }
+      return true;
+    });
     if (ids.length === 0) return;
 
     // 推入一条历史快照
@@ -1030,8 +1226,22 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     };
 
     ids.forEach((id) => {
-      const newId = cloneNode(id, undefined);
-      if (newId) newRootIds.push(newId);
+      const parentId = state.nodes[id]?.parentId;
+      const newId = cloneNode(id, parentId);
+      if (!newId) return;
+      newRootIds.push(newId);
+
+      // 复制后的根节点挂回原父级
+      if (parentId && updatedNodes[parentId]) {
+        const parentNode = updatedNodes[parentId];
+        updatedNodes[parentId] = {
+          ...parentNode,
+          content: {
+            ...parentNode.content,
+            children: [...(parentNode.content.children || []), newId],
+          },
+        };
+      }
     });
 
     set({

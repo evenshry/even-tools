@@ -52,10 +52,10 @@ export class ExportUtils {
     const height = Math.max(1, bounds.maxY - bounds.minY + padding * 2);
 
     const rect = (x: number, y: number, w: number, h: number, fill: string, stroke: string, strokeWidth: number) =>
-      `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${this.escapeXml(fill)}" stroke="${this.escapeXml(stroke)}" stroke-width="${strokeWidth}"/>`;
 
     const text = (x: number, y: number, content: string, fontSize: number, fill: string) =>
-      `<text x="${x}" y="${y}" font-size="${fontSize}" fill="${fill}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${this.escapeXml(
+      `<text x="${x}" y="${y}" font-size="${fontSize}" fill="${this.escapeXml(fill)}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${this.escapeXml(
         content
       )}</text>`;
 
@@ -116,21 +116,6 @@ export class ExportUtils {
     return navigator.clipboard.writeText(svgString);
   }
 
-  // 导出为SVG文件
-  static exportAsSVG(svgElement: SVGSVGElement, filename: string = 'floor-plan.svg') {
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svgElement);
-    
-    // 添加XML声明
-    const svgBlob = new Blob([
-      '<?xml version="1.0" encoding="UTF-8"?>\n' + 
-      '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' + 
-      source
-    ], { type: 'image/svg+xml;charset=utf-8' });
-    
-    this.downloadFile(svgBlob, filename);
-  }
-
   // 导出为PNG文件
   static exportAsPNG(svgElement: SVGSVGElement, filename: string = 'floor-plan.png') {
     return new Promise<void>((resolve, reject) => {
@@ -148,16 +133,22 @@ export class ExportUtils {
       
       const img = new Image();
       img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
+        // 按设备像素比放大，避免高分屏导出模糊
+        const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const width = img.width || 1000;
+        const height = img.height || 800;
+
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
         
         canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url);
           if (blob) {
             this.downloadFile(blob, filename);
-            URL.revokeObjectURL(url);
             resolve();
           } else {
             reject(new Error('无法创建PNG文件'));
@@ -194,16 +185,8 @@ export class ExportUtils {
     URL.revokeObjectURL(url);
   }
 
-  // 复制SVG到剪贴板
-  static copySVGToClipboard(svgElement: SVGSVGElement): Promise<void> {
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svgElement);
-    
-    return navigator.clipboard.writeText(source);
-  }
-
   private static escapeXml(value: string) {
-    return value
+    return String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 
-// ID 生成器：放在非组件文件中，避免 react-hooks/purity 规则误报
-export const genId = (prefix: string): string => `${prefix}-${Date.now()}`;
+// ID 生成器：放在非组件文件中，避免 react-hooks/purity 规则误报；自增序号避免同一毫秒内重复
+let idSequence = 0;
+export const genId = (prefix: string): string => `${prefix}-${Date.now()}-${idSequence++}`;
 
 // 当前选中元素，仅记录身份信息，具体数据从 houseConfig 实时查找
 export interface Selection {
@@ -45,8 +46,11 @@ const normalizeDoorOrWindow = (
   thickness: number
 ) => {
   const isVertical = item.position === 'left' || item.position === 'right';
-  const w = isVertical ? thickness : item.width;
-  const h = isVertical ? item.width : thickness;
+  // 门窗宽度不能超过所在墙的长度
+  const wallLength = isVertical ? room.height : room.width;
+  const width = Math.max(0, Math.min(item.width, wallLength));
+  const w = isVertical ? thickness : width;
+  const h = isVertical ? width : thickness;
 
   let x = 0;
   let y = 0;
@@ -67,6 +71,7 @@ const normalizeDoorOrWindow = (
 
   return {
     ...item,
+    width,
     x,
     y,
     height: h,
@@ -82,15 +87,23 @@ const normalizeRoom = (room: FloorPlan.Room): FloorPlan.Room => {
     ...room,
     x: room.x ?? 0,
     y: room.y ?? 0,
-    color: room.color ?? '#f0f0f0',
+    // 颜色必须为字符串，避免 ColorPicker 等来源写入对象导致导出异常
+    color: typeof room.color === 'string' && room.color ? room.color : '#f0f0f0',
     doors: (room.doors ?? []).map((d) => normalizeDoorOrWindow(room, d, doorThickness) as FloorPlan.Door),
     windows: (room.windows ?? []).map((w) => normalizeDoorOrWindow(room, w, windowThickness) as FloorPlan.Window),
-    furniture: (room.furniture ?? []).map((f) => ({
-      ...f,
-      x: f.x ?? 0,
-      y: f.y ?? 0,
-      rotation: f.rotation ?? 0
-    }))
+    furniture: (room.furniture ?? []).map((f) => {
+      // 家具尺寸与坐标统一约束在房间内
+      const width = Math.min(f.width, room.width);
+      const height = Math.min(f.height, room.height);
+      return {
+        ...f,
+        width,
+        height,
+        x: Math.max(0, Math.min(f.x ?? 0, room.width - width)),
+        y: Math.max(0, Math.min(f.y ?? 0, room.height - height)),
+        rotation: f.rotation ?? 0
+      };
+    })
   };
 };
 
@@ -166,10 +179,10 @@ export const useFloorPlanStore = create<FloorPlanStore>((set) => ({
     set(() => ({ houseConfig: normalizeHouseConfig(config), selectedElement: null }));
   },
 
-  // 更新房屋配置
+  // 更新房屋配置：仅合并顶层字段，避免修改名称等操作触发全量房间归一化
   updateHouseConfig: (config) => {
     set((state) => ({
-      houseConfig: normalizeHouseConfig({ ...state.houseConfig, ...config })
+      houseConfig: { ...state.houseConfig, ...config }
     }));
   },
 

@@ -1,13 +1,85 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, Button, Slider, Space, Typography, Row, Col, message, Tabs, Select, Input, ColorPicker } from "antd";
 import { PlusOutlined, DeleteOutlined, CopyOutlined, CheckOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { hexToRgbaString } from "@/modules/color-calculator/utils/colorUtils";
+import { hexToRgbaString, parseColor } from "@/modules/color-calculator/utils/colorUtils";
 import type { ColorCalculator } from "@/modules/color-calculator/data/interface";
 import { GRADIENT_PRESETS } from "@/modules/color-calculator/data/colorCalculator";
 import "@/modules/color-calculator/components/GradientGenerator.scss";
 
 const { Text } = Typography;
 const { Option } = Select;
+
+interface ColorStopCardProps {
+  stop: ColorCalculator.ColorStop;
+  index: number;
+  removable: boolean;
+  onColorChange: (color: string) => void;
+  onPositionChange: (position: number) => void;
+  onRemove: () => void;
+}
+
+const ColorStopCard = ({ stop, index, removable, onColorChange, onPositionChange, onRemove }: ColorStopCardProps) => {
+  // 颜色输入使用本地草稿，失焦或回车时才提交，避免中间态写入非法值
+  const [draft, setDraft] = useState(stop.color);
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    setDraft(stop.color);
+    setInvalid(false);
+  }, [stop.color]);
+
+  const commitDraft = () => {
+    const parsed = parseColor(draft);
+    if (parsed) {
+      setInvalid(false);
+      onColorChange(parsed);
+    } else {
+      setInvalid(true);
+    }
+  };
+
+  return (
+    <Card size="small" className="color-stop-card">
+      <Space direction="vertical" style={{ width: "100%" }}>
+        <div className="color-stop-header">
+          <Text strong>颜色 {index + 1}</Text>
+          {removable && <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={onRemove} />}
+        </div>
+        <div className="color-stop-controls">
+          <div className="color-picker-wrapper">
+            <ColorPicker
+              value={stop.color}
+              onChange={(color) => onColorChange(color.toHexString())}
+              className="color-input"
+            />
+            <Input
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setInvalid(false);
+              }}
+              onBlur={commitDraft}
+              onPressEnter={commitDraft}
+              status={invalid ? "error" : undefined}
+              placeholder="#000000"
+              style={{ width: 100 }}
+            />
+          </div>
+          <div className="position-slider">
+            <Text style={{ margin: "5px 0" }}>位置: {stop.position}%</Text>
+            <Slider
+              style={{ flex: 1 }}
+              min={0}
+              max={100}
+              value={stop.position}
+              onChange={onPositionChange}
+            />
+          </div>
+        </div>
+      </Space>
+    </Card>
+  );
+};
 
 const GradientGenerator = () => {
   const [gradientType, setGradientType] = useState<ColorCalculator.GradientType>("linear");
@@ -96,31 +168,31 @@ const GradientGenerator = () => {
 
   const generateSVGGradient = (): string => {
     const sortedStops = [...colorStops].sort((a, b) => a.position - b.position);
-    const gradientId = `gradient-${gradientType}-${sortedStops.map((s) => s.color + s.position).join("-")}`;
+    const gradientId = `gradient-${gradientType}`;
+
+    // SVG 没有原生圆锥渐变，改用 foreignObject 承载 CSS conic-gradient，避免导出错误效果
+    if (gradientType === "conic") {
+      return `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:${generateCSSGradient()}"></div>
+  </foreignObject>
+</svg>`;
+    }
 
     let gradientElement = "";
-    let rectElement = "";
 
-    switch (gradientType) {
-      case "linear":
-        const x1 = Math.round(50 + 50 * Math.cos(((angle - 90) * Math.PI) / 180));
-        const y1 = Math.round(50 + 50 * Math.sin(((angle - 90) * Math.PI) / 180));
-        const x2 = Math.round(50 + 50 * Math.cos(((angle + 90) * Math.PI) / 180));
-        const y2 = Math.round(50 + 50 * Math.sin(((angle + 90) * Math.PI) / 180));
+    if (gradientType === "linear") {
+      const x1 = Math.round(50 + 50 * Math.cos(((angle - 90) * Math.PI) / 180));
+      const y1 = Math.round(50 + 50 * Math.sin(((angle - 90) * Math.PI) / 180));
+      const x2 = Math.round(50 + 50 * Math.cos(((angle + 90) * Math.PI) / 180));
+      const y2 = Math.round(50 + 50 * Math.sin(((angle + 90) * Math.PI) / 180));
 
-        gradientElement = `<linearGradient id="${gradientId}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
-        break;
-      case "radial":
-        gradientElement = `<radialGradient id="${gradientId}">`;
-        break;
-      case "conic":
-        gradientElement = `<linearGradient id="${gradientId}" gradientTransform="rotate(${angle})">`;
-        break;
+      gradientElement = `<linearGradient id="${gradientId}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
+    } else {
+      gradientElement = `<radialGradient id="${gradientId}">`;
     }
 
     const stops = sortedStops.map((stop) => `  <stop offset="${stop.position}%" stop-color="${hexToRgbaString(stop.color)}" />`).join("\n");
-
-    rectElement = `<rect width="100%" height="100%" fill="url(#${gradientId})" />`;
 
     return `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -128,53 +200,31 @@ ${gradientElement}
 ${stops}
 </${gradientType === "radial" ? "radialGradient" : "linearGradient"}>
   </defs>
-  ${rectElement}
+  <rect width="100%" height="100%" fill="url(#${gradientId})" />
 </svg>`;
   };
 
-  const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(type);
-    message.success("已复制到剪贴板");
-    setTimeout(() => setCopied(null), 2000);
+  const copyToClipboard = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      message.success("已复制到剪贴板");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      message.error("复制失败，请手动复制");
+    }
   };
 
   const renderColorStopControls = (stop: ColorCalculator.ColorStop, index: number) => (
-    <Card key={stop.id} size="small" className="color-stop-card">
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <div className="color-stop-header">
-          <Text strong>颜色 {index + 1}</Text>
-          {colorStops.length > 2 && (
-            <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeColorStop(stop.id)} />
-          )}
-        </div>
-        <div className="color-stop-controls">
-          <div className="color-picker-wrapper">
-            <ColorPicker
-              value={stop.color}
-              onChange={(color) => updateColorStop(stop.id, "color", color.toHex())}
-              className="color-input"
-            />
-            <Input
-              value={stop.color}
-              onChange={(e) => updateColorStop(stop.id, "color", e.target.value)}
-              placeholder="#000000"
-              style={{ width: 100 }}
-            />
-          </div>
-          <div className="position-slider">
-            <Text style={{ margin: "5px 0" }}>位置: {stop.position}%</Text>
-            <Slider
-              style={{ flex: 1 }}
-              min={0}
-              max={100}
-              value={stop.position}
-              onChange={(value) => updateColorStop(stop.id, "position", value)}
-            />
-          </div>
-        </div>
-      </Space>
-    </Card>
+    <ColorStopCard
+      key={stop.id}
+      stop={stop}
+      index={index}
+      removable={colorStops.length > 2}
+      onColorChange={(color) => updateColorStop(stop.id, "color", color)}
+      onPositionChange={(position) => updateColorStop(stop.id, "position", position)}
+      onRemove={() => removeColorStop(stop.id)}
+    />
   );
 
   return (

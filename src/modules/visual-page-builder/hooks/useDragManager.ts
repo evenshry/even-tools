@@ -1,25 +1,67 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
-import type { DragItem, PageNode, AlignmentGuides } from '../types';
+import type { DragItem, PageNode, AlignmentGuides, NodeType } from '../types';
 import type { RefObject } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
-import { parsePx } from '../utils/styleUtils';
+import { CANVAS_PADDING, parsePxStrict } from '../utils/styleUtils';
 
 /** 对齐吸附阈值（画布坐标，未缩放） */
 const ALIGN_THRESHOLD = 5;
 
 /**
+ * 将客户端坐标转换为画布坐标（未缩放）
+ * 需要扣除画布容器的 border（拖拽高亮时出现）与 padding（16px）
+ */
+const toCanvasPoint = (
+  canvas: HTMLDivElement,
+  clientX: number,
+  clientY: number,
+  zoom: number
+): { x: number; y: number } => {
+  const rect = canvas.getBoundingClientRect();
+  const originX = rect.left + canvas.clientLeft + CANVAS_PADDING;
+  const originY = rect.top + canvas.clientTop + CANVAS_PADDING;
+  return {
+    x: (clientX - originX) / zoom,
+    y: (clientY - originY) / zoom,
+  };
+};
+
+/** 判断 nodeId 是否为 ancestorId 的后代 */
+const isDescendantOf = (
+  nodes: Record<string, PageNode>,
+  ancestorId: string,
+  nodeId: string
+): boolean => {
+  let current = nodes[nodeId];
+  while (current?.parentId) {
+    if (current.parentId === ancestorId) return true;
+    current = nodes[current.parentId];
+  }
+  return false;
+};
+
+/**
+ * 从悬停节点向上查找可接受该类型的容器
+ * - allowedChildren === undefined：允许任意子节点
+ * - allowedChildren 为空数组：叶子节点，继续向上查找
+ */
+const resolveDropParentId = (
+  nodes: Record<string, PageNode>,
+  startId: string | null,
+  type: NodeType
+): string | null => {
+  let current = startId ? nodes[startId] : undefined;
+  while (current) {
+    const allowed = current.constraints.allowedChildren;
+    if (allowed === undefined || allowed.includes(type)) return current.id;
+    current = current.parentId ? nodes[current.parentId] : undefined;
+  }
+  return null;
+};
+
+/**
  * 计算拖动节点与其他节点的对齐参考线 + 吸附偏移
- *
- * 参考线类型：
- * - 垂直方向：left / center / right 三条 x 坐标
- * - 水平方向：top / middle / bottom 三条 y 坐标
- *
- * 当被拖节点某条线与任一目标节点的某条线差值 < ALIGN_THRESHOLD 时：
- * 1. 吸附：将 left/top 修正到对齐位置
- * 2. 显示参考线：在目标位置绘制红色线
- *
- * @returns { left, top, guides } 吸附后的 left/top 与应显示的参考线
  */
 const computeAlignment = (
   dragLeft: number,
@@ -33,7 +75,6 @@ const computeAlignment = (
   const dragBottom = dragTop + dragHeight;
   const dragCenterY = dragTop + dragHeight / 2;
 
-  // 候选吸附：记录最小的差值及对应的吸附后位置
   let bestDX = ALIGN_THRESHOLD + 1;
   let snapLeft: number | null = null;
   let bestDY = ALIGN_THRESHOLD + 1;
@@ -50,13 +91,12 @@ const computeAlignment = (
     const oBottom = other.top + other.height;
     const oCenterY = other.top + other.height / 2;
 
-    // 垂直方向：dragLeft / dragCenterX / dragRight 与 oLeft / oCenterX / oRight 对齐
-    const dragXs: Array<{ value: number; line: number }> = [
+    const dragXs = [
       { value: dragLeft, line: 0 },
       { value: dragCenterX, line: 1 },
       { value: dragRight, line: 2 },
     ];
-    const targetXs: Array<{ value: number; line: number }> = [
+    const targetXs = [
       { value: oLeft, line: 0 },
       { value: oCenterX, line: 1 },
       { value: oRight, line: 2 },
@@ -66,7 +106,6 @@ const computeAlignment = (
         const diff = Math.abs(dx.value - tx.value);
         if (diff < ALIGN_THRESHOLD && diff < bestDX) {
           bestDX = diff;
-          // 吸附后的 left = 目标 x - (dx.value - dragLeft)
           snapLeft = tx.value - (dx.value - dragLeft);
           verticalGuideSet.clear();
           verticalGuideSet.add(tx.value);
@@ -76,13 +115,12 @@ const computeAlignment = (
       });
     });
 
-    // 水平方向
-    const dragYs: Array<{ value: number; line: number }> = [
+    const dragYs = [
       { value: dragTop, line: 0 },
       { value: dragCenterY, line: 1 },
       { value: dragBottom, line: 2 },
     ];
-    const targetYs: Array<{ value: number; line: number }> = [
+    const targetYs = [
       { value: oTop, line: 0 },
       { value: oCenterY, line: 1 },
       { value: oBottom, line: 2 },
@@ -116,28 +154,14 @@ const computeAlignment = (
  * 拖拽管理器接口定义
  */
 export interface DragManager {
-  /** React-DnD drop引用，用于绑定拖拽区域 */
   drop: (element: HTMLDivElement | null) => void;
-  /** 是否正在拖拽悬停在画布上 */
   isOver: boolean;
-  /** 是否可以放置到当前悬停位置 */
   canDrop: boolean;
-  /** 当前正在拖拽的节点ID */
   dragNodeId: string | null;
-  /** 当前悬停的拖拽目标节点ID */
   dragTargetNodeId: string | null;
-  /** 处理节点拖拽开始 */
   handleNodeDragStart: (e: React.MouseEvent, nodeId: string) => void;
-  /** 处理节点拖拽移动 */
   handleNodeDragMove: (e: React.MouseEvent) => void;
-  /** 处理节点拖拽结束 */
   handleNodeDragEnd: () => void;
-  /**
-   * 查找指定位置的节点
-   * @param x 鼠标在画布中的X坐标（已除以 zoom）
-   * @param y 鼠标在画布中的Y坐标（已除以 zoom）
-   * @param nodeMap 已废弃，实现内部通过 DOM 查询定位，保留参数仅为接口兼容
-   */
   findNodeAtPosition: (x: number, y: number, nodeMap?: Record<string, PageNode>) => string | null;
 }
 
@@ -151,17 +175,18 @@ interface DragManagerOptions {
   debounceDelay?: number;
   /** 是否启用边界检查 */
   enableBoundaryCheck?: boolean;
-  /** 是否启用拖拽限制 */
-  enableDragConstraints?: boolean;
+}
+
+/** 一次拖拽会话中缓存的初始位置 */
+interface DragSession {
+  ids: string[];
+  startClientX: number;
+  startClientY: number;
+  starts: Record<string, { left: number; top: number; width: number; height: number }>;
 }
 
 /**
  * 拖拽管理器 - 封装所有拖拽相关的逻辑
- * 
- * @param canvasRef 画布容器的引用
- * @param zoom 当前画布缩放比例
- * @param options 配置选项
- * @returns 拖拽管理器实例
  */
 export const useDragManager = (
   canvasRef: RefObject<HTMLDivElement>,
@@ -170,80 +195,69 @@ export const useDragManager = (
 ): DragManager => {
   const {
     enableDebounce = true,
-    debounceDelay = 16, // 约60fps
+    debounceDelay = 16,
     enableBoundaryCheck = true
   } = options;
 
-  // 从store获取状态和操作（按字段精确订阅，避免任意 store 变化触发重渲染）
+  // 从 store 获取状态和操作（按字段精确订阅）
   const nodes = useCanvasStore(s => s.nodes);
   const hoveredNodeId = useCanvasStore(s => s.hoveredNodeId);
   const dragTargetNodeId = useCanvasStore(s => s.dragTargetNodeId);
   const alignmentGuidesVisible = useCanvasStore(s => s.alignmentGuidesVisible);
   const addNode = useCanvasStore(s => s.addNode);
-  const selectNode = useCanvasStore(s => s.selectNode);
   const hoverNode = useCanvasStore(s => s.hoverNode);
   const setDragTargetNodeId = useCanvasStore(s => s.setDragTargetNodeId);
   const setAlignmentGuides = useCanvasStore(s => s.setAlignmentGuides);
   const updateNode = useCanvasStore(s => s.updateNode);
 
-  // 节点拖拽状态
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  // 当前拖拽的主节点 ID（用于样式与状态）
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  // 拖拽会话（包含多选节点及初始位置），用 ref 避免每帧 setState
+  const dragSessionRef = useRef<DragSession | null>(null);
+  // zoom 用 ref 读取，保证 handleNodeDragStart 保持稳定引用
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
-  // 性能优化相关：ref 缓存最新的 handler，避免拖动时频繁重绑事件监听器
   const handleNodeDragMoveRef = useRef<(e: React.MouseEvent) => void>(() => {});
   const handleNodeDragEndRef = useRef<() => void>(() => {});
 
   /**
-   * 边界检查 - 确保节点不会移出画布
+   * 边界检查 - 确保节点不会移出画布内容区
    */
   const checkBoundary = useCallback((newLeft: number, newTop: number, nodeWidth: number, nodeHeight: number) => {
     if (!enableBoundaryCheck || !canvasRef.current) {
       return { left: newLeft, top: newTop };
     }
 
-    const canvasWidth = canvasRef.current.clientWidth / zoom;
-    const canvasHeight = canvasRef.current.clientHeight / zoom;
+    // clientWidth 包含 padding，需要扣除左右 16px；宽高均为未缩放画布坐标
+    const canvasWidth = (canvasRef.current.clientWidth - CANVAS_PADDING * 2) / zoom;
+    const canvasHeight = (canvasRef.current.clientHeight - CANVAS_PADDING * 2) / zoom;
 
-    // 确保节点不会移出画布边界
-    const constrainedLeft = Math.max(0, Math.min(newLeft, canvasWidth - nodeWidth));
-    const constrainedTop = Math.max(0, Math.min(newTop, canvasHeight - nodeHeight));
+    const constrainedLeft = Math.max(0, Math.min(newLeft, Math.max(0, canvasWidth - nodeWidth)));
+    const constrainedTop = Math.max(0, Math.min(newTop, Math.max(0, canvasHeight - nodeHeight)));
 
     return { left: constrainedLeft, top: constrainedTop };
   }, [enableBoundaryCheck, canvasRef, zoom]);
 
   /**
    * 查找指定位置的节点
-   *
-   * 性能优化方案：
-   * 1. 批量 DOM 查询（querySelectorAll 一次），避免每个节点单独 querySelector
-   * 2. 直接读 getBoundingClientRect，浏览器已计算累积位置（含滚动偏移）
-   * 3. 按 DOM 顺序从后往前命中测试（后渲染的节点在视觉上更靠前）
-   *
-   * @param x 鼠标在画布中的X坐标（已除以 zoom）
-   * @param y 鼠标在画布中的Y坐标（已除以 zoom）
-   * @param nodeMap 节点映射表（保留参数兼容性，内部未使用）
-   * @returns 找到的节点ID，如果没有找到则返回null
+   * @param x 画布坐标 X（已扣除 padding 并除以 zoom）
+   * @param y 画布坐标 Y（已扣除 padding 并除以 zoom）
    */
   const findNodeAtPosition = useCallback((x: number, y: number, _nodeMap?: Record<string, PageNode>): string | null => {
     if (!canvasRef.current) return null;
 
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    // getBoundingClientRect 已包含滚动影响，直接用画布矩形 + 画布坐标 * zoom
-    // 不再额外加 scrollLeft/scrollTop，避免双重偏移
-    const clientX = canvasRect.left + x * zoom;
-    const clientY = canvasRect.top + y * zoom;
-
-    // 一次性查询所有节点 DOM
     const nodeElements = canvasRef.current.querySelectorAll<HTMLElement>('[data-node-id]');
     if (nodeElements.length === 0) return null;
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const clientX = canvasRect.left + canvasRef.current.clientLeft + CANVAS_PADDING + x * zoom;
+    const clientY = canvasRect.top + canvasRef.current.clientTop + CANVAS_PADDING + y * zoom;
 
     // 从后往前遍历（DOM 顺序后面的节点视觉上更靠前）
     for (let i = nodeElements.length - 1; i >= 0; i--) {
       const el = nodeElements[i];
       const rect = el.getBoundingClientRect();
-      // 命中测试
       if (clientX >= rect.left && clientX <= rect.right &&
           clientY >= rect.top && clientY <= rect.bottom) {
         return el.dataset.nodeId || null;
@@ -255,17 +269,11 @@ export const useDragManager = (
 
   /**
    * 判断拖拽项是否可以放置到当前悬停位置
-   * - 没有悬停目标（落到画布空白）：允许，作为根节点
-   * - 悬停节点允许该类型子节点：允许
-   * - 否则：禁止
    */
   const canDropToCurrent = useCallback((item: DragItem): boolean => {
     if (!item.componentType) return false;
     if (!hoveredNodeId) return true; // 画布空白处
-    const hovered = nodes?.[hoveredNodeId];
-    if (!hovered) return true;
-    const allowed = hovered.constraints.allowedChildren || [];
-    return allowed.length === 0 ? false : allowed.includes(item.componentType);
+    return resolveDropParentId(nodes, hoveredNodeId, item.componentType) !== null;
   }, [hoveredNodeId, nodes]);
 
   /**
@@ -280,87 +288,57 @@ export const useDragManager = (
       return;
     }
 
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const x = (clientOffset.x - canvasRect.left) / zoom;
-    const y = (clientOffset.y - canvasRect.top) / zoom;
-
+    const { x, y } = toCanvasPoint(canvasRef.current, clientOffset.x, clientOffset.y, zoom);
     const newHoveredNodeId = findNodeAtPosition(x, y, nodes);
 
     if (newHoveredNodeId !== hoveredNodeId) {
       hoverNode(newHoveredNodeId);
     }
 
-    // 同步更新拖拽目标状态（与 canDrop 保持一致）
-    if (newHoveredNodeId && item.componentType && nodes?.[newHoveredNodeId]) {
-      const hovered = nodes[newHoveredNodeId];
-      const allowed = hovered.constraints.allowedChildren || [];
-      const canDropToNode = allowed.length > 0 && allowed.includes(item.componentType);
-      setDragTargetNodeId(canDropToNode ? newHoveredNodeId : null);
+    if (newHoveredNodeId && item.componentType) {
+      const dropParentId = resolveDropParentId(nodes, newHoveredNodeId, item.componentType);
+      setDragTargetNodeId(dropParentId);
     } else {
       setDragTargetNodeId(null);
     }
   }, [canvasRef, zoom, nodes, hoveredNodeId, hoverNode, setDragTargetNodeId, findNodeAtPosition]);
 
-  /**
-   * 防抖化的 hover 处理器
-   * 使用 ref 保存最新的 handleHoverCore，避免闭包陷阱（旧实现仅初始化一次，
-   * 捕获的 handleHoverCore 永远是首次版本，导致拖动中 hover 判定基于过期 nodes）
-   */
+  // 通过 ref 读取最新 hover 逻辑，避免闭包陷阱
   const handleHoverCoreRef = useRef(handleHoverCore);
   handleHoverCoreRef.current = handleHoverCore;
 
-  const debouncedHoverRef = useRef<((item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => void) | null>(null);
-  if (debouncedHoverRef.current === null) {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let lastItem: DragItem | null = null;
-    let lastMonitor: { getClientOffset: () => { x: number; y: number } | null } | null = null;
-    debouncedHoverRef.current = (item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
-      lastItem = item;
-      lastMonitor = monitor;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (lastItem && lastMonitor) {
-          // 通过 ref 读取最新的 handleHoverCore，避免闭包陷阱
-          handleHoverCoreRef.current(lastItem, lastMonitor);
-        }
-        timer = null;
+  // 防抖定时器需要在卸载时清理
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+  }, []);
+
+  const hoverHandler = useMemo(() => {
+    if (!enableDebounce) return handleHoverCore;
+    return (item: DragItem, monitor: { getClientOffset: () => { x: number; y: number } | null }) => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = setTimeout(() => {
+        handleHoverCoreRef.current(item, monitor);
+        hoverTimerRef.current = null;
       }, debounceDelay);
     };
-  }
+  }, [enableDebounce, debounceDelay, handleHoverCore]);
 
   /**
    * 处理组件拖拽放置
    */
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: "component",
-
-    /**
-     * canDrop 谓词 - 决定拖拽时是否显示"可放置"状态
-     */
     canDrop: (item: DragItem) => canDropToCurrent(item),
-
-    /**
-     * 拖拽放置处理函数
-     */
     drop: (item: DragItem, monitor) => {
       if (!canvasRef.current) return;
 
-      const offset = monitor.getSourceClientOffset();
-      if (!offset || !item.componentType) return;
+      // 优先使用光标位置；getSourceClientOffset 是元素左上角，会额外偏移
+      const clientOffset = monitor.getClientOffset() ?? monitor.getSourceClientOffset();
+      if (!clientOffset || !item.componentType) return;
 
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      const x = (offset.x - canvasRect.left) / zoom;
-      const y = (offset.y - canvasRect.top) / zoom;
-
-      // 检查是否有可放置的父节点
-      let parentId: string | undefined = undefined;
-      if (hoveredNodeId && nodes?.[hoveredNodeId]) {
-        const hovered = nodes[hoveredNodeId];
-        const allowed = hovered.constraints.allowedChildren || [];
-        if (allowed.includes(item.componentType)) {
-          parentId = hoveredNodeId;
-        }
-      }
+      const { x, y } = toCanvasPoint(canvasRef.current, clientOffset.x, clientOffset.y, zoom);
+      const parentId = resolveDropParentId(nodes, hoveredNodeId, item.componentType) ?? undefined;
 
       try {
         addNode(item.componentType, x, y, parentId);
@@ -368,131 +346,158 @@ export const useDragManager = (
         console.error('Failed to add node:', error);
       }
     },
-
-    /**
-     * 拖拽悬停处理函数
-     */
-    hover: enableDebounce
-      ? debouncedHoverRef.current!
-      : handleHoverCore,
-
+    hover: hoverHandler,
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [zoom, nodes, hoveredNodeId, addNode, hoverNode, setDragTargetNodeId, findNodeAtPosition, enableDebounce, debounceDelay, canDropToCurrent, handleHoverCore]);
+  }), [zoom, nodes, hoveredNodeId, addNode, canDropToCurrent, hoverHandler]);
 
   /**
    * 处理节点拖拽开始
+   * - 支持 Shift/Ctrl 多选后整体拖动（仅 absolute/fixed 节点）
+   * - 稳定引用，避免 CanvasNode memo 失效
    */
   const handleNodeDragStart = useCallback((e: React.MouseEvent, nodeId: string) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
-    
-    // 验证节点是否存在
-    if (!nodes || !nodes[nodeId]) {
-      console.warn(`Node with id ${nodeId} not found`);
-      return;
-    }
-    
-    setIsDragging(true);
+
+    const state = useCanvasStore.getState();
+    const node = state.nodes[nodeId];
+    if (!node) return;
+
+    // Ctrl/Cmd 点击取消选中后不再启动拖拽
+    if ((e.ctrlKey || e.metaKey) && !state.selectedNodeIds.includes(nodeId)) return;
+
+    const selected = state.selectedNodeIds.filter((id) => {
+      const n = state.nodes[id];
+      if (!n) return false;
+      if (n.layout.position !== 'absolute' && n.layout.position !== 'fixed') return false;
+      // 祖先也被选中时跳过，避免子树被移动两次
+      let parentId = n.parentId;
+      while (parentId) {
+        if (state.selectedNodeIds.includes(parentId)) return false;
+        parentId = state.nodes[parentId]?.parentId;
+      }
+      return true;
+    });
+    const ids = selected.includes(nodeId) ? selected : [nodeId];
+
+    const starts: DragSession['starts'] = {};
+    ids.forEach((id) => {
+      const n = state.nodes[id];
+      if (!n) return;
+      starts[id] = {
+        left: parsePxStrict(n.style.left) ?? 0,
+        top: parsePxStrict(n.style.top) ?? 0,
+        width: parsePxStrict(n.style.width) ?? 100,
+        height: parsePxStrict(n.style.height) ?? 100,
+      };
+    });
+
+    dragSessionRef.current = {
+      ids,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      starts,
+    };
     setDragNodeId(nodeId);
-    setDragStartPos({ x: e.clientX, y: e.clientY });
-    selectNode(nodeId);
-  }, [selectNode, nodes]);
+    state.beginHistoryBatch();
+  }, []);
 
   /**
    * 处理节点拖拽移动（带边界检查 + 对齐吸附）
+   * 使用会话初始位置 + 总位移计算，避免同帧多次 mousemove 丢失位移
    */
-  const handleNodeDragMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isDragging || !dragNodeId) return;
+  const handleNodeDragMove = useCallback((e: React.MouseEvent) => {
+    const session = dragSessionRef.current;
+    if (!session || !dragNodeId) return;
 
-      const node = nodes && nodes[dragNodeId];
-      if (!node) return;
+    const deltaX = (e.clientX - session.startClientX) / zoom;
+    const deltaY = (e.clientY - session.startClientY) / zoom;
 
-      const deltaX = (e.clientX - dragStartPos.x) / zoom;
-      const deltaY = (e.clientY - dragStartPos.y) / zoom;
+    // 用容器对象保存回调内的赋值，避免 TS 控制流把 guides 收窄为 null
+    const guideHolder: { value: AlignmentGuides | null } = { value: null };
 
-      const nodeWidth = parsePx(node.style.width) || 100;
-      const nodeHeight = parsePx(node.style.height) || 100;
-      let newLeft = parsePx(node.style.left) + deltaX;
-      let newTop = parsePx(node.style.top) + deltaY;
+    session.ids.forEach((id) => {
+      const node = nodes[id];
+      const start = session.starts[id];
+      if (!node || !start) return;
 
-      // 边界检查
-      const constrainedPos = checkBoundary(newLeft, newTop, nodeWidth, nodeHeight);
-      newLeft = constrainedPos.left;
-      newTop = constrainedPos.top;
+      let newLeft = start.left + deltaX;
+      let newTop = start.top + deltaY;
 
-      // 对齐吸附 + 参考线（仅在对齐参考线开关打开时计算）
-      let guides: AlignmentGuides | null = null;
-      if (alignmentGuidesVisible && nodes) {
-        const others: Array<{ id: string; left: number; top: number; width: number; height: number }> = [];
-        Object.values(nodes).forEach((n) => {
-          if (n.id === dragNodeId) return;
-          // 仅绝对/固定定位的可见节点参与对齐
-          if (n.layout.position !== 'absolute' && n.layout.position !== 'fixed') return;
-          if (n.layout.display === 'none') return;
-          others.push({
-            id: n.id,
-            left: parsePx(n.style.left),
-            top: parsePx(n.style.top),
-            width: parsePx(n.style.width) || 100,
-            height: parsePx(n.style.height) || 100,
+      // 仅主节点参与边界检查与对齐吸附
+      if (id === dragNodeId) {
+        const constrained = checkBoundary(newLeft, newTop, start.width, start.height);
+        newLeft = constrained.left;
+        newTop = constrained.top;
+
+        if (alignmentGuidesVisible) {
+          const others: Array<{ id: string; left: number; top: number; width: number; height: number }> = [];
+          Object.values(nodes).forEach((n) => {
+            if (session.ids.includes(n.id)) return;
+            if (n.layout.position !== 'absolute' && n.layout.position !== 'fixed') return;
+            if (n.layout.display === 'none') return;
+            // 只在同一父级坐标系内比较，并排除被拖节点的后代
+            if (n.parentId !== node.parentId) return;
+            if (isDescendantOf(nodes, dragNodeId, n.id)) return;
+
+            const left = parsePxStrict(n.style.left);
+            const top = parsePxStrict(n.style.top);
+            if (left === null || top === null) return;
+
+            others.push({
+              id: n.id,
+              left,
+              top,
+              width: parsePxStrict(n.style.width) ?? 100,
+              height: parsePxStrict(n.style.height) ?? 100,
+            });
           });
-        });
 
-        if (others.length > 0) {
-          const result = computeAlignment(newLeft, newTop, nodeWidth, nodeHeight, others);
-          newLeft = result.left;
-          newTop = result.top;
-          guides = result.guides;
+          if (others.length > 0) {
+            const result = computeAlignment(newLeft, newTop, start.width, start.height, others);
+            newLeft = result.left;
+            newTop = result.top;
+            guideHolder.value = result.guides;
+          }
         }
       }
 
-      try {
-        updateNode(dragNodeId, {
-          style: {
-            ...node.style,
-            left: `${newLeft}px`,
-            top: `${newTop}px`,
-          },
-        });
-        // 同步参考线（仅当有参考线时设置；无则清空）
-        if (guides && (guides.horizontal.length > 0 || guides.vertical.length > 0)) {
-          setAlignmentGuides(guides);
-        } else if (useCanvasStore.getState().alignmentGuides) {
-          setAlignmentGuides(null);
-        }
-      } catch (error) {
-        console.error('Failed to update node position:', error);
-      }
+      updateNode(id, {
+        style: {
+          ...node.style,
+          left: `${newLeft}px`,
+          top: `${newTop}px`,
+        },
+      });
+    });
 
-      setDragStartPos({ x: e.clientX, y: e.clientY });
-    },
-    [isDragging, dragNodeId, dragStartPos, nodes, zoom, updateNode, checkBoundary, alignmentGuidesVisible, setAlignmentGuides]
-  );
+    const guides = guideHolder.value;
+    if (guides && (guides.horizontal.length > 0 || guides.vertical.length > 0)) {
+      setAlignmentGuides(guides);
+    } else if (useCanvasStore.getState().alignmentGuides) {
+      setAlignmentGuides(null);
+    }
+  }, [dragNodeId, nodes, zoom, updateNode, checkBoundary, alignmentGuidesVisible, setAlignmentGuides]);
 
   /**
    * 处理节点拖拽结束
    */
   const handleNodeDragEnd = useCallback(() => {
-    setIsDragging(false);
+    dragSessionRef.current = null;
     setDragNodeId(null);
-    // 清空对齐参考线
-    if (useCanvasStore.getState().alignmentGuides) {
-      setAlignmentGuides(null);
-    }
+    setAlignmentGuides(null);
+    useCanvasStore.getState().commitHistoryBatch();
   }, [setAlignmentGuides]);
 
-  // 同步最新 handler 到 ref，供全局事件监听器使用
-  // 这样 useEffect 只依赖 isDragging，避免拖动时每帧重绑 document 事件
   handleNodeDragMoveRef.current = handleNodeDragMove;
   handleNodeDragEndRef.current = handleNodeDragEnd;
 
-  // 添加全局鼠标事件监听器
-  // 仅在 isDragging 切换时绑定/解绑，不依赖 handleNodeDragMove（每帧变化）
+  // 仅在拖拽开始/结束时绑定全局事件
   useEffect(() => {
-    if (!isDragging) return;
+    if (!dragNodeId) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       handleNodeDragMoveRef.current(e as unknown as React.MouseEvent);
@@ -509,9 +514,8 @@ export const useDragManager = (
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging]);
+  }, [dragNodeId]);
 
-  // 使用 useMemo 稳定返回对象引用，避免每帧新建导致子组件 memo 失效
   return useMemo<DragManager>(() => ({
     drop,
     isOver,

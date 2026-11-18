@@ -51,24 +51,45 @@ const EDGE_POSITION_OPTIONS: { value: FloorPlan.Door['position']; label: string 
   { value: 'right', label: '右侧' },
 ];
 
+// 属性表单字段合集：同一表单实例按选中元素类型展示不同子集
+type PropertyFormValues = {
+  name?: string;
+  type?: string;
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  color?: string;
+  rotation?: number;
+  position?: FloorPlan.Door['position'];
+  offset?: number;
+};
+
 const PropertyPanel: React.FC = () => {
   const { houseConfig, updateHouseConfig, updateRoom, updateFurniture, updateDoor, updateWindow, deleteRoom, deleteFurniture, deleteDoor, deleteWindow, selectedElement } = useFloorPlanStore();
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<PropertyFormValues>();
 
-  // 选中元素身份 key：仅在身份变化时同步表单，避免拖拽过程覆盖用户输入
+  // 选中元素身份 key：用于判断是否需要清空上一类表单字段
   const selectionKey = selectedElement
     ? `${selectedElement.originalType}:${selectedElement.roomId}:${selectedElement.furnitureId ?? ''}:${selectedElement.doorId ?? ''}:${selectedElement.windowId ?? ''}`
     : '';
   const lastKeyRef = useRef('');
 
+  // 同一选中元素的数据变化（拖拽、缩放）也要同步到表单，避免保存时写回旧坐标
   useEffect(() => {
     if (!selectedElement) {
-      form.resetFields();
-      lastKeyRef.current = '';
+      if (lastKeyRef.current) {
+        form.resetFields();
+        lastKeyRef.current = '';
+      }
       return;
     }
-    if (lastKeyRef.current === selectionKey) return;
-    lastKeyRef.current = selectionKey;
+
+    // 切换选中元素时先清空上一类型残留字段
+    if (lastKeyRef.current !== selectionKey) {
+      form.resetFields();
+      lastKeyRef.current = selectionKey;
+    }
 
     if (selectedElement.originalType === 'room') {
       const room = houseConfig.rooms.find((r) => r.id === selectedElement.roomId);
@@ -123,16 +144,42 @@ const PropertyPanel: React.FC = () => {
   }, [selectedElement, selectionKey, houseConfig, form]);
 
   // 处理属性更新
-  const handlePropertiesUpdate = (values: any) => {
+  const handlePropertiesUpdate = (values: PropertyFormValues) => {
     if (!selectedElement) return;
     if (selectedElement.originalType === 'room') {
-      updateRoom(selectedElement.roomId, values);
+      updateRoom(selectedElement.roomId, {
+        name: values.name,
+        type: values.type as FloorPlan.RoomType | undefined,
+        width: values.width,
+        height: values.height,
+        x: values.x,
+        y: values.y,
+        color: values.color
+      });
     } else if (selectedElement.originalType === 'furniture') {
-      updateFurniture(selectedElement.roomId, selectedElement.furnitureId!, values);
+      updateFurniture(selectedElement.roomId, selectedElement.furnitureId!, {
+        name: values.name,
+        type: values.type as FloorPlan.FurnitureType | undefined,
+        width: values.width,
+        height: values.height,
+        x: values.x,
+        y: values.y,
+        rotation: values.rotation
+      });
     } else if (selectedElement.originalType === 'door') {
-      updateDoor(selectedElement.roomId, selectedElement.doorId!, values);
+      updateDoor(selectedElement.roomId, selectedElement.doorId!, {
+        type: values.type as FloorPlan.Door['type'] | undefined,
+        width: values.width,
+        position: values.position,
+        offset: values.offset
+      });
     } else if (selectedElement.originalType === 'window') {
-      updateWindow(selectedElement.roomId, selectedElement.windowId!, values);
+      updateWindow(selectedElement.roomId, selectedElement.windowId!, {
+        type: values.type as FloorPlan.Window['type'] | undefined,
+        width: values.width,
+        position: values.position,
+        offset: values.offset
+      });
     }
   };
 
@@ -200,16 +247,6 @@ const PropertyPanel: React.FC = () => {
                 max={200}
                 value={houseConfig.gridSize}
                 onChange={(value) => updateHouseConfig({ gridSize: value || 50 })}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-            <Form.Item label="缩放比例">
-              <InputNumber
-                min={0.1}
-                max={3}
-                step={0.1}
-                value={houseConfig.scale}
-                onChange={(value) => updateHouseConfig({ scale: value || 1 })}
                 style={{ width: '100%' }}
               />
             </Form.Item>
@@ -309,11 +346,11 @@ const PropertyPanel: React.FC = () => {
             <Divider style={{ margin: '12px 0' }} />
             
             <Form.Item label="宽度" name="width">
-              <InputNumber min={100} max={1000} style={{ width: '100%' }} />
+              <InputNumber min={50} max={1000} style={{ width: '100%' }} />
             </Form.Item>
             
             <Form.Item label="高度" name="height">
-              <InputNumber min={100} max={1000} style={{ width: '100%' }} />
+              <InputNumber min={50} max={1000} style={{ width: '100%' }} />
             </Form.Item>
             
             <Form.Item label="X坐标" name="x">
@@ -324,7 +361,9 @@ const PropertyPanel: React.FC = () => {
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
             
-            <Form.Item label="房间颜色" name="color">
+            <Form.Item label="房间颜色" name="color" getValueFromEvent={(color) =>
+              typeof color === 'string' ? color : color?.toHexString?.() ?? '#f0f0f0'
+            }>
               <ColorPicker />
             </Form.Item>
           </Form>

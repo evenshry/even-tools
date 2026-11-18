@@ -1,6 +1,7 @@
 import React from "react";
 import { useCanvasStore } from "../store/useCanvasStore";
 import { NodeType, type EventsConfig } from "../types";
+import { buildNodeStyle } from "../utils/styleUtils";
 
 interface PreviewRendererProps {
   nodeId: string;
@@ -30,7 +31,8 @@ const buildEventHandlers = (events: EventsConfig | undefined) => {
           try {
             const url = new URL(payload, window.location.href);
             if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
-            window.location.href = url.href;
+            // 在新窗口打开，避免直接跳离编辑器导致未保存内容丢失
+            window.open(url.href, '_blank', 'noopener,noreferrer');
           } catch {
             // 无效 URL，忽略
           }
@@ -38,17 +40,21 @@ const buildEventHandlers = (events: EventsConfig | undefined) => {
       case "toggleVisibility": {
         return () => {
           if (!payload) return;
-          const store = useCanvasStore.getState();
-          const target = store.nodes[payload];
+          // 预览模式下仅在本地切换 DOM 显示，不写入 store，避免污染历史与 isDirty
+          const target = Array.from(document.querySelectorAll<HTMLElement>('[data-preview-id]'))
+            .find((el) => el.dataset.previewId === payload);
           if (!target) return;
-          const hidden = target.layout.display === "none";
-          store.updateNode(payload, {
-            layout: { ...target.layout, display: hidden ? "block" : "none" },
-          });
+          if (target.style.display === 'none') {
+            target.style.display = target.dataset.originalDisplay ?? '';
+            delete target.dataset.originalDisplay;
+          } else {
+            target.dataset.originalDisplay = target.style.display;
+            target.style.display = 'none';
+          }
         };
       }
       case "custom":
-        // 自定义动作预留：运行用户在 payload 中编写的表达式（暂不执行，避免 eval）
+        // 自定义动作预留：暂不执行用户表达式，避免 eval
         return undefined;
       default:
         return undefined;
@@ -69,7 +75,7 @@ const buildEventHandlers = (events: EventsConfig | undefined) => {
 };
 
 const PreviewRenderer: React.FC<PreviewRendererProps> = ({ nodeId }) => {
-  // 精确订阅单个节点：避免任一节点变化导致所有 PreviewRenderer 重渲染（O(n²) → O(1)）
+  // 精确订阅单个节点：避免任一节点变化导致所有 PreviewRenderer 重渲染
   const node = useCanvasStore((s) => s.nodes[nodeId]);
 
   if (!node) {
@@ -80,122 +86,206 @@ const PreviewRenderer: React.FC<PreviewRendererProps> = ({ nodeId }) => {
   const childIds = node.content.children || [];
   const eventHandlers = buildEventHandlers(node.events);
 
-  // 渲染节点内容
-  const renderNodeContent = () => {
-    const { style, layout, content } = node;
+  // 画布 / 预览共用同一套样式映射
+  const nodeStyle = buildNodeStyle(node);
 
-    // 合并样式（显式挑选 layout 的 CSS 属性，避免展开非 CSS 字段如 type）
-    const nodeStyle: React.CSSProperties = {
-      ...style,
-      display: layout?.display,
-      position: layout?.position || "relative",
-      flexDirection: layout?.flexDirection,
-      flexWrap: layout?.flexWrap,
-      gridTemplateColumns: layout?.gridTemplateColumns,
-      gridTemplateRows: layout?.gridTemplateRows,
-      width: style?.width ?? "100%",
-      height: style?.height ?? "auto",
-      minHeight: style?.minHeight ?? "auto",
-      backgroundColor: style?.backgroundColor ?? "transparent",
-      padding: style?.padding ?? "0",
-      margin: style?.margin ?? "0",
-      border: style?.border ?? "none",
-      borderRadius: style?.borderRadius ?? "0",
-      boxShadow: style?.boxShadow ?? "none",
-    };
+  const renderChildren = () =>
+    childIds.map((cid) => <PreviewRenderer key={cid} nodeId={cid} />);
 
-    const renderChildren = () =>
-      childIds.map((cid) => <PreviewRenderer key={cid} nodeId={cid} />);
+  /** 统一的节点标识，供 toggleVisibility 在预览内定位目标 */
+  const previewIdProps = { 'data-preview-id': nodeId };
 
-    // 根据节点类型渲染不同的内容
-    switch (node.type) {
-      case NodeType.SECTION:
-        return (
-          <section className="preview-section" style={nodeStyle} {...eventHandlers}>
-            {renderChildren()}
-          </section>
-        );
+  // 根据节点类型渲染不同的内容
+  switch (node.type) {
+    case NodeType.SECTION:
+      return (
+        <section className="preview-section" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {renderChildren()}
+        </section>
+      );
 
-      case NodeType.CONTAINER:
-        return (
-          <div className="preview-container" style={nodeStyle} {...eventHandlers}>
-            {renderChildren()}
-          </div>
-        );
+    case NodeType.CONTAINER:
+      return (
+        <div className="preview-container" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {renderChildren()}
+        </div>
+      );
 
-      case NodeType.DIV:
-        return (
-          <div className="preview-div" style={nodeStyle} {...eventHandlers}>
-            {renderChildren()}
-          </div>
-        );
+    case NodeType.DIV:
+      return (
+        <div className="preview-div" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text ? <div>{node.content.text}</div> : null}
+          {renderChildren()}
+        </div>
+      );
 
-      case NodeType.FLEX:
-        return (
-          <div
-            className="preview-flex"
-            style={{
-              ...nodeStyle,
-              display: "flex",
-              flexDirection: layout?.flexDirection || "row",
-              justifyContent: "flex-start",
-              alignItems: "stretch",
-              flexWrap: layout?.flexWrap || "nowrap",
-              gap: "0",
-            }}
-            {...eventHandlers}
-          >
-            {renderChildren()}
-          </div>
-        );
+    case NodeType.FORM:
+    case NodeType.STACK:
+    case NodeType.PAGE:
+      return (
+        <div style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {renderChildren()}
+        </div>
+      );
 
-      case NodeType.GRID:
-        return (
-          <div
-            className="preview-grid"
-            style={{
-              ...nodeStyle,
-              display: "grid",
-              gridTemplateColumns: layout?.gridTemplateColumns || "1fr",
-              gridTemplateRows: layout?.gridTemplateRows || "auto",
-              gap: "0",
-            }}
-            {...eventHandlers}
-          >
-            {renderChildren()}
-          </div>
-        );
+    case NodeType.FLEX:
+      return (
+        <div
+          className="preview-flex"
+          style={{
+            ...nodeStyle,
+            display: "flex",
+            flexDirection: node.layout.flexDirection || "row",
+            flexWrap: node.layout.flexWrap || "nowrap",
+          }}
+          {...previewIdProps}
+          {...eventHandlers}
+        >
+          {renderChildren()}
+        </div>
+      );
 
-      case NodeType.TEXT:
-        return (
-          <div className="preview-text" style={nodeStyle} {...eventHandlers}>
-            {content?.text || "文本内容"}
-          </div>
-        );
+    case NodeType.GRID:
+      return (
+        <div
+          className="preview-grid"
+          style={{
+            ...nodeStyle,
+            display: "grid",
+            gridTemplateColumns: node.layout.gridTemplateColumns || "1fr",
+            gridTemplateRows: node.layout.gridTemplateRows || "auto",
+          }}
+          {...previewIdProps}
+          {...eventHandlers}
+        >
+          {renderChildren()}
+        </div>
+      );
 
-      case NodeType.BUTTON:
-        return (
-          <button className="preview-button" style={nodeStyle} {...eventHandlers}>
-            {content?.text || "按钮"}
-          </button>
-        );
+    case NodeType.TEXT:
+      return (
+        <div className="preview-text" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text || "文本内容"}
+        </div>
+      );
 
-      case NodeType.IMAGE:
-        return <img className="preview-image" src={content?.src || "/placeholder-image.jpg"} alt="图片" style={nodeStyle} {...eventHandlers} />;
+    case NodeType.HEADING:
+      return (
+        <h2 className="preview-heading" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text || "标题"}
+        </h2>
+      );
 
-      case NodeType.INPUT:
-        return <input className="preview-input" type="text" placeholder="请输入内容" style={nodeStyle} {...eventHandlers} />;
+    case NodeType.SPAN:
+      return (
+        <span className="preview-span" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text || ""}
+        </span>
+      );
 
-      default:
-        return (
-          <div className="preview-unknown" style={nodeStyle} {...eventHandlers}>
-            {renderChildren()}
-          </div>
-        );
-    }
-  };
+    case NodeType.BUTTON:
+      return (
+        <button className="preview-button" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text || "按钮"}
+        </button>
+      );
 
-  return renderNodeContent();
+    case NodeType.IMAGE:
+      return node.content.src ? (
+        <img
+          className="preview-image"
+          src={node.content.src}
+          alt={node.name}
+          style={nodeStyle}
+          {...previewIdProps}
+          {...eventHandlers}
+        />
+      ) : (
+        <div
+          className="preview-image-empty"
+          style={{
+            ...nodeStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: nodeStyle.backgroundColor ?? '#f5f5f5',
+            color: '#999',
+          }}
+          {...previewIdProps}
+          {...eventHandlers}
+        >
+          图片
+        </div>
+      );
+
+    case NodeType.INPUT:
+      return (
+        <input
+          className="preview-input"
+          type="text"
+          placeholder={node.content.text || "请输入内容"}
+          style={nodeStyle}
+          {...previewIdProps}
+          {...eventHandlers}
+        />
+      );
+
+    case NodeType.SELECT:
+      return (
+        <select className="preview-select" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          <option>{node.content.text || "请选择"}</option>
+        </select>
+      );
+
+    case NodeType.CHECKBOX:
+      return (
+        <label className="preview-checkbox" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          <input type="checkbox" />
+          <span>{node.content.text || "复选框"}</span>
+        </label>
+      );
+
+    case NodeType.VIDEO:
+      return node.content.src ? (
+        <video
+          className="preview-video"
+          src={node.content.src}
+          style={nodeStyle}
+          controls
+          {...previewIdProps}
+          {...eventHandlers}
+        />
+      ) : (
+        <div
+          style={{
+            ...nodeStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: nodeStyle.backgroundColor ?? '#f5f5f5',
+            color: '#999',
+          }}
+          {...previewIdProps}
+          {...eventHandlers}
+        >
+          视频
+        </div>
+      );
+
+    case NodeType.ICON:
+      return (
+        <div className="preview-icon" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {node.content.text || "⭐"}
+        </div>
+      );
+
+    default:
+      return (
+        <div className="preview-unknown" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
+          {renderChildren()}
+        </div>
+      );
+  }
 };
 
 export default PreviewRenderer;

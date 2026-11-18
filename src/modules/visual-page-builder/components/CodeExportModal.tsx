@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Modal, Tabs, Button, Space, message, Typography } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import type { PageNode } from '../types';
@@ -20,6 +20,9 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
   const [activeFormat, setActiveFormat] = useState<ExportFormat>('html');
   // 精确订阅 loadNodes，避免无关 store 变化触发 Modal 重渲染
   const loadNodes = useCanvasStore((s) => s.loadNodes);
+  const pageName = useCanvasStore((s) => s.pageName);
+  // Schema 页签允许编辑，便于导入外部/手改的 JSON
+  const [schemaInput, setSchemaInput] = useState('');
 
   /** 根据当前格式生成代码（仅在 nodes 或格式变化时计算） */
   const code = useMemo(() => {
@@ -41,29 +44,43 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
     }
   }, [open, nodes, activeFormat]);
 
+  // 打开弹窗或切到 Schema 页签时，用当前画布生成的 schema 初始化编辑区
+  useEffect(() => {
+    if (open && activeFormat === 'schema') {
+      setSchemaInput(generateSchema(nodes));
+    }
+  }, [open, activeFormat, nodes]);
+
+  // Schema 页签以编辑区内容为准（支持粘贴外部 JSON）
+  const output = activeFormat === 'schema' ? schemaInput : code;
+
   /** 复制到剪贴板 */
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(output);
       message.success('已复制到剪贴板');
     } catch {
       // 降级方案：使用 textarea + execCommand
       const textarea = document.createElement('textarea');
-      textarea.value = code;
+      textarea.value = output;
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
       document.body.appendChild(textarea);
       textarea.select();
       try {
-        document.execCommand('copy');
-        message.success('已复制到剪贴板');
+        const succeeded = document.execCommand('copy');
+        if (succeeded) {
+          message.success('已复制到剪贴板');
+        } else {
+          message.error('复制失败，请手动选择文本复制');
+        }
       } catch {
         message.error('复制失败，请手动选择文本复制');
       } finally {
         document.body.removeChild(textarea);
       }
     }
-  }, [code]);
+  }, [output]);
 
   /** 下载文件 */
   const handleDownload = useCallback(() => {
@@ -77,10 +94,10 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
       react: 'text/plain',
       schema: 'application/json',
     };
-    const filename = `export-${Date.now()}.${extMap[activeFormat]}`;
-    downloadTextFile(filename, code, mimeMap[activeFormat]);
+    const filename = `${pageName.replace(/[\\/:*?"<>|]/g, '-') || 'page'}-${activeFormat}-${Date.now()}.${extMap[activeFormat]}`;
+    downloadTextFile(filename, output, mimeMap[activeFormat]);
     message.success(`已下载：${filename}`);
-  }, [code, activeFormat]);
+  }, [output, activeFormat, pageName]);
 
   /**
    * 加载 Schema 回画布（仅 schema 格式可用）
@@ -94,7 +111,8 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
    * 注意：parseSchema 会把 meta.createdAt/updatedAt 从 ISO 字符串还原为 Date
    */
   const handleImportSchema = useCallback(() => {
-    const result = parseSchema(code);
+    // 以编辑区内容为准，支持粘贴外部 JSON
+    const result = parseSchema(schemaInput || code);
     if (!result.ok || !result.nodes) {
       message.error(`Schema 解析失败：${result.error || '未知错误'}`);
       return;
@@ -113,7 +131,7 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
         onClose();
       },
     });
-  }, [code, loadNodes, onClose]);
+  }, [schemaInput, code, loadNodes, onClose]);
 
   const tabItems = useMemo(
     () => [
@@ -125,10 +143,10 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
   );
 
   const codeStats = useMemo(() => {
-    const lines = code.split('\n').length;
-    const bytes = new Blob([code]).size;
+    const lines = output.split('\n').length;
+    const bytes = new Blob([output]).size;
     return { lines, bytes };
-  }, [code]);
+  }, [output]);
 
   return (
     <Modal
@@ -160,9 +178,32 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
         items={tabItems}
       />
       <div className="code-export-preview">
-        <pre className="code-export-pre">
-          <code>{code}</code>
-        </pre>
+        {activeFormat === 'schema' ? (
+          <textarea
+            className="code-export-textarea"
+            value={schemaInput}
+            onChange={(e) => setSchemaInput(e.target.value)}
+            spellCheck={false}
+            style={{
+              width: '100%',
+              height: 420,
+              resize: 'vertical',
+              padding: 12,
+              border: '1px solid var(--et-border)',
+              borderRadius: 6,
+              background: 'var(--et-bg-subtle)',
+              color: 'var(--et-ink-1)',
+              fontFamily: 'monospace',
+              fontSize: 12,
+              lineHeight: 1.6,
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <pre className="code-export-pre">
+            <code>{code}</code>
+          </pre>
+        )}
       </div>
     </Modal>
   );
