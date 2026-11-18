@@ -142,6 +142,8 @@ export interface PageNode {
     canDuplicate: boolean;
     canResize: boolean;
     allowedChildren?: NodeType[];
+    /** 锁定后禁止拖拽、缩放、删除、移动，仅允许重命名 */
+    locked?: boolean;
   };
 }
 

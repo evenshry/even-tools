@@ -4,12 +4,25 @@ import type { PageNode } from '../types';
 /**
  * 已保存的页面结构
  */
+export interface PageSettings {
+  /** 画布背景色 */
+  backgroundColor?: string;
+  /** 画布宽度（默认跟随预览设备，可覆盖） */
+  canvasWidth?: number;
+  /** 画布最小高度（内容多时自动撑开） */
+  canvasMinHeight?: number;
+  /** 导出时的 HTML <title> */
+  title?: string;
+}
+
 export interface SavedPage {
   id: string;
   name: string;
   nodes: Record<string, PageNode>;
   createdAt: number;
   updatedAt: number;
+  /** 页面外观与导出设置 */
+  settings?: PageSettings;
 }
 
 /**

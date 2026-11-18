@@ -141,7 +141,8 @@ const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragNodeId, 
 
   if (!node) return null;
 
-  const supportsDrag = node.layout.position === 'absolute' || node.layout.position === 'fixed';
+  const isLocked = !!node.constraints.locked;
+  const supportsDrag = (node.layout.position === 'absolute' || node.layout.position === 'fixed') && !isLocked;
   const nodeStyle = buildNodeStyle(node);
 
   const renderChildren = () => {
@@ -187,7 +188,7 @@ const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragNodeId, 
       >
         {renderNodeContent(node, renderChildren)}
 
-        {isSelected && node.constraints.canResize && (
+        {isSelected && !isLocked && node.constraints.canResize && (
           <ResizeHandles nodeId={nodeId} zoom={zoom} />
         )}
       </div>

@@ -39,6 +39,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
     enableBoundaryCheck: true,
   });
 
+  // 页面设置：背景色、画布尺寸
+  const pageSettings = useCanvasStore((s) => s.pageSettings);
+
   // 仅订阅 nodes 引用（用于根节点列表）
   const nodes = useCanvasStore(s => s.nodes);
 
@@ -138,6 +141,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ extraActions }) => {
           className={`canvas-container ${dragManager.isOver ? (dragManager.canDrop ? "drag-over-valid" : "drag-over-invalid") : ""}`}
           onClick={() => {
             useCanvasStore.getState().selectNode(null);
+          }}
+          style={{
+            backgroundColor: pageSettings.backgroundColor,
+            width: pageSettings.canvasWidth ? `${pageSettings.canvasWidth}px` : '100%',
+            minHeight: pageSettings.canvasMinHeight ? `${pageSettings.canvasMinHeight}px` : '100%',
           }}
         >
           {/* 网格背景 */}

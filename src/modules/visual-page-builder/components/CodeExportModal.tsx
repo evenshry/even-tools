@@ -2,13 +2,13 @@ import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Modal, Tabs, Button, Space, message, Typography } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import type { PageNode } from '../types';
-import { generateHTML, generateReact, generateSchema, downloadTextFile, parseSchema } from '../utils/codeGenerator';
+import { generateHTML, generateReact, generateSchema, generateTailwind, downloadTextFile, parseSchema } from '../utils/codeGenerator';
 import { useCanvasStore } from '../store/useCanvasStore';
 import './CodeExportModal.scss';
 
 const { Text } = Typography;
 
-export type ExportFormat = 'html' | 'react' | 'schema';
+export type ExportFormat = 'html' | 'react' | 'tailwind' | 'schema';
 
 interface CodeExportModalProps {
   open: boolean;
@@ -33,6 +33,8 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
           return generateHTML(nodes);
         case 'react':
           return generateReact(nodes);
+        case 'tailwind':
+          return generateTailwind(nodes);
         case 'schema':
           return generateSchema(nodes);
         default:
@@ -87,11 +89,13 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
     const extMap: Record<ExportFormat, string> = {
       html: 'html',
       react: 'tsx',
+      tailwind: 'tsx',
       schema: 'json',
     };
     const mimeMap: Record<ExportFormat, string> = {
       html: 'text/html',
       react: 'text/plain',
+      tailwind: 'text/plain',
       schema: 'application/json',
     };
     const filename = `${pageName.replace(/[\\/:*?"<>|]/g, '-') || 'page'}-${activeFormat}-${Date.now()}.${extMap[activeFormat]}`;
@@ -137,6 +141,7 @@ const CodeExportModal: React.FC<CodeExportModalProps> = ({ open, nodes, onClose 
     () => [
       { key: 'html', label: 'HTML' },
       { key: 'react', label: 'React' },
+      { key: 'tailwind', label: 'Tailwind' },
       { key: 'schema', label: 'Schema (JSON)' },
     ],
     []

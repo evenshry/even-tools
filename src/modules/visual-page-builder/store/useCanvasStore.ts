@@ -3,7 +3,7 @@ import type { CanvasState, PageNode, AlignmentGuides } from '../types';
 import { NodeType, PreviewMode, LayoutType } from '../types';
 import { componentLibrary } from '../data/componentLibrary';
 import { cloneTemplateNodes } from '../data/templates';
-import { pageDB, DEFAULT_PAGE_ID, DEFAULT_PAGE_NAME, type SavedPage, type SavedTemplate } from './usePagePersistence';
+import { pageDB, DEFAULT_PAGE_ID, DEFAULT_PAGE_NAME, type SavedPage, type SavedTemplate, type PageSettings } from './usePagePersistence';
 import { parsePx, parsePxStrict } from '../utils/styleUtils';
 import { validateNodeGraph } from '../utils/nodeValidation';
 
@@ -123,12 +123,16 @@ interface CanvasStore extends CanvasState {
   pageName: string;
   /** 页面首次创建时间（保存时保留，不被覆盖） */
   pageCreatedAt: number;
+  /** 页面外观与导出设置（背景、画布尺寸、title 等） */
+  pageSettings: PageSettings;
   isDirty: boolean;
   isSaving: boolean;
   loadPage: (id?: string) => Promise<void>;
   saveCurrentPage: () => Promise<void>;
   loadNodes: (nodes: Record<string, PageNode>) => void;
   markDirty: () => void;
+  /** 更新页面设置（合并写法，自动标记 isDirty） */
+  updatePageSettings: (patch: Partial<PageSettings>) => void;
 
   // 多页面管理
   /** 列出所有已保存页面（按更新时间倒序） */
@@ -283,6 +287,12 @@ const persistenceInitialState = {
   pageId: DEFAULT_PAGE_ID,
   pageName: DEFAULT_PAGE_NAME,
   pageCreatedAt: Date.now(),
+  pageSettings: {
+    backgroundColor: '#ffffff',
+    canvasWidth: 375,
+    canvasMinHeight: 667,
+    title: '',
+  } as PageSettings,
   isDirty: false,
   isSaving: false,
   past: [] as Snapshot[],
@@ -919,6 +929,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
+  updatePageSettings: (patch) => {
+    set((state) => ({
+      pageSettings: { ...state.pageSettings, ...patch },
+      isDirty: true,
+    }));
+  },
+
   // 加载页面（默认加载最近的页面）
   loadPage: async (id?: string) => {
     try {
@@ -939,6 +956,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           pageId: page.id,
           pageName: page.name,
           pageCreatedAt: page.createdAt,
+          pageSettings: { ...persistenceInitialState.pageSettings, ...page.settings },
           nodes: sanitized,
           selectedNodeId: null,
           selectedNodeIds: [],
@@ -973,7 +991,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         nodes: serializeNodes(state.nodes),
         // 保留首次创建时间，仅更新 updatedAt
         createdAt: state.pageCreatedAt || now,
-        updatedAt: now
+        updatedAt: now,
+        settings: state.pageSettings,
       };
       await pageDB.savePage(page);
       set((current) => ({

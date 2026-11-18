@@ -9,6 +9,8 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   SearchOutlined,
+  LockOutlined,
+  UnlockOutlined,
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import type { PageNode } from '../types';
@@ -103,6 +105,17 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
         onClick: () => moveNode(nodeId, node.parentId, index + 1),
       },
       { type: 'divider' as const },
+      {
+        key: 'toggleLock',
+        label: node.constraints.locked ? '解锁' : '锁定',
+        icon: node.constraints.locked ? <UnlockOutlined /> : <LockOutlined />,
+        onClick: () => {
+          updateNode(nodeId, {
+            constraints: { ...node.constraints, locked: !node.constraints.locked },
+          });
+          message.info(node.constraints.locked ? '节点已解锁' : '节点已锁定');
+        },
+      },
       {
         key: 'duplicate',
         label: '复制',

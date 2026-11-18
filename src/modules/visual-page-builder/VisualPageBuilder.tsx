@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip, Tabs, List, Input, Popconfirm, Tag } from "antd";
-import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined, AppstoreOutlined, BlockOutlined, LayoutOutlined, FileTextOutlined, PlusOutlined, QuestionCircleOutlined } from "@ant-design/icons";
+import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip, Tabs, List, Input, Popconfirm, Tag, InputNumber, ColorPicker, Form } from "antd";
+import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined, AppstoreOutlined, BlockOutlined, LayoutOutlined, FileTextOutlined, PlusOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
 import ComponentPanel from "./components/ComponentPanel";
 import LayerPanel from "./components/LayerPanel";
@@ -51,11 +51,14 @@ const VisualPageBuilder: React.FC = () => {
   const switchPage = useCanvasStore(s => s.switchPage);
   const renamePage = useCanvasStore(s => s.renamePage);
   const deletePage = useCanvasStore(s => s.deletePage);
+  const pageSettings = useCanvasStore(s => s.pageSettings);
+  const updatePageSettings = useCanvasStore(s => s.updatePageSettings);
 
   const [leftPanelTab, setLeftPanelTab] = useState<'components' | 'layers' | 'templates'>('components');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [pageModalOpen, setPageModalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
   const [pages, setPages] = useState<SavedPage[]>([]);
   const [pageActionLoading, setPageActionLoading] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -278,6 +281,11 @@ const VisualPageBuilder: React.FC = () => {
             页面
           </Button>
         </Tooltip>
+        <Tooltip title="页面设置">
+          <Button size="small" icon={<SettingOutlined />} onClick={() => setPageSettingsOpen(true)}>
+            设置
+          </Button>
+        </Tooltip>
         <Tooltip title="操作指南">
           <Button size="small" icon={<QuestionCircleOutlined />} onClick={() => setHelpOpen(true)}>
             指南
@@ -411,6 +419,52 @@ const VisualPageBuilder: React.FC = () => {
               )}
             />
           </Space>
+        </Modal>
+        <Modal
+          title="页面设置"
+          open={pageSettingsOpen}
+          onCancel={() => setPageSettingsOpen(false)}
+          onOk={() => setPageSettingsOpen(false)}
+          width={480}
+          okText="关闭"
+          cancelButtonProps={{ style: { display: 'none' } }}
+        >
+          <Form layout="vertical" size="small" style={{ marginTop: 8 }}>
+            <Form.Item label="导出标题（HTML title）">
+              <Input
+                value={pageSettings.title || ''}
+                onChange={(e) => updatePageSettings({ title: e.target.value })}
+                placeholder=""
+              />
+            </Form.Item>
+            <Form.Item label="画布背景色">
+              <ColorPicker
+                value={pageSettings.backgroundColor || '#ffffff'}
+                onChange={(_, color) => updatePageSettings({ backgroundColor: color })}
+                showText
+              />
+            </Form.Item>
+            <Space style={{ width: '100%' }}>
+              <Form.Item label="画布宽度（px）" style={{ flex: 1, marginBottom: 8 }}>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={200}
+                  max={2400}
+                  value={pageSettings.canvasWidth}
+                  onChange={(v) => updatePageSettings({ canvasWidth: v ?? 375 })}
+                />
+              </Form.Item>
+              <Form.Item label="最小高度（px）" style={{ flex: 1, marginBottom: 8 }}>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={200}
+                  max={4000}
+                  value={pageSettings.canvasMinHeight}
+                  onChange={(v) => updatePageSettings({ canvasMinHeight: v ?? 667 })}
+                />
+              </Form.Item>
+            </Space>
+          </Form>
         </Modal>
         <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
       </Layout>
