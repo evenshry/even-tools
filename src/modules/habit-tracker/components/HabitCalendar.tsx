@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import { Card, Typography, Tooltip, Button } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
-import { formatDate, get30DayRange, isToday, isPast, isFuture } from "@/modules/habit-tracker/utils/dateUtils";
+import { formatDate, getTrackingRange, isToday, isPast, isFuture } from "@/modules/habit-tracker/utils/dateUtils";
 import "@/modules/habit-tracker/components/HabitCalendar.scss";
 
 const { Title, Text } = Typography;
@@ -123,9 +123,12 @@ const HabitCalendar: React.FC<HabitCalendarProps> = ({ habit, onToggleRecord }) 
   const calendarData = useMemo(() => {
     if (!habit) return null;
 
-    const dateRange = get30DayRange(new Date(habit.startDate));
+    // 日历覆盖开始日期到目标结束日/今天，支持 1-365 天目标
+    const dateRange = getTrackingRange(habit.startDate, habit.targetDays, habit.endDate);
     const completedDays = habit.records.filter((r) => r.completed).length;
-    const progress = (completedDays / habit.targetDays) * 100;
+    const progress = habit.targetDays > 0
+      ? Math.min(100, Math.max(0, (completedDays / habit.targetDays) * 100))
+      : 0;
 
     return {
       dateRange,

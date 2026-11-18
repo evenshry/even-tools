@@ -22,7 +22,12 @@ interface UseCase {
   exampleOutput: string;
 }
 
-const RegexGuideExamples = () => {
+interface RegexGuideExamplesProps {
+  /** 点击「尝试此正则表达式」时回填编辑器 */
+  onTryPattern?: (pattern: string) => void;
+}
+
+const RegexGuideExamples = ({ onTryPattern }: RegexGuideExamplesProps) => {
   const mode = useThemeStore((s) => s.mode);
   const useCases: UseCase[] = [
     {
@@ -156,7 +161,20 @@ const RegexGuideExamples = () => {
   ];
 
   const handleTryPattern = (pattern: string) => {
-    message.success(`已复制正则表达式: ${pattern}`);
+    if (onTryPattern) {
+      onTryPattern(pattern);
+      message.success("已填入正则表达式编辑器");
+      return;
+    }
+    // 没有回填通道时退化为复制，保证按钮有实际效果
+    if (navigator.clipboard) {
+      navigator.clipboard
+        .writeText(pattern)
+        .then(() => message.success(`已复制正则表达式: ${pattern}`))
+        .catch(() => message.warning("复制失败，请手动选择表达式"));
+    } else {
+      message.warning("当前环境不支持复制，请手动选择表达式");
+    }
   };
 
   const getDifficultyColor = (difficulty: string) => {

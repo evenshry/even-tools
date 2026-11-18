@@ -64,6 +64,7 @@ class HabitTrackerDB extends BaseIndexedDB {
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("删除习惯事务被中止"));
     });
   }
 
@@ -126,6 +127,7 @@ class HabitTrackerDB extends BaseIndexedDB {
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("删除时段习惯事务被中止"));
     });
   }
 
@@ -172,14 +174,29 @@ class HabitTrackerDB extends BaseIndexedDB {
     };
   }
 
-  async importData(data: HabitTracker.ExportData): Promise<void> {
+  /**
+   * 用备份数据整体替换本地数据。
+   * 清空与写入在同一个事务中完成：任意一步失败都会回滚，不会出现「先清空、后导入失败」导致数据丢失。
+   */
+  async replaceAll(data: HabitTracker.ExportData): Promise<void> {
     const db = await this.ensureDB();
+    const storeNames = [
+      DB_CONFIG.STORES.HABITS,
+      DB_CONFIG.STORES.RECORDS,
+      DB_CONFIG.STORES.TIME_HABITS,
+      DB_CONFIG.STORES.TIME_RECORDS,
+    ];
+
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([DB_CONFIG.STORES.HABITS, DB_CONFIG.STORES.RECORDS, DB_CONFIG.STORES.TIME_HABITS, DB_CONFIG.STORES.TIME_RECORDS], "readwrite");
+      const transaction = db.transaction(storeNames, "readwrite");
       const habitsStore = transaction.objectStore(DB_CONFIG.STORES.HABITS);
       const recordsStore = transaction.objectStore(DB_CONFIG.STORES.RECORDS);
       const timeHabitsStore = transaction.objectStore(DB_CONFIG.STORES.TIME_HABITS);
       const timeRecordsStore = transaction.objectStore(DB_CONFIG.STORES.TIME_RECORDS);
+
+      storeNames.forEach((storeName) => {
+        transaction.objectStore(storeName).clear();
+      });
 
       data.habits.forEach((habit) => {
         habitsStore.put(habit);
@@ -189,28 +206,39 @@ class HabitTrackerDB extends BaseIndexedDB {
         recordsStore.put(record);
       });
 
-      if (data.timeHabits) {
-        data.timeHabits.forEach((habit) => {
-          timeHabitsStore.put(habit);
-        });
-      }
+      data.timeHabits?.forEach((habit) => {
+        timeHabitsStore.put(habit);
+      });
 
-      if (data.timeHabitRecords) {
-        data.timeHabitRecords.forEach((record) => {
-          timeRecordsStore.put(record);
-        });
-      }
+      data.timeHabitRecords?.forEach((record) => {
+        timeRecordsStore.put(record);
+      });
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("导入事务被中止"));
     });
   }
 
   async clearAll(): Promise<void> {
-    await this.clearStore(DB_CONFIG.STORES.HABITS);
-    await this.clearStore(DB_CONFIG.STORES.RECORDS);
-    await this.clearStore(DB_CONFIG.STORES.TIME_HABITS);
-    await this.clearStore(DB_CONFIG.STORES.TIME_RECORDS);
+    const db = await this.ensureDB();
+    const storeNames = [
+      DB_CONFIG.STORES.HABITS,
+      DB_CONFIG.STORES.RECORDS,
+      DB_CONFIG.STORES.TIME_HABITS,
+      DB_CONFIG.STORES.TIME_RECORDS,
+    ];
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeNames, "readwrite");
+      storeNames.forEach((storeName) => {
+        transaction.objectStore(storeName).clear();
+      });
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("清空数据事务被中止"));
+    });
   }
 }
 

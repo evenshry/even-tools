@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, Typography, Tag, Space, Alert, Collapse, Steps, Tooltip } from "antd";
 import { EyeOutlined, InfoCircleOutlined, FileTextOutlined } from "@ant-design/icons";
 import type { RegexSandboxTypes } from "@/modules/regex-sandbox/data/interface";
@@ -57,10 +58,26 @@ const RegexVisualizer = ({ pattern, flags, testString, selectedPreset }: RegexVi
           i++;
         }
       } else if (char === "[") {
+        // 字符类内部可能包含转义的 ] 或 \\，需要逐字符判断
         let bracketContent = "";
         let j = i + 1;
-        while (j < pattern.length && pattern[j] !== "]") {
-          bracketContent += pattern[j];
+        let escaped = false;
+        while (j < pattern.length) {
+          const current = pattern[j];
+          if (escaped) {
+            bracketContent += current;
+            escaped = false;
+            j++;
+            continue;
+          }
+          if (current === "\\") {
+            bracketContent += current;
+            escaped = true;
+            j++;
+            continue;
+          }
+          if (current === "]") break;
+          bracketContent += current;
           j++;
         }
         if (j < pattern.length) {
@@ -81,23 +98,72 @@ const RegexVisualizer = ({ pattern, flags, testString, selectedPreset }: RegexVi
           i = j;
         }
       } else if (char === "(") {
+        // 解析分组内容时跳过转义字符和字符类，避免括号计数被 [)(] 干扰
         let groupContent = "";
         let j = i + 1;
         let depth = 1;
+        let escaped = false;
+        let inCharClass = false;
         while (j < pattern.length && depth > 0) {
-          if (pattern[j] === "(") depth++;
-          if (pattern[j] === ")") depth--;
-          if (depth > 0) groupContent += pattern[j];
+          const current = pattern[j];
+          if (escaped) {
+            groupContent += current;
+            escaped = false;
+            j++;
+            continue;
+          }
+          if (current === "\\") {
+            groupContent += current;
+            escaped = true;
+            j++;
+            continue;
+          }
+          if (inCharClass) {
+            groupContent += current;
+            if (current === "]") inCharClass = false;
+            j++;
+            continue;
+          }
+          if (current === "[") {
+            inCharClass = true;
+            groupContent += current;
+            j++;
+            continue;
+          }
+          if (current === "(") depth++;
+          if (current === ")") depth--;
+          if (depth > 0) groupContent += current;
           j++;
         }
         if (depth === 0) {
           const isNonCapturing = groupContent.startsWith("?:");
-          parts.push({
-            type: isNonCapturing ? "非捕获分组" : "捕获分组",
-            pattern: `(${groupContent})`,
-            description: isNonCapturing ? "匹配但不捕获分组" : "匹配并捕获分组",
-            color: isNonCapturing ? "orange" : "green",
-          });
+          const isLookahead = groupContent.startsWith("?=") || groupContent.startsWith("?!");
+          const isLookbehind = groupContent.startsWith("?<=") || groupContent.startsWith("?<!");
+          const namedMatch = !isLookbehind ? groupContent.match(/^\?<([^>]+)>/) : null;
+
+          if (namedMatch) {
+            parts.push({
+              type: "命名分组",
+              pattern: `(${groupContent})`,
+              description: `匹配并捕获到名为 ${namedMatch[1]} 的分组`,
+              color: "green",
+            });
+          } else if (isLookahead || isLookbehind) {
+            const negative = groupContent.startsWith("?!") || groupContent.startsWith("?<!");
+            parts.push({
+              type: "断言",
+              pattern: `(${groupContent})`,
+              description: `${negative ? "负向" : "正向"}${isLookbehind ? "后行" : "先行"}断言，只判断条件不消耗字符`,
+              color: "gold",
+            });
+          } else {
+            parts.push({
+              type: isNonCapturing ? "非捕获分组" : "捕获分组",
+              pattern: `(${groupContent})`,
+              description: isNonCapturing ? "匹配但不捕获分组" : "匹配并捕获分组",
+              color: isNonCapturing ? "orange" : "green",
+            });
+          }
           i = j;
         } else {
           parts.push({
@@ -207,8 +273,8 @@ const RegexVisualizer = ({ pattern, flags, testString, selectedPreset }: RegexVi
     }));
   };
 
-  const regexParts = parseRegexPattern(pattern);
-  const flagItems = parseFlags(flags);
+  const regexParts = useMemo(() => parseRegexPattern(pattern), [pattern]);
+  const flagItems = useMemo(() => parseFlags(flags), [flags]);
 
   const getTypeColor = (color: string) => {
     const colorMap: Record<string, string> = {
@@ -220,6 +286,7 @@ const RegexVisualizer = ({ pattern, flags, testString, selectedPreset }: RegexVi
       red: "#f5222d",
       magenta: "#eb2f96",
       geekblue: "#2f54eb",
+      gold: "#d48806",
       default: "#8c8c8c",
     };
     return colorMap[color] || colorMap.default;

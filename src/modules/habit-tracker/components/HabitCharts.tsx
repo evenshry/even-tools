@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, Typography, Empty } from "antd";
 import { Line, Column } from "@ant-design/charts";
-import { get30DayRange, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
+import { getTrackingRange, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
 import "@/modules/habit-tracker/components/HabitCharts.scss";
 
 const { Title } = Typography;
@@ -22,8 +22,8 @@ const HabitCharts: React.FC<HabitChartsProps> = ({ habit }) => {
     );
   }
 
-  // 获取30天日期范围
-  const dateRange = get30DayRange(new Date(habit.startDate));
+  // 追踪区间覆盖目标天数并延伸至今天
+  const dateRange = getTrackingRange(habit.startDate, habit.targetDays, habit.endDate);
 
   // 生成每日完成状态数据
   const lineData = dateRange.map((date) => {
@@ -38,8 +38,10 @@ const HabitCharts: React.FC<HabitChartsProps> = ({ habit }) => {
 
   // 生成累计完成天数数据
   const cumulativeData = dateRange.map((date) => {
+    const dateStr = formatDate(date);
+    // 日期均为 YYYY-MM-DD，直接字符串比较可避免 new Date 按 UTC 解析导致漏算当天
     const completedCount = habit.records
-      .filter((r) => r.completed && new Date(r.date) <= date)
+      .filter((r) => r.completed && r.date <= dateStr)
       .length;
     return {
       date: `${date.getMonth() + 1}/${date.getDate()}`,

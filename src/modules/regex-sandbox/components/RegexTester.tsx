@@ -1,23 +1,16 @@
+import { memo, useMemo } from "react";
 import { Input, Card, Space, Typography, Tag, Empty, Alert, Statistic, Row, Col } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { useThemeStore } from "@/store/useThemeStore";
 import { semanticColors } from "@/styles/themeColors";
+import { MAX_MATCHES } from "@/modules/regex-sandbox/utils/regexUtils";
+import type { RegexSandboxTypes } from "@/modules/regex-sandbox/data/interface";
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
-interface MatchResult {
-  match: string;
-  index: number;
-  groups: string[];
-}
-
-interface TestResult {
-  input: string;
-  matches: MatchResult[];
-  isValid: boolean;
-  error?: string;
-}
+type MatchResult = RegexSandboxTypes.MatchResult;
+type TestResult = RegexSandboxTypes.TestResult;
 
 interface RegexTesterProps {
   testString: string;
@@ -25,8 +18,28 @@ interface RegexTesterProps {
   testResult: TestResult | null;
 }
 
+const calculateMatchStats = (matches: MatchResult[]) => {
+  if (matches.length === 0) {
+    return { totalLength: 0, avgLength: 0, maxMatch: "", minMatch: "" };
+  }
+
+  const lengths = matches.map((m) => m.match.length);
+  const totalLength = lengths.reduce((a, b) => a + b, 0);
+  const avgLength = Math.round(totalLength / matches.length);
+  const maxMatch = matches.reduce((max, m) => (m.match.length > max.match.length ? m : max));
+  const minMatch = matches.reduce((min, m) => (m.match.length < min.match.length ? m : min));
+
+  return { totalLength, avgLength, maxMatch: maxMatch.match, minMatch: minMatch.match };
+};
+
 const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTesterProps) => {
   const mode = useThemeStore((s) => s.mode);
+  // 统计只依赖匹配结果，避免每次渲染重复计算三遍
+  const matchStats = useMemo(
+    () => calculateMatchStats(testResult?.matches ?? []),
+    [testResult]
+  );
+
   const renderHighlightedText = (text: string, matches: MatchResult[]) => {
     if (matches.length === 0) {
       return <Text>{text}</Text>;
@@ -65,20 +78,6 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
         ))}
       </div>
     );
-  };
-
-  const calculateMatchStats = (matches: MatchResult[]) => {
-    if (matches.length === 0) {
-      return { totalLength: 0, avgLength: 0, maxMatch: "", minMatch: "" };
-    }
-
-    const lengths = matches.map((m) => m.match.length);
-    const totalLength = lengths.reduce((a, b) => a + b, 0);
-    const avgLength = Math.round(totalLength / matches.length);
-    const maxMatch = matches.reduce((max, m) => (m.match.length > max.match.length ? m : max));
-    const minMatch = matches.reduce((min, m) => (m.match.length < min.match.length ? m : min));
-
-    return { totalLength, avgLength, maxMatch: maxMatch.match, minMatch: minMatch.match };
   };
 
   const renderMatchExplanation = (match: MatchResult) => {
@@ -133,6 +132,14 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
                 </Space>
               </div>
 
+              {testResult.truncated && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={`匹配数量过多，仅展示前 ${MAX_MATCHES} 个结果`}
+                />
+              )}
+
               <div className="match-stats">
                 <Text strong style={{ marginBottom: 12, display: "block" }}>
                   匹配统计：
@@ -141,7 +148,7 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
                   <Col span={8}>
                     <Statistic
                       title="总匹配长度"
-                      value={calculateMatchStats(testResult.matches).totalLength}
+                      value={matchStats.totalLength}
                       suffix="字符"
                       valueStyle={{ fontSize: 18 }}
                     />
@@ -149,7 +156,7 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
                   <Col span={8}>
                     <Statistic
                       title="平均长度"
-                      value={calculateMatchStats(testResult.matches).avgLength}
+                      value={matchStats.avgLength}
                       suffix="字符"
                       valueStyle={{ fontSize: 18 }}
                     />
@@ -195,6 +202,21 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
                           </Space>
                         </div>
                       )}
+
+                      {match.namedGroups && Object.keys(match.namedGroups).length > 0 && (
+                        <div className="match-groups">
+                          <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                            命名分组：
+                          </Text>
+                          <Space wrap>
+                            {Object.entries(match.namedGroups).map(([name, value]) => (
+                              <Tag key={name} color={value ? "purple" : "default"} style={{ fontSize: 12 }}>
+                                {name}: {value || "(空)"}
+                              </Tag>
+                            ))}
+                          </Space>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -211,4 +233,4 @@ const RegexTester = ({ testString, onTestStringChange, testResult }: RegexTester
   );
 };
 
-export default RegexTester;
+export default memo(RegexTester);

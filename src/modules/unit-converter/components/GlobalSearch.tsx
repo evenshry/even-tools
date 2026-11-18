@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Input, List, Card, Tag, Typography, Empty } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { unitData } from "@/modules/unit-converter/data/unitData";
@@ -24,6 +24,16 @@ interface GlobalSearchProps {
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearchResultClick }) => {
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [showResults, setShowResults] = useState<boolean>(false);
+  // 延迟隐藏结果面板的定时器，组件卸载时需要清理
+  const blurTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current !== null) {
+        window.clearTimeout(blurTimerRef.current);
+      }
+    };
+  }, []);
 
   // 跨类型搜索所有单位
   const searchResults = useMemo((): SearchResultItem[] => {
@@ -70,8 +80,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearchResultClick }) => {
 
   // 处理输入框失焦
   const handleBlur = () => {
-    setTimeout(() => {
+    if (blurTimerRef.current !== null) {
+      window.clearTimeout(blurTimerRef.current);
+    }
+    blurTimerRef.current = window.setTimeout(() => {
       setShowResults(false);
+      blurTimerRef.current = null;
     }, 200);
   };
 

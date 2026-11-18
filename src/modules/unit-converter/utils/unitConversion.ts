@@ -2,8 +2,28 @@
 import Big from 'big.js';
 import { getUnitById } from '@/modules/unit-converter/data/unitData';
 
+// 查找该类别的基准单位（换算系数为 1 的单位），用于说明文案
+const findBaseUnit = (
+  category: UnitConversion.UnitCategory,
+  fallback: UnitConversion.Unit
+): UnitConversion.Unit => {
+  for (const group of category.groups) {
+    for (const unit of group.units) {
+      if (Number(unit.conversionFactor) === 1) {
+        return unit;
+      }
+    }
+  }
+  return fallback;
+};
+
 // 单位换算核心逻辑函数
 export const convertUnits = (fromValue: number, fromUnitId: string, toUnitId: string): UnitConversion.ConversionResult | null => {
+  // 非有限数（Infinity / NaN）无法参与换算，直接判为无效，避免 big.js 抛错
+  if (!Number.isFinite(fromValue)) {
+    return null;
+  }
+
   const fromUnitData = getUnitById(fromUnitId);
   const toUnitData = getUnitById(toUnitId);
 
@@ -31,31 +51,31 @@ export const convertUnits = (fromValue: number, fromUnitId: string, toUnitId: st
     case 'fuel':
       return convertFuelConsumption(fromValue, fromUnit, toUnit);
     default:
-      // 基本单位换算（基于换算系数）
-      // 使用 Big.js 处理大数精度计算
-      const valueBig = new Big(fromValue);
-      const fromFactorBig = typeof fromUnit.conversionFactor === 'string' 
-        ? new Big(fromUnit.conversionFactor) 
-        : new Big(fromUnit.conversionFactor);
-      const toFactorBig = typeof toUnit.conversionFactor === 'string' 
-        ? new Big(toUnit.conversionFactor) 
-        : new Big(toUnit.conversionFactor);
-      
-      // 计算逻辑：先转换为基准单位，再从基准单位转换为目标单位
-      const baseValue = valueBig.times(fromFactorBig);
-      const resultBig = baseValue.div(toFactorBig);
-      result = resultBig.toNumber();
-      
-      // 生成换算公式和说明
-      const fromFactorDisplay = typeof fromUnit.conversionFactor === 'string' 
-        ? fromUnit.conversionFactor 
-        : fromUnit.conversionFactor.toString();
-      const toFactorDisplay = typeof toUnit.conversionFactor === 'string' 
-        ? toUnit.conversionFactor 
-        : toUnit.conversionFactor.toString();
-      
-      formula = `${fromValue} ${fromUnit.symbol} = ${fromValue} × ${fromFactorDisplay} ÷ ${toFactorDisplay} ${toUnit.symbol}`;
-      explanation = `1 ${fromUnit.symbol} = ${fromFactorDisplay} ${fromUnitData.category.name === 'data' ? 'bit' : fromUnitData.category.name === 'length' ? 'm' : fromUnitData.category.name === 'weight' ? 'kg' : fromUnitData.category.name === 'area' ? 'm²' : fromUnitData.category.name === 'volume' ? 'm³' : fromUnitData.category.name === 'time' ? 's' : fromUnitData.category.name === 'energy' ? 'J' : '基础单位'}`;
+      {
+        // 基本单位换算（基于换算系数）
+        // 使用 Big.js 处理大数精度计算
+        const valueBig = new Big(fromValue);
+        const fromFactorBig = new Big(fromUnit.conversionFactor);
+        const toFactorBig = new Big(toUnit.conversionFactor);
+
+        // 计算逻辑：先转换为基准单位，再从基准单位转换为目标单位
+        const baseValue = valueBig.times(fromFactorBig);
+        const resultBig = baseValue.div(toFactorBig);
+        result = resultBig.toNumber();
+
+        // 超出 JS 数值范围时视为无效，避免展示 Infinity
+        if (!Number.isFinite(result)) {
+          return null;
+        }
+
+        // 生成换算公式和说明
+        const fromFactorDisplay = fromUnit.conversionFactor.toString();
+        const toFactorDisplay = toUnit.conversionFactor.toString();
+        const baseUnit = findBaseUnit(fromUnitData.category, fromUnit);
+
+        formula = `${fromValue} ${fromUnit.symbol} = ${fromValue} × ${fromFactorDisplay} ÷ ${toFactorDisplay} ${toUnit.symbol}`;
+        explanation = `1 ${fromUnit.symbol} = ${fromFactorDisplay} ${baseUnit.symbol}`;
+      }
       break;
   }
 
@@ -70,7 +90,7 @@ export const convertUnits = (fromValue: number, fromUnitId: string, toUnitId: st
 };
 
 // 温度单位换算函数（温度单位有特殊的换算公式，不能使用简单的系数换算）
-const convertTemperature = (value: number, fromUnit: UnitConversion.Unit, toUnit: UnitConversion.Unit): UnitConversion.ConversionResult => {
+const convertTemperature = (value: number, fromUnit: UnitConversion.Unit, toUnit: UnitConversion.Unit): UnitConversion.ConversionResult | null => {
   let celsius: number;
   let result: number;
   let formula: string;
@@ -110,6 +130,11 @@ const convertTemperature = (value: number, fromUnit: UnitConversion.Unit, toUnit
       break;
     default:
       result = celsius;
+  }
+
+  // 极端数值可能溢出为 Infinity，此时视为无效换算
+  if (!Number.isFinite(celsius) || !Number.isFinite(result)) {
+    return null;
   }
 
   // 生成换算公式和解释（根据不同的转换组合生成对应的公式）
@@ -165,7 +190,12 @@ const convertTemperature = (value: number, fromUnit: UnitConversion.Unit, toUnit
 };
 
 // 油耗单位换算函数（油耗单位有特殊的换算公式，不能使用简单的系数换算）
-const convertFuelConsumption = (value: number, fromUnit: UnitConversion.Unit, toUnit: UnitConversion.Unit): UnitConversion.ConversionResult => {
+const convertFuelConsumption = (value: number, fromUnit: UnitConversion.Unit, toUnit: UnitConversion.Unit): UnitConversion.ConversionResult | null => {
+  // 油耗必须为正数：0 或负数会得到 Infinity/负值，没有实际意义
+  if (!(value > 0)) {
+    return null;
+  }
+
   let result: number;
   let formula: string;
   let explanation: string;
@@ -225,6 +255,10 @@ const convertFuelConsumption = (value: number, fromUnit: UnitConversion.Unit, to
     explanation = '相同油耗单位转换';
   }
 
+  if (!Number.isFinite(result)) {
+    return null;
+  }
+
   return {
     fromValue: value,
     fromUnit,
@@ -237,22 +271,23 @@ const convertFuelConsumption = (value: number, fromUnit: UnitConversion.Unit, to
 
 // 格式化数字，保留合适的小数位数（用于显示换算结果）
 export const formatNumber = (num: number): string => {
-  const bigNum = new Big(num);
-  
-  // 判断绝对值大小
-  const absValue = bigNum.abs();
-  
-  // 大数字使用科学计数法（大于等于 1e6）
-  if (absValue.gte(new Big('1e6'))) {
-    return bigNum.toExponential(6);
+  if (!Number.isFinite(num)) {
+    return "-";
   }
-  // 极小数字使用科学计数法（小于 1e-6）
-  if (absValue.lt(new Big('1e-6')) && absValue.gt(0)) {
-    return bigNum.toExponential(6);
+  if (num === 0) {
+    return "0";
   }
-  
-  // 保留最多6位有效数字
-  return bigNum.toPrecision(6).toString();
+
+  const absValue = Math.abs(num);
+
+  // 极大或极小的数字使用科学计数法，避免被截断成 0 或一长串 0
+  if (absValue >= 1e9 || absValue < 1e-6) {
+    return num.toExponential(6).replace(/\.?0+e/, "e");
+  }
+
+  // 按数量级保留 8 位有效数字，并去掉尾随零
+  const decimals = Math.max(1, Math.min(12, 8 - Math.floor(Math.log10(absValue)) - 1));
+  return Number(num.toFixed(decimals)).toString();
 };
 
 // 获取单位描述信息

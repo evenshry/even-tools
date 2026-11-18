@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, Typography, Empty } from "antd";
 import { Line, Column } from "@ant-design/charts";
-import { get30DayRange, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
+import { getTrackingRange, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
 import dayjs from "dayjs";
 import "@/modules/habit-tracker/components/TimeHabitCharts.scss";
 
@@ -24,8 +24,8 @@ const TimeHabitCharts: React.FC<TimeHabitChartsProps> = ({ habit, records }) => 
     );
   }
 
-  // 获取30天日期范围并筛选当前习惯的记录
-  const dateRange = get30DayRange(new Date(habit.startDate));
+  // 追踪区间从开始日期延伸到今天（或设定的结束日期）
+  const dateRange = getTrackingRange(habit.startDate, 1, habit.endDate);
   const habitRecords = records.filter((r) => r.habitId === habit.id);
 
   // 处理有间隔时间的习惯（如每天多次打卡）
@@ -223,7 +223,9 @@ const TimeHabitCharts: React.FC<TimeHabitChartsProps> = ({ habit, records }) => 
 
   // 生成累计完成天数数据
   const cumulativeData = dateRange.map((date) => {
-    const completedCount = habitRecords.filter((r) => new Date(r.date) <= date).length;
+    const dateStr = formatDate(date);
+    // 日期字符串为 YYYY-MM-DD，按字符串比较避免时区导致的当天漏算
+    const completedCount = habitRecords.filter((r) => r.date <= dateStr).length;
     return {
       date: `${date.getMonth() + 1}/${date.getDate()}`,
       value: completedCount,

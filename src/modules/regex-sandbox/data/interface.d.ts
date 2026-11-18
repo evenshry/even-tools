@@ -20,6 +20,8 @@ export namespace RegexSandboxTypes {
     match: string;
     index: number;
     groups: string[];
+    /** 命名捕获分组，未使用命名分组时为 undefined */
+    namedGroups?: Record<string, string | undefined>;
   }
 
   export interface TestResult {
@@ -27,5 +29,7 @@ export namespace RegexSandboxTypes {
     matches: MatchResult[];
     isValid: boolean;
     error?: string;
+    /** 匹配数量超过上限、结果被截断时为 true */
+    truncated?: boolean;
   }
 }

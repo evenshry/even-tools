@@ -14,6 +14,7 @@ import TimeHabitTimeline from "@/modules/habit-tracker/components/TimeHabitTimel
 import TimeHabitCharts from "@/modules/habit-tracker/components/TimeHabitCharts";
 import ModuleHeader from "@/components/ModuleHeader";
 import { dbManager } from "@/modules/habit-tracker/utils/indexedDB";
+import { calculateCompletionRate, formatDate } from "@/modules/habit-tracker/utils/dateUtils";
 import "@/modules/habit-tracker/HabitTracker.scss";
 
 const { Sider, Content } = Layout;
@@ -35,13 +36,17 @@ const HabitTracker: React.FC = () => {
     try {
       const loadedHabits = await dbManager.getAllHabits();
       setHabits(loadedHabits);
-      if (loadedHabits.length > 0 && !selectedHabitId) {
-        setSelectedHabitId(loadedHabits[0].id);
-      }
+      // 当前选中项仍存在则保留，否则回退到第一个习惯，避免重复全量加载
+      setSelectedHabitId((currentId) => {
+        if (currentId && loadedHabits.some((habit) => habit.id === currentId)) {
+          return currentId;
+        }
+        return loadedHabits[0]?.id ?? null;
+      });
     } catch {
       message.error("加载习惯数据失败");
     }
-  }, [selectedHabitId]);
+  }, []);
 
   /**
    * 加载所有时段习惯
@@ -50,13 +55,16 @@ const HabitTracker: React.FC = () => {
     try {
       const loadedTimeHabits = await dbManager.getAllTimeHabits();
       setTimeHabits(loadedTimeHabits);
-      if (loadedTimeHabits.length > 0 && !selectedTimeHabitId) {
-        setSelectedTimeHabitId(loadedTimeHabits[0].id);
-      }
+      setSelectedTimeHabitId((currentId) => {
+        if (currentId && loadedTimeHabits.some((habit) => habit.id === currentId)) {
+          return currentId;
+        }
+        return loadedTimeHabits[0]?.id ?? null;
+      });
     } catch {
       message.error("加载时段习惯数据失败");
     }
-  }, [selectedTimeHabitId]);
+  }, []);
 
   /**
    * 加载所有时段习惯记录
@@ -81,7 +89,8 @@ const HabitTracker: React.FC = () => {
       if (!habit) return null;
       const records = await dbManager.getHabitRecordsByHabit(habitId);
       const completedDays = records.filter((r) => r.completed).length;
-      const completionRate = records.length > 0 ? (completedDays / records.length) * 100 : 0;
+      // 完成率以目标天数为分母，避免记录数量做分母导致恒为 100%
+      const completionRate = calculateCompletionRate(records, habit.targetDays);
       return { ...habit, records, completedDays, completionRate };
     } catch {
       message.error("加载习惯记录失败");
@@ -99,54 +108,42 @@ const HabitTracker: React.FC = () => {
       const habit = await dbManager.getTimeHabit(habitId);
       if (!habit) return null;
       const records = await dbManager.getTimeHabitRecordsByHabit(habitId);
-      
-      let completedDays = 0;
-      let completionRate = 0;
 
-      if (habit.intervalMinutes) {
-        completedDays = records.length;
-        const startDate = new Date(habit.startDate);
-        const endDate = habit.endDate ? new Date(habit.endDate) : new Date();
-        const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const targetTimesPerDay = Math.floor((24 * 60) / habit.intervalMinutes);
-        const totalTargetTimes = totalDays * targetTimesPerDay;
-        completionRate = totalTargetTimes > 0 ? (completedDays / totalTargetTimes) * 100 : 0;
-      } else {
-        const uniqueDates = new Set(records.map((r) => r.date));
-        completedDays = uniqueDates.size;
-        
-        const startDate = new Date(habit.startDate);
-        const endDate = habit.endDate ? new Date(habit.endDate) : new Date();
-        const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        
-        let activeDays = 0;
-        for (let i = 0; i < totalDays; i++) {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(currentDate.getDate() + i);
-          const weekday = currentDate.getDay();
-          
-          switch (habit.frequency) {
-            case "daily":
-              activeDays++;
-              break;
-            case "weekdays":
-              if (weekday >= 1 && weekday <= 5) activeDays++;
-              break;
-            case "weekends":
-              if (weekday === 0 || weekday === 6) activeDays++;
-              break;
-            case "custom":
-              if (habit.weekdays?.includes(weekday)) activeDays++;
-              break;
-            case "interval":
-              activeDays++;
-              break;
-          }
+      // 统一统计口径：完成天数按自然日去重（同一天多次打卡只算一天）
+      const completedDays = new Set(records.map((r) => r.date)).size;
+
+      // 目标天数按习惯频率统计起止日期内的活跃日
+      const startDate = new Date(habit.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = habit.endDate ? new Date(habit.endDate) : new Date();
+      endDate.setHours(0, 0, 0, 0);
+
+      let activeDays = 0;
+      const cursor = new Date(startDate);
+      while (cursor <= endDate) {
+        const weekday = cursor.getDay();
+        switch (habit.frequency) {
+          case "daily":
+          case "interval":
+            activeDays++;
+            break;
+          case "weekdays":
+            if (weekday >= 1 && weekday <= 5) activeDays++;
+            break;
+          case "weekends":
+            if (weekday === 0 || weekday === 6) activeDays++;
+            break;
+          case "custom":
+            if (habit.weekdays?.includes(weekday)) activeDays++;
+            break;
         }
-        
-        completionRate = activeDays > 0 ? (completedDays / activeDays) * 100 : 0;
+        cursor.setDate(cursor.getDate() + 1);
       }
-      
+
+      const completionRate = activeDays > 0
+        ? Math.min(100, Math.max(0, (completedDays / activeDays) * 100))
+        : 0;
+
       return { ...habit, records, completedDays, completionRate };
     } catch {
       message.error("加载时段习惯记录失败");
@@ -217,7 +214,8 @@ const HabitTracker: React.FC = () => {
     if (!selectedHabitId) return;
 
     try {
-      const dateStr = date.toISOString().split("T")[0];
+      // 打卡日期使用本地日期，避免 toISOString 在 UTC+8 凌晨串到前一天
+      const dateStr = formatDate(date);
       const records = await dbManager.getHabitRecordsByHabit(selectedHabitId);
       const existingRecord = records.find((r) => r.date === dateStr);
 
@@ -245,12 +243,17 @@ const HabitTracker: React.FC = () => {
   }, [selectedHabitId, loadHabits, loadHabitWithRecords]);
 
   /**
-   * 处理数据导入完成后的刷新
+   * 处理数据导入/清空后的刷新：重置选中项并重新加载全部数据
    */
   const handleDataImport = useCallback(async () => {
+    setSelectedHabitId(null);
+    setSelectedTimeHabitId(null);
+    setSelectedHabitWithRecords(null);
+    setSelectedTimeHabitWithRecords(null);
     await loadHabits();
     await loadTimeHabits();
-  }, [loadHabits, loadTimeHabits]);
+    await loadAllTimeHabitRecords();
+  }, [loadHabits, loadTimeHabits, loadAllTimeHabitRecords]);
 
   /**
    * 处理时段习惯记录变化
@@ -325,7 +328,7 @@ const HabitTracker: React.FC = () => {
 
                 <div className="habit-tracker__charts">
                   {selectedHabitWithRecords ? (
-                    <HabitCharts key={`${selectedHabitId}-${selectedHabitWithRecords.records.length}`} habit={selectedHabitWithRecords} />
+                    <HabitCharts key={selectedHabitId} habit={selectedHabitWithRecords} />
                   ) : (
                     <div className="habit-tracker__empty">请选择一个习惯查看图表</div>
                   )}
@@ -343,7 +346,7 @@ const HabitTracker: React.FC = () => {
 
                 <div className="habit-tracker__charts">
                   {selectedTimeHabitWithRecords ? (
-                    <TimeHabitCharts key={`${selectedTimeHabitId}-${timeHabitRecords.length}`} habit={selectedTimeHabitWithRecords} records={timeHabitRecords} />
+                    <TimeHabitCharts key={selectedTimeHabitId} habit={selectedTimeHabitWithRecords} records={timeHabitRecords} />
                   ) : (
                     <div className="habit-tracker__empty">请选择一个时段习惯查看图表</div>
                   )}

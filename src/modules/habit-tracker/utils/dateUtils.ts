@@ -4,7 +4,7 @@
  */
 
 /**
- * 格式化日期为 YYYY-MM-DD 格式
+ * 格式化日期为 YYYY-MM-DD 格式（使用本地时区，避免 UTC 跨天）
  * @param date - 要格式化的日期对象
  * @returns 格式化后的日期字符串，例如 "2024-01-15"
  */
@@ -21,33 +21,47 @@ export const formatDate = (date: Date): string => {
  * @param endDate - 结束日期
  * @returns 日期数组，包含从开始日期到结束日期的所有日期
  */
-export const getDaysBetween = (startDate: Date, endDate: Date): Date[] => {
+export const getDateRange = (startDate: Date, endDate: Date): Date[] => {
   const dates: Date[] = [];
   const currentDate = new Date(startDate);
-  
-  while (currentDate <= endDate) {
+  currentDate.setHours(0, 0, 0, 0);
+
+  const lastDate = new Date(endDate);
+  lastDate.setHours(0, 0, 0, 0);
+
+  while (currentDate <= lastDate) {
     dates.push(new Date(currentDate));
     currentDate.setDate(currentDate.getDate() + 1);
   }
-  
+
   return dates;
 };
 
 /**
- * 获取从指定日期开始的30天日期范围
- * @param startDate - 开始日期
- * @returns 包含30个日期的数组
+ * 生成习惯的追踪区间
+ * 从开始日期起至少覆盖目标天数，并延伸到今天或结束日期中较晚的一天，
+ * 这样目标天数大于 30 或习惯已持续较久时也不会被截断。
+ * @param startDate - 开始日期时间戳
+ * @param targetDays - 目标天数
+ * @param endDate - 可选的结束日期时间戳
  */
-export const get30DayRange = (startDate: Date): Date[] => {
-  const dates: Date[] = [];
-  const currentDate = new Date(startDate);
-  
-  for (let i = 0; i < 30; i++) {
-    dates.push(new Date(currentDate));
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-  
-  return dates;
+export const getTrackingRange = (startDate: number, targetDays: number, endDate?: number): Date[] => {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const targetEnd = new Date(start);
+  targetEnd.setDate(targetEnd.getDate() + Math.max(1, targetDays) - 1);
+
+  const endTimestamp = Math.max(
+    targetEnd.getTime(),
+    today.getTime(),
+    endDate ?? 0
+  );
+
+  return getDateRange(start, new Date(endTimestamp));
 };
 
 /**
@@ -57,56 +71,11 @@ export const get30DayRange = (startDate: Date): Date[] => {
  * @returns 完成率（百分比，0-100）
  */
 export const calculateCompletionRate = (records: HabitTracker.HabitRecord[], totalDays: number): number => {
+  if (totalDays <= 0) {
+    return 0;
+  }
   const completedDays = records.filter((r) => r.completed).length;
-  return totalDays > 0 ? (completedDays / totalDays) * 100 : 0;
-};
-
-/**
- * 获取包含记录的习惯对象
- * @param habit - 习惯对象
- * @param records - 所有记录数组
- * @returns 包含记录、完成天数和完成率的习惯对象
- */
-export const getHabitWithRecords = async (habit: HabitTracker.Habit, records: HabitTracker.HabitRecord[]): Promise<HabitTracker.HabitWithRecords> => {
-  const habitRecords = records.filter((r) => r.habitId === habit.id);
-  const completedDays = habitRecords.filter((r) => r.completed).length;
-  const completionRate = calculateCompletionRate(habitRecords, habit.targetDays);
-
-  return {
-    ...habit,
-    records: habitRecords,
-    completedDays,
-    completionRate,
-  };
-};
-
-/**
- * 获取每日统计数据
- * @param habits - 习惯数组
- * @param records - 记录数组
- * @param dateRange - 日期范围
- * @returns 每日统计数据数组，包含日期、总习惯数、完成习惯数和完成率
- */
-export const getDailyStats = (habits: HabitTracker.Habit[], records: HabitTracker.HabitRecord[], dateRange: Date[]): HabitTracker.DailyStats[] => {
-  return dateRange.map((date) => {
-    const dateStr = formatDate(date);
-    const activeHabits = habits.filter((h) => {
-      const startDate = new Date(h.startDate);
-      const endDate = new Date(h.endDate);
-      return date >= startDate && date <= endDate;
-    });
-
-    const dayRecords = records.filter((r) => r.date === dateStr);
-    const completedHabits = dayRecords.filter((r) => r.completed).length;
-    const completionRate = activeHabits.length > 0 ? (completedHabits / activeHabits.length) * 100 : 0;
-
-    return {
-      date: dateStr,
-      totalHabits: activeHabits.length,
-      completedHabits,
-      completionRate,
-    };
-  });
+  return Math.min(100, Math.max(0, (completedDays / totalDays) * 100));
 };
 
 /**

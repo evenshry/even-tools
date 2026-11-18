@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Input, Button, Card, Typography, Space, Alert, Row, Col } from "antd";
 import { SwapOutlined } from "@ant-design/icons";
-import { convertUnits } from "@/modules/unit-converter/utils/unitConversion";
+import { convertUnits, formatNumber } from "@/modules/unit-converter/utils/unitConversion";
 import "@/modules/unit-converter/components/ConversionResultDisplay.scss";
-import { formatDecimal } from "@/utils/numUtils";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -25,22 +24,20 @@ const ConversionResultDisplay: React.FC<ConversionResultDisplayProps> = ({ selec
   // 交换动画状态
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // 验证输入是否为有效数字
+  // 验证输入是否为有效数字（1e999 这类溢出值也必须判为无效）
   const validateInput = (value: string): boolean => {
     if (value === "") return true;
-    const numValue = parseFloat(value);
-    return !isNaN(numValue) && isFinite(numValue);
+    return Number.isFinite(Number(value));
   };
 
   // 当单位或输入值变化时，自动执行换算
   useEffect(() => {
     if (selectedFromUnit && selectedToUnit && inputValue !== "") {
-      const numValue = parseFloat(inputValue);
-      if (!isNaN(numValue)) {
-        const result = convertUnits(numValue, selectedFromUnit.id, selectedToUnit.id);
-        if (result) {
-          setConversionResult(result);
-        }
+      const numValue = Number(inputValue);
+      if (Number.isFinite(numValue)) {
+        setConversionResult(convertUnits(numValue, selectedFromUnit.id, selectedToUnit.id));
+      } else {
+        setConversionResult(null);
       }
     } else {
       setConversionResult(null);
@@ -57,7 +54,7 @@ const ConversionResultDisplay: React.FC<ConversionResultDisplayProps> = ({ selec
   // 交换源单位和目标单位，并将当前结果作为新的输入值
   const handleSwapUnits = () => {
     setIsSwapping(true);
-    setInputValue(conversionResult?.result.toString() || "1");
+    setInputValue(conversionResult ? formatNumber(conversionResult.result) : "1");
     onSwapUnits();
     setTimeout(() => {
       setIsSwapping(false);
@@ -152,7 +149,7 @@ const ConversionResultDisplay: React.FC<ConversionResultDisplayProps> = ({ selec
                   {conversionResult && (
                     <div className="conversion-result-display__result-value">
                       <Text className="conversion-result-display__result-text conversion-result-display__result-text--highlight">
-                        {formatDecimal(conversionResult.result)}
+                        {formatNumber(conversionResult.result)}
                       </Text>
                     </div>
                   )}

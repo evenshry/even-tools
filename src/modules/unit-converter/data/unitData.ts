@@ -30,10 +30,10 @@ export const unitData: UnitConversion.UnitCategory[] = [
           { id: 'ly', name: '光年', symbol: 'ly', conversionFactor: '9.4607304725808e15', type: 'modern' },
           { id: 'pc', name: '秒差距', symbol: 'pc', conversionFactor: '3.0856775814913673e16', type: 'modern' },
           { id: 'li', name: '里', symbol: '里', conversionFactor: 500, description: '中国古代长度单位', type: 'ancient' },
-          { id: 'zhang', name: '丈', symbol: '丈', conversionFactor: 3.333, description: '中国古代长度单位', type: 'ancient' },
-          { id: 'chi', name: '尺', symbol: '尺', conversionFactor: 0.333, description: '中国古代长度单位', type: 'ancient' },
-          { id: 'cun', name: '寸', symbol: '寸', conversionFactor: 0.0333, description: '中国古代长度单位', type: 'ancient' },
-          { id: 'fen', name: '分', symbol: '分', conversionFactor: 0.00333, description: '中国古代长度单位', type: 'ancient' },
+          { id: 'zhang', name: '丈', symbol: '丈', conversionFactor: 10 / 3, description: '中国古代长度单位', type: 'ancient' },
+          { id: 'chi', name: '尺', symbol: '尺', conversionFactor: 1 / 3, description: '中国古代长度单位', type: 'ancient' },
+          { id: 'cun', name: '寸', symbol: '寸', conversionFactor: 1 / 30, description: '中国古代长度单位', type: 'ancient' },
+          { id: 'fen', name: '分', symbol: '分', conversionFactor: 1 / 300, description: '中国古代长度单位', type: 'ancient' },
           { id: 'cubit', name: '腕尺', symbol: 'cubit', conversionFactor: 0.457, description: '古代中东长度单位', type: 'ancient' },
           { id: 'furlong', name: '弗隆', symbol: 'fur', conversionFactor: 201.168, description: '古代英国长度单位', type: 'ancient' },
           { id: 'league', name: '里格', symbol: 'lea', conversionFactor: 4828.032, description: '古代长度单位', type: 'ancient' },
@@ -89,7 +89,7 @@ export const unitData: UnitConversion.UnitCategory[] = [
           { id: 'cm2', name: '平方厘米', symbol: 'cm²', conversionFactor: 0.0001, type: 'modern' },
           { id: 'ha', name: '公顷', symbol: 'ha', conversionFactor: 10000, type: 'modern' },
           { id: 'acre', name: '英亩', symbol: 'ac', conversionFactor: 4046.86, type: 'modern' },
-          { id: 'mu', name: '亩', symbol: '亩', conversionFactor: 666.667, description: '中国古代面积单位', type: 'ancient' },
+          { id: 'mu', name: '亩', symbol: '亩', conversionFactor: 10000 / 15, description: '中国古代面积单位', type: 'ancient' },
         ]
       },
       {
@@ -98,8 +98,7 @@ export const unitData: UnitConversion.UnitCategory[] = [
         units: [
           { id: 'sqft', name: '平方英尺', symbol: 'ft²', conversionFactor: 0.092903, type: 'modern' },
           { id: 'sqin', name: '平方英寸', symbol: 'in²', conversionFactor: 0.00064516, type: 'modern' },
-          { id: 'qing', name: '顷', symbol: '顷', conversionFactor: 66666.7, description: '中国古代面积单位', type: 'ancient' },
-          { id: 'hectare-ancient', name: '古代公顷', symbol: 'ha', conversionFactor: 10000, description: '古代面积单位', type: 'ancient' },
+          { id: 'qing', name: '顷', symbol: '顷', conversionFactor: 1000000 / 15, description: '中国古代面积单位', type: 'ancient' },
         ]
       }
     ]
@@ -120,7 +119,6 @@ export const unitData: UnitConversion.UnitCategory[] = [
           { id: 'qt', name: '夸脱', symbol: 'qt', conversionFactor: 0.000946353, type: 'modern' },
           { id: 'pt', name: '品脱', symbol: 'pt', conversionFactor: 0.000473176, type: 'modern' },
           { id: 'floz', name: '液盎司', symbol: 'fl oz', conversionFactor: 0.0000295735, type: 'modern' },
-          { id: 'sheng', name: '升', symbol: '升', conversionFactor: 0.001, description: '中国古代体积单位', type: 'ancient' },
         ]
       },
       {
@@ -300,12 +298,11 @@ export const unitData: UnitConversion.UnitCategory[] = [
         name: '速度单位',
         units: [
           { id: 'mps', name: '米每秒', symbol: 'm/s', conversionFactor: 1, type: 'modern' },
-          { id: 'kph', name: '千米每小时', symbol: 'km/h', conversionFactor: 0.277778, type: 'modern' },
+          { id: 'kph', name: '千米每小时', symbol: 'km/h', conversionFactor: 1000 / 3600, type: 'modern' },
           { id: 'mph', name: '英里每小时', symbol: 'mph', conversionFactor: 0.44704, type: 'modern' },
           { id: 'fps', name: '英尺每秒', symbol: 'ft/s', conversionFactor: 0.3048, type: 'modern' },
-          { id: 'kn', name: '节', symbol: 'kn', conversionFactor: 0.514444, type: 'modern' },
+          { id: 'kn', name: '节', symbol: 'kn', conversionFactor: 1852 / 3600, type: 'modern' },
           { id: 'mach', name: '马赫', symbol: 'Ma', conversionFactor: 340.29, type: 'modern' },
-          { id: 'knot', name: '海里每小时', symbol: 'nmi/h', conversionFactor: 0.514444, type: 'modern' },
         ]
       }
     ]
@@ -419,15 +416,16 @@ export const unitData: UnitConversion.UnitCategory[] = [
 ];
 
 // 根据ID获取单位
+const unitIndex = new Map<string, { unit: UnitConversion.Unit, group: UnitConversion.UnitGroup, category: UnitConversion.UnitCategory }>();
+
+unitData.forEach((category) => {
+  category.groups.forEach((group) => {
+    group.units.forEach((unit) => {
+      unitIndex.set(unit.id, { unit, group, category });
+    });
+  });
+});
+
 export const getUnitById = (id: string): { unit: UnitConversion.Unit, group: UnitConversion.UnitGroup, category: UnitConversion.UnitCategory } | null => {
-  for (const category of unitData) {
-    for (const group of category.groups) {
-      for (const unit of group.units) {
-        if (unit.id === id) {
-          return { unit, group, category };
-        }
-      }
-    }
-  }
-  return null;
+  return unitIndex.get(id) ?? null;
 };

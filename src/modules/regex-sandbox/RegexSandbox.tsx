@@ -26,7 +26,8 @@ const RegexSandboxModule = () => {
   const [showFirstTimeGuide, setShowFirstTimeGuide] = useState(false);
 
   useEffect(() => {
-    const validation = validateRegex(pattern);
+    // 同时校验 pattern 与 flags，避免非法标志位被静默忽略
+    const validation = validateRegex(pattern, flags);
     setRegexError(validation.isValid ? undefined : validation.error);
 
     if (validation.isValid && testString) {
@@ -51,6 +52,7 @@ const RegexSandboxModule = () => {
 
   const handleFlagsChange = (value: string) => {
     setFlags(value);
+    setSelectedPreset(null);
   };
 
   const handleTestStringChange = (value: string) => {
@@ -61,6 +63,12 @@ const RegexSandboxModule = () => {
     setPattern(preset.pattern);
     setFlags(preset.flags);
     setSelectedPreset(preset);
+  };
+
+  // 用例引导中选择的表达式直接回填编辑器
+  const handleApplyExample = (value: string) => {
+    setPattern(value);
+    setSelectedPreset(null);
   };
 
   const handleFirstTimeGuideClose = () => {
@@ -87,6 +95,7 @@ const RegexSandboxModule = () => {
               error={regexError}
               presets={regexPresets.slice(0, 10)}
               onPresetSelect={handlePresetSelect}
+              selectedPresetId={selectedPreset?.id ?? null}
             />
             <RegexTester testString={testString} onTestStringChange={handleTestStringChange} testResult={testResult} />
           </Content>
@@ -113,7 +122,7 @@ const RegexSandboxModule = () => {
                       用例引导
                     </span>
                   ),
-                  children: <RegexGuideExamples />,
+                  children: <RegexGuideExamples onTryPattern={handleApplyExample} />,
                 },
                 {
                   key: "cheatsheet",

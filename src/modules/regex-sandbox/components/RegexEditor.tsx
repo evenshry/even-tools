@@ -1,15 +1,7 @@
 import { Input, Checkbox, Select, Card, Space, Typography, Alert } from "antd";
+import type { RegexSandboxTypes } from "@/modules/regex-sandbox/data/interface";
 
 const { Text } = Typography;
-
-interface RegexPreset {
-  id: string;
-  name: string;
-  description: string;
-  pattern: string;
-  flags: string;
-  category: string;
-}
 
 interface RegexEditorProps {
   pattern: string;
@@ -17,8 +9,9 @@ interface RegexEditorProps {
   onPatternChange: (value: string) => void;
   onFlagsChange: (value: string) => void;
   error?: string;
-  presets?: RegexPreset[];
-  onPresetSelect?: (preset: RegexPreset) => void;
+  presets?: RegexSandboxTypes.RegexPreset[];
+  onPresetSelect?: (preset: RegexSandboxTypes.RegexPreset) => void;
+  selectedPresetId?: string | null;
 }
 
 const flagOptions = [
@@ -38,6 +31,7 @@ const RegexEditor = ({
   error,
   presets,
   onPresetSelect,
+  selectedPresetId,
 }: RegexEditorProps) => {
   const handleFlagChange = (checkedValues: string[]) => {
     onFlagsChange(checkedValues.join(""));
@@ -77,6 +71,7 @@ const RegexEditor = ({
             <Select
               placeholder="选择预设正则表达式"
               style={{ width: "100%" }}
+              value={selectedPresetId ?? undefined}
               options={presets.map((preset) => ({
                 label: preset.name,
                 value: preset.id,
