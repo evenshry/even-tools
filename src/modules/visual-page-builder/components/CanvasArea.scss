@@ -212,6 +212,20 @@
     }
   }
 
+  // 弹性 / 网格容器：子项由容器统一控制间距，去掉流布局的下外边距
+  &.flex-container,
+  &.grid-container {
+    & > .canvas-node.flow-layout {
+      margin-bottom: 0;
+    }
+
+    // 空状态提示占满整行/整格
+    & > .empty-hint {
+      flex: 1 1 100%;
+      width: 100%;
+    }
+  }
+
   // 拖拽目标状态
   &.drag-target {
     border-color: var(--et-info) !important;

@@ -58,8 +58,14 @@ const mergeStyleAndLayout = (node: PageNode): Record<string, string | number> =>
   if (layout.position) merged.position = layout.position;
   if (layout.flexDirection) merged.flexDirection = layout.flexDirection;
   if (layout.flexWrap) merged.flexWrap = layout.flexWrap;
+  if (layout.justifyContent) merged.justifyContent = layout.justifyContent;
+  if (layout.alignItems) merged.alignItems = layout.alignItems;
+  if (layout.alignContent) merged.alignContent = layout.alignContent;
   if (layout.gridTemplateColumns) merged.gridTemplateColumns = layout.gridTemplateColumns;
   if (layout.gridTemplateRows) merged.gridTemplateRows = layout.gridTemplateRows;
+  if (layout.gridAutoFlow) merged.gridAutoFlow = layout.gridAutoFlow;
+  if (layout.gridAutoRows) merged.gridAutoRows = layout.gridAutoRows;
+  if (layout.gridAutoColumns) merged.gridAutoColumns = layout.gridAutoColumns;
 
   return merged;
 };

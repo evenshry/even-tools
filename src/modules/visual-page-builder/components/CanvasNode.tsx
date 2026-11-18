@@ -176,7 +176,9 @@ const CanvasNodeInner: React.FC<CanvasNodeProps> = ({ nodeId, zoom, dragNodeId, 
         data-node-id={nodeId}
         className={`canvas-node ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""} ${dragNodeId === nodeId ? "dragging" : ""} ${
           supportsDrag ? "draggable" : "flow-layout"
-        } ${isDragTarget ? "drag-target" : ""}`}
+        } ${isDragTarget ? "drag-target" : ""} ${
+          node.layout.display === "flex" ? "flex-container" : ""
+        } ${node.layout.display === "grid" ? "grid-container" : ""}`}
         style={{ ...nodeStyle, zIndex }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}

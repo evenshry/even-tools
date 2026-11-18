@@ -130,34 +130,14 @@ const PreviewRenderer: React.FC<PreviewRendererProps> = ({ nodeId }) => {
 
     case NodeType.FLEX:
       return (
-        <div
-          className="preview-flex"
-          style={{
-            ...nodeStyle,
-            display: "flex",
-            flexDirection: node.layout.flexDirection || "row",
-            flexWrap: node.layout.flexWrap || "nowrap",
-          }}
-          {...previewIdProps}
-          {...eventHandlers}
-        >
+        <div className="preview-flex" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
           {renderChildren()}
         </div>
       );
 
     case NodeType.GRID:
       return (
-        <div
-          className="preview-grid"
-          style={{
-            ...nodeStyle,
-            display: "grid",
-            gridTemplateColumns: node.layout.gridTemplateColumns || "1fr",
-            gridTemplateRows: node.layout.gridTemplateRows || "auto",
-          }}
-          {...previewIdProps}
-          {...eventHandlers}
-        >
+        <div className="preview-grid" style={nodeStyle} {...previewIdProps} {...eventHandlers}>
           {renderChildren()}
         </div>
       );

@@ -268,6 +268,47 @@ export const useDragManager = (
   }, [canvasRef, zoom]);
 
   /**
+   * 计算组件在 flex/grid 容器中的插入位置
+   * - flex：按主轴方向比较子项中心点
+   * - grid：按阅读顺序（先行后列）比较
+   * - 非 flex/grid 容器返回 -1（追加到末尾）
+   */
+  const getDropInsertIndex = useCallback((parentId: string, clientX: number, clientY: number): number => {
+    const canvas = canvasRef.current;
+    const parentNode = nodes[parentId];
+    if (!canvas || !parentNode) return -1;
+
+    const display = parentNode.layout.display;
+    if (display !== 'flex' && display !== 'grid') return -1;
+
+    const parentEl = canvas.querySelector<HTMLElement>(`[data-node-id="${parentId}"]`);
+    if (!parentEl) return -1;
+
+    const childEls = Array.from(parentEl.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && !!el.dataset.nodeId
+    );
+    if (childEls.length === 0) return 0;
+
+    const direction = parentNode.layout.flexDirection || 'row';
+    const isColumn = display === 'flex' && (direction === 'column' || direction === 'column-reverse');
+
+    for (let i = 0; i < childEls.length; i++) {
+      const rect = childEls[i].getBoundingClientRect();
+      if (display === 'grid') {
+        // 落在该行上方 → 插到当前项之前；同一行内按水平中线判断
+        if (clientY < rect.top) return i;
+        if (clientY <= rect.bottom && clientX < rect.left + rect.width / 2) return i;
+      } else if (isColumn) {
+        if (clientY < rect.top + rect.height / 2) return i;
+      } else {
+        if (clientX < rect.left + rect.width / 2) return i;
+      }
+    }
+
+    return childEls.length;
+  }, [canvasRef, nodes]);
+
+  /**
    * 判断拖拽项是否可以放置到当前悬停位置
    */
   const canDropToCurrent = useCallback((item: DragItem): boolean => {
@@ -340,8 +381,13 @@ export const useDragManager = (
       const { x, y } = toCanvasPoint(canvasRef.current, clientOffset.x, clientOffset.y, zoom);
       const parentId = resolveDropParentId(nodes, hoveredNodeId, item.componentType) ?? undefined;
 
+      // flex/grid 容器按落点计算插入顺序，其余容器由 store 追加到末尾
+      const insertIndex = parentId
+        ? getDropInsertIndex(parentId, clientOffset.x, clientOffset.y)
+        : -1;
+
       try {
-        addNode(item.componentType, x, y, parentId);
+        addNode(item.componentType, x, y, parentId, insertIndex >= 0 ? insertIndex : undefined);
       } catch (error) {
         console.error('Failed to add node:', error);
       }
@@ -351,7 +397,7 @@ export const useDragManager = (
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [zoom, nodes, hoveredNodeId, addNode, canDropToCurrent, hoverHandler]);
+  }), [zoom, nodes, hoveredNodeId, addNode, canDropToCurrent, hoverHandler, getDropInsertIndex]);
 
   /**
    * 处理节点拖拽开始

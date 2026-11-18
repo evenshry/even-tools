@@ -85,8 +85,20 @@ export interface PageNode {
     position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
     flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
     flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+    /** 主轴对齐（flex）/ 网格水平对齐（grid） */
+    justifyContent?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+    /** 交叉轴对齐（flex）/ 网格项目垂直对齐（grid） */
+    alignItems?: 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
+    /** 多行内容的交叉轴对齐（flex-wrap: wrap 时生效） */
+    alignContent?: 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around';
     gridTemplateColumns?: string;
     gridTemplateRows?: string;
+    /** 网格自动放置方向 */
+    gridAutoFlow?: 'row' | 'column' | 'row dense' | 'column dense';
+    /** 隐式行高 */
+    gridAutoRows?: string;
+    /** 隐式列宽 */
+    gridAutoColumns?: string;
   };
 
   // 样式属性

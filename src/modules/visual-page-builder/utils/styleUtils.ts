@@ -18,6 +18,7 @@ export const NODE_STYLE_KEYS = [
   'textAlign', 'lineHeight', 'letterSpacing', 'textDecoration', 'whiteSpace',
   'overflow', 'cursor', 'objectFit', 'zIndex', 'transform', 'transition',
   'verticalAlign', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'justifySelf', 'order',
+  'gridColumn', 'gridRow',
 ] as const;
 
 export type NodeStyleKey = typeof NODE_STYLE_KEYS[number];
@@ -43,8 +44,14 @@ export const buildNodeStyle = (node: PageNode): CSSProperties => {
   if (layout.position) result.position = layout.position;
   if (layout.flexDirection) result.flexDirection = layout.flexDirection;
   if (layout.flexWrap) result.flexWrap = layout.flexWrap;
+  if (layout.justifyContent) result.justifyContent = layout.justifyContent;
+  if (layout.alignItems) result.alignItems = layout.alignItems;
+  if (layout.alignContent) result.alignContent = layout.alignContent;
   if (layout.gridTemplateColumns) result.gridTemplateColumns = layout.gridTemplateColumns;
   if (layout.gridTemplateRows) result.gridTemplateRows = layout.gridTemplateRows;
+  if (layout.gridAutoFlow) result.gridAutoFlow = layout.gridAutoFlow;
+  if (layout.gridAutoRows) result.gridAutoRows = layout.gridAutoRows;
+  if (layout.gridAutoColumns) result.gridAutoColumns = layout.gridAutoColumns;
 
   return result as CSSProperties;
 };

@@ -63,7 +63,7 @@ const createSnapshot = (nodes: Record<string, PageNode>, selectedNodeId: string 
 
 interface CanvasStore extends CanvasState {
   // 节点操作
-  addNode: (type: NodeType, x: number, y: number, parentId?: string) => void;
+  addNode: (type: NodeType, x: number, y: number, parentId?: string, insertIndex?: number) => void;
   updateNode: (id: string, updates: Partial<PageNode>) => void;
   deleteNode: (id: string) => void;
   duplicateNode: (id: string) => void;
@@ -336,7 +336,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   ...multiSelectInitialState,
   
   // 添加节点
-  addNode: (type: NodeType, x: number, y: number, parentId?: string) => {
+  addNode: (type: NodeType, x: number, y: number, parentId?: string, insertIndex?: number) => {
     const id = generateNodeId();
     const name = `${type}-${Object.keys(get().nodes).length}`;
 
@@ -378,6 +378,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           delete newNode.style.left;
           delete newNode.style.top;
           delete newNode.style.position;
+          // 绝对定位节点放入流式容器时改为相对定位，参与 flex/grid/块级布局
+          newNode.layout = { ...newNode.layout, position: 'relative' };
           // 块级容器中撑满宽度；flex/grid 容器保持自适应，避免破坏多列布局
           if (targetParent.layout.display !== 'flex' && targetParent.layout.display !== 'grid') {
             newNode.style.width = '100%';
@@ -387,11 +389,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         // 维护 parentId
         newNode.parentId = parentId;
 
+        // flex/grid 容器按落点插入到指定顺序，其余情况追加到末尾
+        const nextChildren = [...children];
+        if (
+          typeof insertIndex === 'number' &&
+          insertIndex >= 0 &&
+          insertIndex <= nextChildren.length
+        ) {
+          nextChildren.splice(insertIndex, 0, id);
+        } else {
+          nextChildren.push(id);
+        }
+
         updatedNodes[parentId] = {
           ...targetParent,
           content: {
             ...targetParent.content,
-            children: [...children, id]
+            children: nextChildren
           }
         };
       }
@@ -627,7 +641,29 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
       // 2. 更新被移动节点的 parentId，并在换父级时换算绝对定位坐标
       const isAbsoluteNode = node.layout.position === 'absolute' || node.layout.position === 'fixed';
-      if (isAbsoluteNode && oldParentId !== newParentId) {
+      const newParentNode = newParentId ? state.nodes[newParentId] : undefined;
+      const newParentIsFlowLayout = !!newParentNode && (
+        !newParentNode.layout.position ||
+        newParentNode.layout.position === 'static' ||
+        newParentNode.layout.position === 'relative'
+      );
+      if (isAbsoluteNode && oldParentId !== newParentId && newParentIsFlowLayout && newParentNode) {
+        // 绝对定位节点移入流布局容器：转为相对定位并清除坐标，作为普通子项参与布局
+        updatedNodes[id] = {
+          ...node,
+          parentId: newParentId,
+          layout: { ...node.layout, position: 'relative' },
+          style: {
+            ...node.style,
+            left: undefined,
+            top: undefined,
+            position: undefined,
+            ...(newParentNode.layout.display !== 'flex' && newParentNode.layout.display !== 'grid'
+              ? { width: '100%' }
+              : {}),
+          },
+        };
+      } else if (isAbsoluteNode && oldParentId !== newParentId) {
         const getParentOffset = (pid: string | undefined): { left: number; top: number } => {
           let left = 0;
           let top = 0;

@@ -187,119 +187,344 @@ interface LayoutEditorProps {
   onUpdate: (updates: Partial<PageNode>) => void;
 }
 
-const LayoutEditor: React.FC<LayoutEditorProps> = ({ node, onUpdate }) => (
-  <div className="layout-editor">
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      <div className="property-group">
-        <Text strong style={{ fontSize: '12px' }}>显示类型</Text>
-        <Select
-          size="small"
-          value={node.layout.display}
-          onChange={(value) => onUpdate({
-            layout: { ...node.layout, display: value }
-          })}
-          style={{ width: '100%' }}
-        >
-          <Option value="block">块级 (block)</Option>
-          <Option value="inline">行内 (inline)</Option>
-          <Option value="inline-block">行内块 (inline-block)</Option>
-          <Option value="flex">弹性 (flex)</Option>
-          <Option value="grid">网格 (grid)</Option>
-          <Option value="none">隐藏 (none)</Option>
-        </Select>
-      </div>
-      
-      <div className="property-group">
-        <Text strong style={{ fontSize: '12px' }}>定位方式</Text>
-        <Select
-          size="small"
-          value={node.layout.position || 'static'}
-          onChange={(value) => onUpdate({
-            layout: { ...node.layout, position: value }
-          })}
-          style={{ width: '100%' }}
-        >
-          <Option value="static">静态 (static)</Option>
-          <Option value="relative">相对 (relative)</Option>
-          <Option value="absolute">绝对 (absolute)</Option>
-          <Option value="fixed">固定 (fixed)</Option>
-          <Option value="sticky">粘性 (sticky)</Option>
-        </Select>
-      </div>
-      
-      {node.layout.display === 'flex' && (
-        <>
-          <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
-            弹性布局
-          </Divider>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>主轴方向</Text>
-            <Select
-              size="small"
-              value={node.layout.flexDirection || 'row'}
-              onChange={(value) => onUpdate({
-                layout: { ...node.layout, flexDirection: value }
-              })}
-              style={{ width: '100%' }}
-            >
-              <Option value="row">水平 (row)</Option>
-              <Option value="column">垂直 (column)</Option>
-              <Option value="row-reverse">水平反向 (row-reverse)</Option>
-              <Option value="column-reverse">垂直反向 (column-reverse)</Option>
-            </Select>
-          </div>
-          
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>换行方式</Text>
-            <Select
-              size="small"
-              value={node.layout.flexWrap || 'nowrap'}
-              onChange={(value) => onUpdate({
-                layout: { ...node.layout, flexWrap: value }
-              })}
-              style={{ width: '100%' }}
-            >
-              <Option value="nowrap">不换行 (nowrap)</Option>
-              <Option value="wrap">换行 (wrap)</Option>
-              <Option value="wrap-reverse">反向换行 (wrap-reverse)</Option>
-            </Select>
-          </div>
-        </>
-      )}
-      
-      {node.layout.display === 'grid' && (
-        <>
-          <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
-            网格布局
-          </Divider>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>列模板</Text>
-            <Input
-              size="small"
-              value={node.layout.gridTemplateColumns || ''}
-              onChange={(e) => onUpdate({
-                layout: { ...node.layout, gridTemplateColumns: e.target.value }
-              })}
-              placeholder="repeat(3, 1fr)"
-            />
-          </div>
-          
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>行模板</Text>
-            <Input
-              size="small"
-              value={node.layout.gridTemplateRows || ''}
-              onChange={(e) => onUpdate({
-                layout: { ...node.layout, gridTemplateRows: e.target.value }
-              })}
-              placeholder="auto"
-            />
-          </div>
-        </>
-      )}
-    </Space>
-  </div>
-);
+const LayoutEditor: React.FC<LayoutEditorProps> = ({ node, onUpdate }) => {
+  // 父节点布局决定子项可用的布局能力（flex 子项 / grid 子项）
+  const parent = useCanvasStore((s) => (node.parentId ? s.nodes[node.parentId] : null));
+  const parentDisplay = parent?.layout.display;
+
+  const updateLayout = (patch: Partial<PageNode['layout']>) => {
+    onUpdate({ layout: { ...node.layout, ...patch } });
+  };
+
+  const updateStyle = (patch: Partial<PageNode['style']>) => {
+    onUpdate({ style: { ...node.style, ...patch } });
+  };
+
+  return (
+    <div className="layout-editor">
+      <Space direction="vertical" style={{ width: '100%' }} size="small">
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>显示类型</Text>
+          <Select
+            size="small"
+            value={node.layout.display}
+            onChange={(value) => updateLayout({ display: value })}
+            style={{ width: '100%' }}
+          >
+            <Option value="block">块级 (block)</Option>
+            <Option value="inline">行内 (inline)</Option>
+            <Option value="inline-block">行内块 (inline-block)</Option>
+            <Option value="flex">弹性 (flex)</Option>
+            <Option value="grid">网格 (grid)</Option>
+            <Option value="none">隐藏 (none)</Option>
+          </Select>
+        </div>
+
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>定位方式</Text>
+          <Select
+            size="small"
+            value={node.layout.position || 'static'}
+            onChange={(value) => updateLayout({ position: value })}
+            style={{ width: '100%' }}
+          >
+            <Option value="static">静态 (static)</Option>
+            <Option value="relative">相对 (relative)</Option>
+            <Option value="absolute">绝对 (absolute)</Option>
+            <Option value="fixed">固定 (fixed)</Option>
+            <Option value="sticky">粘性 (sticky)</Option>
+          </Select>
+        </div>
+
+        {node.layout.display === 'flex' && (
+          <>
+            <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
+              弹性布局
+            </Divider>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>主轴方向</Text>
+              <Select
+                size="small"
+                value={node.layout.flexDirection || 'row'}
+                onChange={(value) => updateLayout({ flexDirection: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="row">水平 (row)</Option>
+                <Option value="column">垂直 (column)</Option>
+                <Option value="row-reverse">水平反向 (row-reverse)</Option>
+                <Option value="column-reverse">垂直反向 (column-reverse)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>主轴对齐</Text>
+              <Select
+                size="small"
+                value={node.layout.justifyContent || 'flex-start'}
+                onChange={(value) => updateLayout({ justifyContent: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="space-between">两端对齐 (space-between)</Option>
+                <Option value="space-around">环绕分布 (space-around)</Option>
+                <Option value="space-evenly">均匀分布 (space-evenly)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>交叉轴对齐</Text>
+              <Select
+                size="small"
+                value={node.layout.alignItems || 'stretch'}
+                onChange={(value) => updateLayout({ alignItems: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="stretch">拉伸填充 (stretch)</Option>
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="baseline">基线对齐 (baseline)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>换行方式</Text>
+              <Select
+                size="small"
+                value={node.layout.flexWrap || 'nowrap'}
+                onChange={(value) => updateLayout({ flexWrap: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="nowrap">不换行 (nowrap)</Option>
+                <Option value="wrap">换行 (wrap)</Option>
+                <Option value="wrap-reverse">反向换行 (wrap-reverse)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>多行对齐</Text>
+              <Select
+                size="small"
+                value={node.layout.alignContent || 'stretch'}
+                onChange={(value) => updateLayout({ alignContent: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="stretch">拉伸填充 (stretch)</Option>
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="space-between">两端对齐 (space-between)</Option>
+                <Option value="space-around">环绕分布 (space-around)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>间距</Text>
+              <Input
+                size="small"
+                value={node.style.gap || ''}
+                onChange={(e) => updateStyle({ gap: e.target.value })}
+                placeholder="10px"
+              />
+            </div>
+          </>
+        )}
+
+        {node.layout.display === 'grid' && (
+          <>
+            <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
+              网格布局
+            </Divider>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>列模板</Text>
+              <Input
+                size="small"
+                value={node.layout.gridTemplateColumns || ''}
+                onChange={(e) => updateLayout({ gridTemplateColumns: e.target.value })}
+                placeholder="repeat(3, 1fr)"
+              />
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>行模板</Text>
+              <Input
+                size="small"
+                value={node.layout.gridTemplateRows || ''}
+                onChange={(e) => updateLayout({ gridTemplateRows: e.target.value })}
+                placeholder="auto"
+              />
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>自动流</Text>
+              <Select
+                size="small"
+                value={node.layout.gridAutoFlow || 'row'}
+                onChange={(value) => updateLayout({ gridAutoFlow: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="row">按行 (row)</Option>
+                <Option value="column">按列 (column)</Option>
+                <Option value="row dense">按行紧凑 (row dense)</Option>
+                <Option value="column dense">按列紧凑 (column dense)</Option>
+              </Select>
+            </div>
+
+            <Row gutter={8}>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>自动行高</Text>
+                  <Input
+                    size="small"
+                    value={node.layout.gridAutoRows || ''}
+                    onChange={(e) => updateLayout({ gridAutoRows: e.target.value })}
+                    placeholder="auto"
+                  />
+                </div>
+              </Col>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>自动列宽</Text>
+                  <Input
+                    size="small"
+                    value={node.layout.gridAutoColumns || ''}
+                    onChange={(e) => updateLayout({ gridAutoColumns: e.target.value })}
+                    placeholder="auto"
+                  />
+                </div>
+              </Col>
+            </Row>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>水平对齐</Text>
+              <Select
+                size="small"
+                value={node.layout.justifyContent || 'flex-start'}
+                onChange={(value) => updateLayout({ justifyContent: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="space-between">两端对齐 (space-between)</Option>
+                <Option value="space-around">环绕分布 (space-around)</Option>
+                <Option value="space-evenly">均匀分布 (space-evenly)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>垂直对齐</Text>
+              <Select
+                size="small"
+                value={node.layout.alignItems || 'stretch'}
+                onChange={(value) => updateLayout({ alignItems: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="stretch">拉伸填充 (stretch)</Option>
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="baseline">基线对齐 (baseline)</Option>
+              </Select>
+            </div>
+
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>间距</Text>
+              <Input
+                size="small"
+                value={node.style.gap || ''}
+                onChange={(e) => updateStyle({ gap: e.target.value })}
+                placeholder="10px"
+              />
+            </div>
+          </>
+        )}
+
+        {parentDisplay === 'flex' && (
+          <>
+            <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
+              作为弹性子项
+            </Divider>
+            <Row gutter={8}>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>伸缩比例</Text>
+                  <Input
+                    size="small"
+                    value={node.style.flexGrow ?? ''}
+                    onChange={(e) => updateStyle({ flexGrow: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+              </Col>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>基准尺寸</Text>
+                  <Input
+                    size="small"
+                    value={node.style.flexBasis ?? ''}
+                    onChange={(e) => updateStyle({ flexBasis: e.target.value })}
+                    placeholder="auto"
+                  />
+                </div>
+              </Col>
+            </Row>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>自身对齐</Text>
+              <Select
+                size="small"
+                value={node.style.alignSelf || 'auto'}
+                onChange={(value) => updateStyle({ alignSelf: value === 'auto' ? undefined : value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="auto">跟随容器 (auto)</Option>
+                <Option value="stretch">拉伸填充 (stretch)</Option>
+                <Option value="flex-start">起始对齐 (flex-start)</Option>
+                <Option value="flex-end">末尾对齐 (flex-end)</Option>
+                <Option value="center">居中 (center)</Option>
+                <Option value="baseline">基线对齐 (baseline)</Option>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {parentDisplay === 'grid' && (
+          <>
+            <Divider style={{ margin: '8px 0', fontSize: '12px' }}>
+              作为网格子项
+            </Divider>
+            <Row gutter={8}>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>网格列</Text>
+                  <Input
+                    size="small"
+                    value={node.style.gridColumn ?? ''}
+                    onChange={(e) => updateStyle({ gridColumn: e.target.value })}
+                    placeholder="auto"
+                  />
+                </div>
+              </Col>
+              <Col span={12}>
+                <div className="property-group">
+                  <Text strong style={{ fontSize: '12px' }}>网格行</Text>
+                  <Input
+                    size="small"
+                    value={node.style.gridRow ?? ''}
+                    onChange={(e) => updateStyle({ gridRow: e.target.value })}
+                    placeholder="auto"
+                  />
+                </div>
+              </Col>
+            </Row>
+          </>
+        )}
+      </Space>
+    </div>
+  );
+};
 
 // 内容编辑器组件
 interface ContentEditorProps {
