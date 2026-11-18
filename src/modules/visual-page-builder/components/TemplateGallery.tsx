@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Row, Col, Button, Modal, Input, Empty, Spin, message, Tooltip, Popconfirm, Tag, Divider } from 'antd';
-import { PlusOutlined, SaveOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, SaveOutlined, DeleteOutlined, ReloadOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { builtinTemplates, type PageTemplate } from '../data/templates';
 import type { SavedTemplate } from '../store/usePagePersistence';
@@ -38,14 +38,19 @@ const TemplateGallery: React.FC = () => {
   const applyTemplate = useCanvasStore((s) => s.applyTemplate);
   const saveTemplate = useCanvasStore((s) => s.saveTemplate);
   const listTemplates = useCanvasStore((s) => s.listTemplates);
+  const renameTemplate = useCanvasStore((s) => s.renameTemplate);
   const deleteTemplate = useCanvasStore((s) => s.deleteTemplate);
 
   const [userTemplates, setUserTemplates] = useState<UserTemplateItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveDesc, setSaveDesc] = useState('');
   const [saving, setSaving] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<UserTemplateItem | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   /** 加载用户自定义模板列表 */
   const refreshUserTemplates = useCallback(async () => {
@@ -130,6 +135,34 @@ const TemplateGallery: React.FC = () => {
     [deleteTemplate, refreshUserTemplates]
   );
 
+  /** 重命名用户模板 */
+  const handleRename = useCallback(async () => {
+    if (!renameTarget || !renameValue.trim()) {
+      message.warning('请输入模板名称');
+      return;
+    }
+    setRenaming(true);
+    try {
+      await renameTemplate(renameTarget.dbId, renameValue.trim());
+      message.success('模板已重命名');
+      setRenameTarget(null);
+      await refreshUserTemplates();
+    } catch {
+      message.error('重命名失败');
+    } finally {
+      setRenaming(false);
+    }
+  }, [renameTarget, renameValue, renameTemplate, refreshUserTemplates]);
+
+  // 搜索过滤（名称 / 描述）
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const filteredBuiltin = builtinTemplates.filter(
+    (t) => !normalizedKeyword || `${t.name} ${t.description}`.toLowerCase().includes(normalizedKeyword)
+  );
+  const filteredUser = userTemplates.filter(
+    (t) => !normalizedKeyword || `${t.name} ${t.description}`.toLowerCase().includes(normalizedKeyword)
+  );
+
   /** 渲染单个模板卡片 */
   const renderTemplateCard = (template: PageTemplate | UserTemplateItem) => {
     const isUser = !template.builtin;
@@ -145,6 +178,21 @@ const TemplateGallery: React.FC = () => {
             <Tooltip title="应用模板" key="apply">
               <PlusOutlined />
             </Tooltip>,
+            isUser ? (
+              <Tooltip title="重命名" key="rename">
+                <EditOutlined
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenameTarget(template as UserTemplateItem);
+                    setRenameValue(template.name);
+                  }}
+                />
+              </Tooltip>
+            ) : (
+              <span key="rename-placeholder" style={{ visibility: 'hidden' }}>
+                <EditOutlined />
+              </span>
+            ),
             isUser ? (
               <Popconfirm
                 key="delete"
@@ -184,6 +232,15 @@ const TemplateGallery: React.FC = () => {
     <div className="template-gallery">
       <div className="template-gallery-header">
         <span className="template-gallery-title">模板库</span>
+        <Input
+          size="small"
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="搜索模板"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          style={{ width: 140 }}
+        />
         <Tooltip title="刷新用户模板">
           <Button size="small" type="text" icon={<ReloadOutlined />} onClick={refreshUserTemplates} loading={loading} />
         </Tooltip>
@@ -195,32 +252,56 @@ const TemplateGallery: React.FC = () => {
       <Divider style={{ margin: '8px 0' }} />
 
       <div className="template-section">
-        <div className="template-section-title">预置模板（{builtinTemplates.length}）</div>
-        <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
-          {builtinTemplates.map(renderTemplateCard)}
-        </Row>
+        <div className="template-section-title">预置模板（{filteredBuiltin.length}）</div>
+        {filteredBuiltin.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到匹配模板" style={{ margin: '12px 0' }} />
+        ) : (
+          <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
+            {filteredBuiltin.map(renderTemplateCard)}
+          </Row>
+        )}
       </div>
 
       <Divider style={{ margin: '12px 0' }} />
 
       <div className="template-section">
-        <div className="template-section-title">我的模板（{userTemplates.length}）</div>
+        <div className="template-section-title">我的模板（{filteredUser.length}）</div>
         {loading ? (
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <Spin size="small" />
           </div>
-        ) : userTemplates.length === 0 ? (
+        ) : filteredUser.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无自定义模板"
+            description={normalizedKeyword ? '未找到匹配模板' : '暂无自定义模板'}
             style={{ margin: '12px 0' }}
           />
         ) : (
           <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
-            {userTemplates.map(renderTemplateCard)}
+            {filteredUser.map(renderTemplateCard)}
           </Row>
         )}
       </div>
+
+      <Modal
+        title="重命名模板"
+        open={!!renameTarget}
+        onCancel={() => setRenameTarget(null)}
+        onOk={handleRename}
+        confirmLoading={renaming}
+        okText="保存"
+        cancelText="取消"
+        width={380}
+      >
+        <Input
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onPressEnter={handleRename}
+          placeholder="请输入模板名称"
+          maxLength={50}
+          style={{ marginTop: 8 }}
+        />
+      </Modal>
 
       <Modal
         title="保存为模板"

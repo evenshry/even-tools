@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip, Tabs } from "antd";
-import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined, AppstoreOutlined, BlockOutlined, LayoutOutlined } from "@ant-design/icons";
+import { Layout, Button, Space, Typography, Card, Modal, message, Tooltip, Tabs, List, Input, Popconfirm, Tag } from "antd";
+import { SaveOutlined, EyeOutlined, ExportOutlined, ReloadOutlined, UndoOutlined, RedoOutlined, AppstoreOutlined, BlockOutlined, LayoutOutlined, FileTextOutlined, PlusOutlined, QuestionCircleOutlined } from "@ant-design/icons";
 import ModuleHeader from "@/components/ModuleHeader";
 import ComponentPanel from "./components/ComponentPanel";
 import LayerPanel from "./components/LayerPanel";
@@ -11,7 +11,9 @@ import CanvasArea from "./components/CanvasArea";
 import PropertyPanel from "./components/PropertyPanel";
 import PreviewArea from "./components/PreviewArea";
 import CodeExportModal from "./components/CodeExportModal";
+import HelpDrawer from "./components/HelpDrawer";
 import { useCanvasStore } from "./store/useCanvasStore";
+import type { SavedPage } from "./store/usePagePersistence";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { PreviewMode } from "./types";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -42,9 +44,20 @@ const VisualPageBuilder: React.FC = () => {
   const redo = useCanvasStore(s => s.redo);
   const loadPage = useCanvasStore(s => s.loadPage);
   const saveCurrentPage = useCanvasStore(s => s.saveCurrentPage);
+  const currentPageId = useCanvasStore(s => s.pageId);
+  const pageName = useCanvasStore(s => s.pageName);
+  const listPages = useCanvasStore(s => s.listPages);
+  const createPage = useCanvasStore(s => s.createPage);
+  const switchPage = useCanvasStore(s => s.switchPage);
+  const renamePage = useCanvasStore(s => s.renamePage);
+  const deletePage = useCanvasStore(s => s.deletePage);
 
   const [leftPanelTab, setLeftPanelTab] = useState<'components' | 'layers' | 'templates'>('components');
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [pageModalOpen, setPageModalOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [pages, setPages] = useState<SavedPage[]>([]);
+  const [pageActionLoading, setPageActionLoading] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 快捷键挂载在模块根组件：编辑/预览模式均可响应
@@ -140,6 +153,63 @@ const VisualPageBuilder: React.FC = () => {
     setExportModalOpen(true);
   }, [nodes]);
 
+  // 刷新页面列表
+  const refreshPages = useCallback(async () => {
+    try {
+      setPages(await listPages());
+    } catch {
+      // IndexedDB 不可用时保持空列表，不影响编辑
+    }
+  }, [listPages]);
+
+  // 执行页面操作：统一处理 loading、错误提示与列表刷新
+  const runPageAction = useCallback(
+    async (action: () => Promise<void>, successText?: string) => {
+      setPageActionLoading(true);
+      try {
+        await action();
+        await refreshPages();
+        if (successText) message.success(successText);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        message.error(detail);
+      } finally {
+        setPageActionLoading(false);
+      }
+    },
+    [refreshPages]
+  );
+
+  const handleOpenPageModal = useCallback(() => {
+    setPageModalOpen(true);
+    refreshPages();
+  }, [refreshPages]);
+
+  const handleCreatePage = useCallback(() => {
+    runPageAction(() => createPage(), "已新建页面");
+  }, [runPageAction, createPage]);
+
+  const handleSwitchPage = useCallback(
+    (id: string) => {
+      runPageAction(() => switchPage(id));
+    },
+    [runPageAction, switchPage]
+  );
+
+  const handleRenamePage = useCallback(
+    (id: string, name: string) => {
+      runPageAction(() => renamePage(id, name));
+    },
+    [runPageAction, renamePage]
+  );
+
+  const handleDeletePage = useCallback(
+    (id: string) => {
+      runPageAction(() => deletePage(id), "页面已删除");
+    },
+    [runPageAction, deletePage]
+  );
+
   // 渲染编辑模式界面
   const renderEditMode = () => (
     <div className="workspace-layout">
@@ -203,6 +273,16 @@ const VisualPageBuilder: React.FC = () => {
   const canvasExtraActions = (
     <>
       <Space>
+        <Tooltip title="页面管理">
+          <Button size="small" icon={<FileTextOutlined />} onClick={handleOpenPageModal}>
+            页面
+          </Button>
+        </Tooltip>
+        <Tooltip title="操作指南">
+          <Button size="small" icon={<QuestionCircleOutlined />} onClick={() => setHelpOpen(true)}>
+            指南
+          </Button>
+        </Tooltip>
         <Tooltip title="撤销 (Ctrl+Z)">
           <Button
             size="small"
@@ -240,7 +320,7 @@ const VisualPageBuilder: React.FC = () => {
         <Button size="small" icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
       </Space>
       <Text style={{ fontSize: 12, color: "var(--et-ink-2)" }}>
-        节点数: {Object.keys(nodes).length} | 选中: {selectedNodeId ? nodes[selectedNodeId]?.name : "无"}
+        页面: {pageName} | 节点数: {Object.keys(nodes).length} | 选中: {selectedNodeId ? nodes[selectedNodeId]?.name : "无"}
         {isDirty && <span style={{ color: semanticColors.warning[mode], marginLeft: 8 }}>· 未保存</span>}
       </Text>
     </>
@@ -260,6 +340,79 @@ const VisualPageBuilder: React.FC = () => {
           nodes={nodes}
           onClose={() => setExportModalOpen(false)}
         />
+        <Modal
+          title="页面管理"
+          open={pageModalOpen}
+          onCancel={() => setPageModalOpen(false)}
+          footer={null}
+          width={560}
+        >
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            <Button
+              type="dashed"
+              block
+              icon={<PlusOutlined />}
+              onClick={handleCreatePage}
+              loading={pageActionLoading}
+            >
+              新建页面
+            </Button>
+            <List
+              bordered
+              dataSource={pages}
+              locale={{ emptyText: "暂无已保存页面" }}
+              renderItem={(page) => (
+                <List.Item
+                  actions={[
+                    page.id === currentPageId ? (
+                      <Tag color="blue" key="current">当前</Tag>
+                    ) : (
+                      <Button
+                        key="switch"
+                        type="link"
+                        size="small"
+                        onClick={() => handleSwitchPage(page.id)}
+                      >
+                        切换
+                      </Button>
+                    ),
+                    <Popconfirm
+                      key="delete"
+                      title="删除该页面？"
+                      description="删除后不可恢复"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => handleDeletePage(page.id)}
+                    >
+                      <Button type="link" size="small" danger>删除</Button>
+                    </Popconfirm>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <Input
+                        key={`${page.id}-${page.name}`}
+                        size="small"
+                        defaultValue={page.name}
+                        onBlur={(e) => {
+                          const value = e.target.value.trim();
+                          if (!value) {
+                            e.target.value = page.name;
+                            return;
+                          }
+                          if (value !== page.name) handleRenamePage(page.id, value);
+                        }}
+                      />
+                    }
+                    description={`更新于 ${new Date(page.updatedAt).toLocaleString()} · ${Object.keys(page.nodes).length} 个节点`}
+                  />
+                </List.Item>
+              )}
+            />
+          </Space>
+        </Modal>
+        <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
       </Layout>
     </DndProvider>
   );

@@ -61,6 +61,29 @@ const createSnapshot = (nodes: Record<string, PageNode>, selectedNodeId: string 
   };
 };
 
+/** 生成页面 ID */
+const generatePageId = (): string => `page-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+/**
+ * 切换到空白页面时的会话状态（清空节点、选中与历史，避免跨页面撤销）
+ */
+const buildBlankPageSession = (page: SavedPage) => ({
+  pageId: page.id,
+  pageName: page.name,
+  pageCreatedAt: page.createdAt,
+  nodes: {} as Record<string, PageNode>,
+  selectedNodeId: null as string | null,
+  selectedNodeIds: [] as string[],
+  hoveredNodeId: null as string | null,
+  dragTargetNodeId: null as string | null,
+  alignmentGuides: null,
+  isDirty: false,
+  past: [] as Snapshot[],
+  future: [] as Snapshot[],
+  canUndo: false,
+  canRedo: false,
+});
+
 interface CanvasStore extends CanvasState {
   // 节点操作
   addNode: (type: NodeType, x: number, y: number, parentId?: string, insertIndex?: number) => void;
@@ -107,6 +130,18 @@ interface CanvasStore extends CanvasState {
   loadNodes: (nodes: Record<string, PageNode>) => void;
   markDirty: () => void;
 
+  // 多页面管理
+  /** 列出所有已保存页面（按更新时间倒序） */
+  listPages: () => Promise<SavedPage[]>;
+  /** 新建空白页面并切换过去 */
+  createPage: (name?: string) => Promise<void>;
+  /** 保存当前页后切换到目标页面 */
+  switchPage: (id: string) => Promise<void>;
+  /** 重命名页面（当前页标记为待保存，非当前页直接写库） */
+  renamePage: (id: string, name: string) => Promise<void>;
+  /** 删除页面（删除当前页时自动切换到最近的页面） */
+  deletePage: (id: string) => Promise<void>;
+
   // 模板操作（T4.2）
   /** 应用模板：克隆节点 + 推入历史 + 替换画布 */
   applyTemplate: (templateNodes: Record<string, PageNode>, templateRootId: string) => void;
@@ -114,6 +149,8 @@ interface CanvasStore extends CanvasState {
   saveTemplate: (name: string, description?: string) => Promise<SavedTemplate>;
   /** 列出所有用户自定义模板 */
   listTemplates: () => Promise<SavedTemplate[]>;
+  /** 重命名用户自定义模板 */
+  renameTemplate: (id: string, name: string) => Promise<void>;
   /** 删除用户自定义模板 */
   deleteTemplate: (id: string) => Promise<void>;
 
@@ -840,6 +877,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   },
 
+  // 重命名用户自定义模板
+  renameTemplate: async (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const template = await pageDB.getTemplate(id);
+    if (!template) return;
+    await pageDB.saveTemplate({ ...template, name: trimmed, updatedAt: Date.now() });
+  },
+
   // 删除用户自定义模板
   deleteTemplate: async (id: string) => {
     try {
@@ -940,6 +986,76 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       set({ isSaving: false });
       throw error;
     }
+  },
+
+  // ===== 多页面管理 =====
+
+  listPages: () => pageDB.listPages(),
+
+  createPage: async (name?: string) => {
+    const state = get();
+    if (state.isSaving) throw new Error('正在保存，请稍候');
+    if (state.isDirty) {
+      await state.saveCurrentPage();
+    }
+
+    const now = Date.now();
+    const page: SavedPage = {
+      id: generatePageId(),
+      name: name?.trim() || `未命名页面 ${new Date(now).toLocaleDateString()}`,
+      nodes: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    await pageDB.savePage(page);
+    set(buildBlankPageSession(page));
+  },
+
+  switchPage: async (id: string) => {
+    const state = get();
+    if (id === state.pageId) return;
+    if (state.isSaving) throw new Error('正在保存，请稍候');
+    if (state.isDirty) {
+      await state.saveCurrentPage();
+    }
+    await get().loadPage(id);
+  },
+
+  renamePage: async (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    if (id === get().pageId) {
+      set({ pageName: trimmed, isDirty: true });
+      return;
+    }
+
+    const page = await pageDB.getPage(id);
+    if (!page) return;
+    await pageDB.savePage({ ...page, name: trimmed, updatedAt: Date.now() });
+  },
+
+  deletePage: async (id: string) => {
+    await pageDB.deletePage(id);
+    if (get().pageId !== id) return;
+
+    const remaining = await pageDB.listPages();
+    if (remaining.length > 0) {
+      await get().loadPage(remaining[0].id);
+      return;
+    }
+
+    // 已无其他页面：创建一个新的空白页，避免停留在已删除页面
+    const now = Date.now();
+    const page: SavedPage = {
+      id: generatePageId(),
+      name: DEFAULT_PAGE_NAME,
+      nodes: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    await pageDB.savePage(page);
+    set(buildBlankPageSession(page));
   },
 
   // ===== 撤销/重做 =====

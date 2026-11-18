@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Tree, Empty, Dropdown, Tooltip, message } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Tree, Empty, Dropdown, Tooltip, Input, message } from 'antd';
 import type { TreeDataNode, TreeProps } from 'antd';
 import {
   EyeOutlined,
@@ -8,6 +8,7 @@ import {
   DeleteOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import type { PageNode } from '../types';
@@ -32,6 +33,9 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
 
   // 展开状态：首次加载展开全部，新增节点自动展开，同时保留用户的折叠操作
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  // 搜索关键字与重命名中的节点
+  const [keyword, setKeyword] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   useEffect(() => {
     setExpandedKeys((prev) => {
       const allKeys = Object.keys(nodes);
@@ -40,6 +44,32 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
       return newKeys.length > 0 ? [...prev, ...newKeys] : prev;
     });
   }, [nodes]);
+
+  const normalizedKeyword = keyword.trim().toLowerCase();
+
+  // 命中节点及其所有祖先（搜索时保留层级路径）
+  const matchedIds = useMemo(() => {
+    if (!normalizedKeyword) return null;
+    const result = new Set<string>();
+    Object.values(nodes).forEach((node) => {
+      const haystack = `${node.name} ${node.alias || ''} ${node.type}`.toLowerCase();
+      if (!haystack.includes(normalizedKeyword)) return;
+      result.add(node.id);
+      let parentId = node.parentId;
+      while (parentId && !result.has(parentId)) {
+        result.add(parentId);
+        parentId = nodes[parentId]?.parentId;
+      }
+    });
+    return result;
+  }, [nodes, normalizedKeyword]);
+
+  // 提交重命名
+  const commitRename = useCallback((id: string, value: string) => {
+    const name = value.trim();
+    if (name) updateNode(id, { name });
+    setEditingId(null);
+  }, [updateNode]);
 
   // 计算同层兄弟节点（用于上移/下移 disable 判断）
   const getSiblingIds = (node: PageNode): string[] => {
@@ -93,12 +123,15 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
 
   // 构建树数据（O(n) 一次遍历 + 子节点组装）
   const treeData = useMemo<TreeDataNode[]>(() => {
-    const rootNodes = Object.values(nodes).filter((n) => !n.parentId);
+    const rootNodes = Object.values(nodes)
+      .filter((n) => !n.parentId)
+      .filter((n) => !matchedIds || matchedIds.has(n.id));
     const buildNode = (node: PageNode): TreeDataNode => {
       const childIds = node.content.children || [];
       const children = childIds
         .map((cid) => nodes[cid])
         .filter((n): n is PageNode => !!n)
+        .filter((n) => !matchedIds || matchedIds.has(n.id))
         .map(buildNode);
       const isHidden = node.layout.display === 'none';
       const titleContent = (
@@ -115,7 +148,28 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
             }}
           >
             <span className="layer-node-icon">{getNodeTypeIcon(node.type)}</span>
-            <span className={`layer-node-name ${isHidden ? 'is-hidden' : ''}`}>{node.name}</span>
+            {editingId === node.id ? (
+              <Input
+                size="small"
+                autoFocus
+                defaultValue={node.name}
+                style={{ width: 120, height: 22 }}
+                onClick={(e) => e.stopPropagation()}
+                onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
+                onBlur={(e) => commitRename(node.id, e.target.value)}
+              />
+            ) : (
+              <span
+                className={`layer-node-name ${isHidden ? 'is-hidden' : ''}`}
+                title="双击重命名"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingId(node.id);
+                }}
+              >
+                {node.name}
+              </span>
+            )}
             <Tooltip title={isHidden ? '显示' : '隐藏'}>
               <span
                 className="layer-node-toggle"
@@ -144,7 +198,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
     };
     return rootNodes.map(buildNode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, updateNode, selectNode, duplicateNode, deleteNode, moveNode]);
+  }, [nodes, updateNode, selectNode, duplicateNode, deleteNode, moveNode, matchedIds, editingId, commitRename]);
 
   // 处理拖拽放置（调整父子层级）
   const onDrop: TreeProps['onDrop'] = (info) => {
@@ -190,7 +244,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
     }
   };
 
-  if (treeData.length === 0) {
+  if (treeData.length === 0 && !normalizedKeyword) {
     return (
       <div className="layer-panel">
         <Empty
@@ -203,21 +257,39 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
 
   return (
     <div className="layer-panel">
-      <div className="layer-tree-wrapper">
-        <Tree
-          treeData={treeData}
-          selectedKeys={selectedNodeId ? [selectedNodeId] : []}
-          onSelect={(keys) => {
-            const key = keys[0];
-            selectNode(key ? String(key) : null);
-          }}
-          onDrop={onDrop}
-          expandedKeys={expandedKeys}
-          onExpand={(keys) => setExpandedKeys(keys)}
-          draggable
-          blockNode
-          showLine
+      <div style={{ padding: '8px 8px 0' }}>
+        <Input
+          size="small"
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="搜索节点名称 / 别名 / 类型"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
         />
+      </div>
+      <div className="layer-tree-wrapper">
+        {treeData.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="未找到匹配节点"
+            style={{ marginTop: 24 }}
+          />
+        ) : (
+          <Tree
+            treeData={treeData}
+            selectedKeys={selectedNodeId ? [selectedNodeId] : []}
+            onSelect={(keys) => {
+              const key = keys[0];
+              selectNode(key ? String(key) : null);
+            }}
+            onDrop={onDrop}
+            expandedKeys={normalizedKeyword ? Object.keys(nodes) : expandedKeys}
+            onExpand={(keys) => setExpandedKeys(keys)}
+            draggable
+            blockNode
+            showLine
+          />
+        )}
       </div>
     </div>
   );

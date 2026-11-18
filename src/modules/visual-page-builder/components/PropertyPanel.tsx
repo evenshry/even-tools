@@ -13,6 +13,7 @@ import {
   Col,
   Button,
   Tooltip,
+  Upload,
   message
 } from 'antd';
 import {
@@ -28,7 +29,8 @@ import {
   VerticalAlignTopOutlined,
   VerticalAlignMiddleOutlined,
   VerticalAlignBottomOutlined,
-  CloseOutlined
+  CloseOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { NodeType, type PageNode } from '../types';
@@ -47,139 +49,224 @@ interface StyleEditorProps {
   onUpdate: (updates: Partial<PageNode>) => void;
 }
 
-const StyleEditor: React.FC<StyleEditorProps> = ({ node, onUpdate }) => (
-  <div className="style-editor">
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      <Row gutter={8}>
-        <Col span={12}>
+const StyleEditor: React.FC<StyleEditorProps> = ({ node, onUpdate }) => {
+  const style = node.style;
+
+  const setStyle = (patch: Partial<PageNode['style']>) => {
+    onUpdate({ style: { ...style, ...patch } });
+  };
+
+  /** 通用文本样式输入（尺寸、间距、定位等自由输入项） */
+  const textField = (label: string, key: keyof PageNode['style'], placeholder = 'auto') => (
+    <div className="property-group" key={key}>
+      <Text strong style={{ fontSize: '12px' }}>{label}</Text>
+      <Input
+        size="small"
+        value={(style[key] as string | number | undefined) ?? ''}
+        onChange={(e) => setStyle({ [key]: e.target.value } as Partial<PageNode['style']>)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+
+  const isPositioned = !!node.layout.position && node.layout.position !== 'static';
+  const isMedia = node.type === NodeType.IMAGE || node.type === NodeType.VIDEO;
+
+  return (
+    <div className="style-editor">
+      <Space direction="vertical" style={{ width: '100%' }} size="small">
+        <Divider style={{ margin: '4px 0', fontSize: '12px' }}>尺寸</Divider>
+        <Row gutter={8}>
+          <Col span={12}>{textField('宽度', 'width')}</Col>
+          <Col span={12}>{textField('高度', 'height')}</Col>
+        </Row>
+        <Row gutter={8}>
+          <Col span={12}>{textField('最小宽度', 'minWidth')}</Col>
+          <Col span={12}>{textField('最小高度', 'minHeight')}</Col>
+        </Row>
+        <Row gutter={8}>
+          <Col span={12}>{textField('最大宽度', 'maxWidth')}</Col>
+          <Col span={12}>{textField('最大高度', 'maxHeight')}</Col>
+        </Row>
+
+        <Divider style={{ margin: '4px 0', fontSize: '12px' }}>间距</Divider>
+        <Row gutter={8}>
+          <Col span={12}>{textField('内边距', 'padding', '0 / 8px 16px')}</Col>
+          <Col span={12}>{textField('外边距', 'margin', '0 / 0 auto')}</Col>
+        </Row>
+
+        <Divider style={{ margin: '4px 0', fontSize: '12px' }}>排版</Divider>
+        <Row gutter={8}>
+          <Col span={12}>{textField('字体大小', 'fontSize', '14px')}</Col>
+          <Col span={12}>{textField('行高', 'lineHeight', '1.5')}</Col>
+        </Row>
+        <Row gutter={8}>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>字重</Text>
+              <Select
+                size="small"
+                value={(style.fontWeight as string) || 'normal'}
+                onChange={(value) => setStyle({ fontWeight: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="normal">常规 (normal)</Option>
+                <Option value="500">中等 (500)</Option>
+                <Option value="600">半粗 (600)</Option>
+                <Option value="bold">加粗 (bold)</Option>
+              </Select>
+            </div>
+          </Col>
+          <Col span={12}>{textField('字间距', 'letterSpacing', '0')}</Col>
+        </Row>
+        <Row gutter={8}>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>文本对齐</Text>
+              <Select
+                size="small"
+                value={style.textAlign || 'left'}
+                onChange={(value) => setStyle({ textAlign: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="left">左对齐</Option>
+                <Option value="center">居中</Option>
+                <Option value="right">右对齐</Option>
+                <Option value="justify">两端对齐</Option>
+              </Select>
+            </div>
+          </Col>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>文本装饰</Text>
+              <Select
+                size="small"
+                value={style.textDecoration || 'none'}
+                onChange={(value) => setStyle({ textDecoration: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="none">无</Option>
+                <Option value="underline">下划线</Option>
+                <Option value="line-through">删除线</Option>
+              </Select>
+            </div>
+          </Col>
+        </Row>
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>空白处理</Text>
+          <Select
+            size="small"
+            value={style.whiteSpace || 'normal'}
+            onChange={(value) => setStyle({ whiteSpace: value })}
+            style={{ width: '100%' }}
+          >
+            <Option value="normal">自动换行 (normal)</Option>
+            <Option value="nowrap">不换行 (nowrap)</Option>
+            <Option value="pre-wrap">保留空白并换行 (pre-wrap)</Option>
+          </Select>
+        </div>
+
+        <Divider style={{ margin: '4px 0', fontSize: '12px' }}>外观</Divider>
+        <Row gutter={8}>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>背景颜色</Text>
+              <ColorPicker
+                size="small"
+                value={style.backgroundColor || '#ffffff'}
+                onChange={(_, color) => setStyle({ backgroundColor: color })}
+                showText
+              />
+            </div>
+          </Col>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>字体颜色</Text>
+              <ColorPicker
+                size="small"
+                value={style.color || '#000000'}
+                onChange={(_, color) => setStyle({ color })}
+                showText
+              />
+            </div>
+          </Col>
+        </Row>
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>边框</Text>
+          <Input
+            size="small"
+            value={style.border || ''}
+            onChange={(e) => setStyle({ border: e.target.value })}
+            placeholder="1px solid #ccc"
+          />
+        </div>
+        <Row gutter={8}>
+          <Col span={12}>{textField('圆角', 'borderRadius', '0')}</Col>
+          <Col span={12}>{textField('透明度', 'opacity', '1')}</Col>
+        </Row>
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>阴影</Text>
+          <Input
+            size="small"
+            value={style.boxShadow || ''}
+            onChange={(e) => setStyle({ boxShadow: e.target.value })}
+            placeholder="0 2px 8px rgba(0,0,0,0.15)"
+          />
+        </div>
+        <Row gutter={8}>
+          <Col span={12}>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>溢出处理</Text>
+              <Select
+                size="small"
+                value={style.overflow || 'visible'}
+                onChange={(value) => setStyle({ overflow: value })}
+                style={{ width: '100%' }}
+              >
+                <Option value="visible">显示 (visible)</Option>
+                <Option value="hidden">隐藏 (hidden)</Option>
+                <Option value="auto">自动滚动 (auto)</Option>
+                <Option value="scroll">强制滚动 (scroll)</Option>
+              </Select>
+            </div>
+          </Col>
+          <Col span={12}>{textField('层级 z-index', 'zIndex', 'auto')}</Col>
+        </Row>
+        {isMedia && (
           <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>宽度</Text>
-            <Input
+            <Text strong style={{ fontSize: '12px' }}>填充方式</Text>
+            <Select
               size="small"
-              value={node.style.width || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, width: e.target.value }
-              })}
-              placeholder="auto"
-            />
+              value={style.objectFit || 'fill'}
+              onChange={(value) => setStyle({ objectFit: value })}
+              style={{ width: '100%' }}
+            >
+              <Option value="fill">拉伸填充 (fill)</Option>
+              <Option value="contain">完整显示 (contain)</Option>
+              <Option value="cover">裁剪填满 (cover)</Option>
+              <Option value="none">原始尺寸 (none)</Option>
+              <Option value="scale-down">等比缩小 (scale-down)</Option>
+            </Select>
           </div>
-        </Col>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>高度</Text>
-            <Input
-              size="small"
-              value={node.style.height || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, height: e.target.value }
-              })}
-              placeholder="auto"
-            />
-          </div>
-        </Col>
-      </Row>
-      
-      <Row gutter={8}>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>背景颜色</Text>
-            <ColorPicker
-              size="small"
-              value={node.style.backgroundColor || '#ffffff'}
-              onChange={(_, color) => onUpdate({
-                style: { ...node.style, backgroundColor: color }
-              })}
-              showText
-            />
-          </div>
-        </Col>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>字体颜色</Text>
-            <ColorPicker
-              size="small"
-              value={node.style.color || '#000000'}
-              onChange={(_, color) => onUpdate({
-                style: { ...node.style, color: color }
-              })}
-              showText
-            />
-          </div>
-        </Col>
-      </Row>
-      
-      <Row gutter={8}>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>字体大小</Text>
-            <Input
-              size="small"
-              value={node.style.fontSize || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, fontSize: e.target.value }
-              })}
-              placeholder="14px"
-            />
-          </div>
-        </Col>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>内边距</Text>
-            <Input
-              size="small"
-              value={node.style.padding || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, padding: e.target.value }
-              })}
-              placeholder="0"
-            />
-          </div>
-        </Col>
-      </Row>
-      
-      <Row gutter={8}>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>外边距</Text>
-            <Input
-              size="small"
-              value={node.style.margin || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, margin: e.target.value }
-              })}
-              placeholder="0"
-            />
-          </div>
-        </Col>
-        <Col span={12}>
-          <div className="property-group">
-            <Text strong style={{ fontSize: '12px' }}>圆角</Text>
-            <Input
-              size="small"
-              value={node.style.borderRadius || ''}
-              onChange={(e) => onUpdate({
-                style: { ...node.style, borderRadius: e.target.value }
-              })}
-              placeholder="0"
-            />
-          </div>
-        </Col>
-      </Row>
-      
-      <div className="property-group">
-        <Text strong style={{ fontSize: '12px' }}>边框</Text>
-        <Input
-          size="small"
-          value={node.style.border || ''}
-          onChange={(e) => onUpdate({
-            style: { ...node.style, border: e.target.value }
-          })}
-          placeholder="1px solid #ccc"
-        />
-      </div>
-    </Space>
-  </div>
-);
+        )}
+
+        {isPositioned && (
+          <>
+            <Divider style={{ margin: '4px 0', fontSize: '12px' }}>定位偏移</Divider>
+            <Row gutter={8}>
+              <Col span={12}>{textField('left', 'left', '0px')}</Col>
+              <Col span={12}>{textField('top', 'top', '0px')}</Col>
+            </Row>
+            <Row gutter={8}>
+              <Col span={12}>{textField('right', 'right', 'auto')}</Col>
+              <Col span={12}>{textField('bottom', 'bottom', 'auto')}</Col>
+            </Row>
+          </>
+        )}
+      </Space>
+    </div>
+  );
+};
 
 // 布局编辑器组件
 interface LayoutEditorProps {
@@ -532,57 +619,117 @@ interface ContentEditorProps {
   onUpdate: (updates: Partial<PageNode>) => void;
 }
 
-const ContentEditor: React.FC<ContentEditorProps> = ({ node, onUpdate }) => (
-  <div className="content-editor">
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      {(node.type === NodeType.TEXT || node.type === NodeType.HEADING) && (
-        <div className="property-group">
-          <Text strong style={{ fontSize: '12px' }}>
-            {node.type === NodeType.TEXT ? '文本内容' : '标题内容'}
-          </Text>
-          <TextArea
-            rows={3}
-            value={node.content.text || ''}
-            onChange={(e) => onUpdate({
-              content: { ...node.content, text: e.target.value }
-            })}
-            placeholder={
-              node.type === NodeType.TEXT ? '输入文本内容' : '输入标题内容'
-            }
-          />
-        </div>
-      )}
-      
-      {node.type === NodeType.BUTTON && (
-        <div className="property-group">
-          <Text strong style={{ fontSize: '12px' }}>按钮文本</Text>
-          <Input
-            size="small"
-            value={node.content.text || ''}
-            onChange={(e) => onUpdate({
-              content: { ...node.content, text: e.target.value }
-            })}
-            placeholder="按钮"
-          />
-        </div>
-      )}
-      
-      {node.type === NodeType.IMAGE && (
-        <div className="property-group">
-          <Text strong style={{ fontSize: '12px' }}>图片地址</Text>
-          <Input
-            size="small"
-            value={node.content.src || ''}
-            onChange={(e) => onUpdate({
-              content: { ...node.content, src: e.target.value }
-            })}
-            placeholder="https://example.com/image.jpg"
-          />
-        </div>
-      )}
-    </Space>
-  </div>
-);
+const ContentEditor: React.FC<ContentEditorProps> = ({ node, onUpdate }) => {
+  // 本地上传图片：转为 dataURL 存入 content.src，限制大小避免撑爆 IndexedDB
+  const handleImageUpload = (file: File) => {
+    const MAX_SIZE = 1.5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      message.warning('图片超过 1.5MB，建议压缩后上传或改用图片链接');
+      return false;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        onUpdate({ content: { ...node.content, src: reader.result } });
+      }
+    };
+    reader.readAsDataURL(file);
+    return false;
+  };
+
+  return (
+    <div className="content-editor">
+      <Space direction="vertical" style={{ width: '100%' }} size="small">
+        {(node.type === NodeType.TEXT || node.type === NodeType.HEADING) && (
+          <div className="property-group">
+            <Text strong style={{ fontSize: '12px' }}>
+              {node.type === NodeType.TEXT ? '文本内容' : '标题内容'}
+            </Text>
+            <TextArea
+              rows={3}
+              value={node.content.text || ''}
+              onChange={(e) => onUpdate({
+                content: { ...node.content, text: e.target.value }
+              })}
+              placeholder={
+                node.type === NodeType.TEXT ? '输入文本内容' : '输入标题内容'
+              }
+            />
+          </div>
+        )}
+
+        {node.type === NodeType.BUTTON && (
+          <div className="property-group">
+            <Text strong style={{ fontSize: '12px' }}>按钮文本</Text>
+            <Input
+              size="small"
+              value={node.content.text || ''}
+              onChange={(e) => onUpdate({
+                content: { ...node.content, text: e.target.value }
+              })}
+              placeholder="按钮"
+            />
+          </div>
+        )}
+
+        {node.type === NodeType.IMAGE && (
+          <>
+            <div className="property-group">
+              <Text strong style={{ fontSize: '12px' }}>图片地址</Text>
+              <Input
+                size="small"
+                value={node.content.src || ''}
+                onChange={(e) => onUpdate({
+                  content: { ...node.content, src: e.target.value }
+                })}
+                placeholder="https://example.com/image.jpg"
+              />
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                beforeUpload={handleImageUpload}
+              >
+                <Button size="small" icon={<UploadOutlined />} style={{ marginTop: 4 }}>
+                  本地上传
+                </Button>
+              </Upload>
+            </div>
+            {node.content.src && (
+              <div className="property-group">
+                <Text strong style={{ fontSize: '12px' }}>预览</Text>
+                <img
+                  src={node.content.src}
+                  alt={node.name}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 120,
+                    objectFit: 'contain',
+                    border: '1px solid var(--et-line)',
+                    borderRadius: 4,
+                  }}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {node.type === NodeType.VIDEO && (
+          <div className="property-group">
+            <Text strong style={{ fontSize: '12px' }}>视频地址</Text>
+            <Input
+              size="small"
+              value={node.content.src || ''}
+              onChange={(e) => onUpdate({
+                content: { ...node.content, src: e.target.value }
+              })}
+              placeholder="https://example.com/video.mp4"
+            />
+          </div>
+        )}
+      </Space>
+    </div>
+  );
+};
 
 // 交互编辑器组件
 interface InteractionEditorProps {
@@ -590,68 +737,122 @@ interface InteractionEditorProps {
   onUpdate: (updates: Partial<PageNode>) => void;
 }
 
-const InteractionEditor: React.FC<InteractionEditorProps> = ({ node, onUpdate }) => (
-  <div className="interaction-editor">
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      <div className="property-group">
-        <Text strong style={{ fontSize: '12px' }}>点击事件</Text>
-        <Select
-          size="small"
-          value={node.events.onClick?.actionType || 'none'}
-          onChange={(value) => {
-            const events = value === 'none'
-              ? { ...node.events, onClick: undefined }
-              : { ...node.events, onClick: { actionType: value as 'navigate' | 'alert' | 'toggleVisibility' | 'custom', payload: '' } };
-            onUpdate({ events });
-          }}
-          style={{ width: '100%' }}
-        >
-          <Option value="none">无</Option>
-          <Option value="alert">弹出提示</Option>
-          <Option value="navigate">跳转链接</Option>
-          <Option value="toggleVisibility">切换显隐</Option>
-          <Option value="custom">自定义</Option>
-        </Select>
-        {node.events.onClick && (
-          <Input
-            size="small"
-            placeholder={node.events.onClick.actionType === 'navigate' ? 'https://...' : '提示文本 / 自定义参数'}
-            value={node.events.onClick.payload || ''}
-            onChange={(e) => {
-              onUpdate({
-                events: {
-                  ...node.events,
-                  onClick: { ...node.events.onClick!, payload: e.target.value }
-                }
-              });
-            }}
-            style={{ marginTop: 4 }}
-          />
-        )}
-      </div>
+const InteractionEditor: React.FC<InteractionEditorProps> = ({ node, onUpdate }) => {
+  const nodes = useCanvasStore((s) => s.nodes);
 
-      <div className="property-group">
-        <Text strong style={{ fontSize: '12px' }}>悬停事件</Text>
+  type ActionType = 'navigate' | 'alert' | 'toggleVisibility' | 'custom';
+
+  // 可作为「切换显隐」目标的节点（排除自身）
+  const nodeOptions = Object.values(nodes)
+    .filter((n) => n.id !== node.id)
+    .map((n) => ({ value: n.id, label: `${n.name}（${n.type}）` }));
+
+  const renderPayload = (
+    actionType: ActionType,
+    payload: string | undefined,
+    onChange: (value: string) => void
+  ) => {
+    if (actionType === 'toggleVisibility') {
+      return (
         <Select
           size="small"
-          value={node.events.onHover?.actionType || 'none'}
-          onChange={(value) => {
-            const events = value === 'none'
-              ? { ...node.events, onHover: undefined }
-              : { ...node.events, onHover: { actionType: value as 'navigate' | 'alert' | 'toggleVisibility' | 'custom', payload: '' } };
-            onUpdate({ events });
-          }}
-          style={{ width: '100%' }}
-        >
-          <Option value="none">无</Option>
-          <Option value="alert">弹出提示</Option>
-          <Option value="toggleVisibility">切换显隐</Option>
-          <Option value="custom">自定义</Option>
-        </Select>
-      </div>
-    </Space>
-  </div>
-);
+          showSearch
+          optionFilterProp="label"
+          placeholder="选择要切换显隐的节点"
+          value={payload || undefined}
+          onChange={onChange}
+          options={nodeOptions}
+          notFoundContent="暂无其他节点"
+          style={{ width: '100%', marginTop: 4 }}
+        />
+      );
+    }
+
+    return (
+      <Input
+        size="small"
+        style={{ marginTop: 4 }}
+        placeholder={
+          actionType === 'navigate'
+            ? 'https://...'
+            : actionType === 'alert'
+              ? '提示文本'
+              : '自定义参数'
+        }
+        value={payload || ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  };
+
+  return (
+    <div className="interaction-editor">
+      <Space direction="vertical" style={{ width: '100%' }} size="small">
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>点击事件</Text>
+          <Select
+            size="small"
+            value={node.events.onClick?.actionType || 'none'}
+            onChange={(value) => {
+              const events = value === 'none'
+                ? { ...node.events, onClick: undefined }
+                : { ...node.events, onClick: { actionType: value as ActionType, payload: '' } };
+              onUpdate({ events });
+            }}
+            style={{ width: '100%' }}
+          >
+            <Option value="none">无</Option>
+            <Option value="alert">弹出提示</Option>
+            <Option value="navigate">跳转链接</Option>
+            <Option value="toggleVisibility">切换显隐</Option>
+            <Option value="custom">自定义</Option>
+          </Select>
+          {node.events.onClick && renderPayload(
+            node.events.onClick.actionType,
+            node.events.onClick.payload,
+            (payload) => onUpdate({
+              events: {
+                ...node.events,
+                onClick: { ...node.events.onClick!, payload }
+              }
+            })
+          )}
+        </div>
+
+        <div className="property-group">
+          <Text strong style={{ fontSize: '12px' }}>悬停事件</Text>
+          <Select
+            size="small"
+            value={node.events.onHover?.actionType || 'none'}
+            onChange={(value) => {
+              const events = value === 'none'
+                ? { ...node.events, onHover: undefined }
+                : { ...node.events, onHover: { actionType: value as ActionType, payload: '' } };
+              onUpdate({ events });
+            }}
+            style={{ width: '100%' }}
+          >
+            <Option value="none">无</Option>
+            <Option value="alert">弹出提示</Option>
+            <Option value="navigate">跳转链接</Option>
+            <Option value="toggleVisibility">切换显隐</Option>
+            <Option value="custom">自定义</Option>
+          </Select>
+          {node.events.onHover && renderPayload(
+            node.events.onHover.actionType,
+            node.events.onHover.payload,
+            (payload) => onUpdate({
+              events: {
+                ...node.events,
+                onHover: { ...node.events.onHover!, payload }
+              }
+            })
+          )}
+        </div>
+      </Space>
+    </div>
+  );
+};
 
 // 多选批量操作工具栏组件（T4.3e）
 const MultiSelectToolbar: React.FC = () => {
@@ -916,10 +1117,21 @@ const PropertyPanel: React.FC = () => {
         <div className="node-info">
           <Space align="start" style={{ width: '100%' }}>
             <div style={{ fontSize: '24px' }}>{nodeIcon}</div>
-            <div style={{ flex: 1 }}>
-              <Text strong style={{ fontSize: '14px', display: 'block' }}>
-                {selectedNode.name}
-              </Text>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Input
+                size="small"
+                value={selectedNode.name}
+                onChange={(e) => handleUpdate({ name: e.target.value })}
+                placeholder="节点名称"
+                style={{ marginBottom: 4 }}
+              />
+              <Input
+                size="small"
+                value={selectedNode.alias || ''}
+                onChange={(e) => handleUpdate({ alias: e.target.value || undefined })}
+                placeholder="别名（可选）"
+                style={{ marginBottom: 4 }}
+              />
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 {selectedNode.type}
               </Text>
